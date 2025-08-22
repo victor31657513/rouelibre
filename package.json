@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --strictPort --port 4173",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "node test/relayCluster.test.js && echo \"tests completed\"",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.13.1",
