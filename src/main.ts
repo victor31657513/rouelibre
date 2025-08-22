@@ -105,3 +105,144 @@ function tick() {
 }
 
 requestAnimationFrame(tick)
+// GPX loading and road rendering
+
+// Types
+export type GPXPoint = { lat: number; lon: number; ele: number }
+export type Vec3 = THREE.Vector3
+
+const gpxInput = document.getElementById('gpx') as HTMLInputElement | null
+
+gpxInput?.addEventListener('change', async () => {
+  const file = gpxInput.files?.[0]
+  if (!file) return
+  const xmlText = await file.text()
+
+  const points = parseGPX(xmlText)
+  const { path3D } = projectToLocal(points)
+  const { totalGain, totalLoss } = elevationStats(points)
+
+  removeIfPresent('routeMesh')
+  removeIfPresent('centerMarkings')
+
+  const road = buildRoadMesh(path3D, 6)
+  road.name = 'routeMesh'
+  scene.add(road)
+
+  const markings = buildCenterDashes(path3D, 0.2, 3, 5)
+  markings.name = 'centerMarkings'
+  scene.add(markings)
+
+  console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
+})
+
+function parseGPX(xml: string): GPXPoint[] {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  const pts: GPXPoint[] = []
+  const trkpts = Array.from(doc.getElementsByTagName('trkpt'))
+  for (const pt of trkpts) {
+    const lat = pt.getAttribute('lat')
+    const lon = pt.getAttribute('lon')
+    const ele = pt.getElementsByTagName('ele')[0]?.textContent
+    if (lat && lon && ele) {
+      pts.push({ lat: Number.parseFloat(lat), lon: Number.parseFloat(lon), ele: Number.parseFloat(ele) })
+    }
+  }
+  return pts
+}
+
+function projectToLocal(pts: GPXPoint[]): { path3D: Vec3[] } {
+  if (pts.length === 0) return { path3D: [] }
+  const R = 6371000
+  const lat0 = (pts[0].lat * Math.PI) / 180
+  const lon0 = (pts[0].lon * Math.PI) / 180
+  const ele0 = pts[0].ele
+  const path3D: Vec3[] = []
+  for (const p of pts) {
+    const lat = (p.lat * Math.PI) / 180
+    const lon = (p.lon * Math.PI) / 180
+    const x = (lon - lon0) * Math.cos(lat0) * R
+    const z = (lat - lat0) * R
+    const y = p.ele - ele0
+    path3D.push(new THREE.Vector3(x, y, z))
+  }
+  return { path3D }
+}
+
+function elevationStats(pts: GPXPoint[]): { totalGain: number; totalLoss: number } {
+  let totalGain = 0
+  let totalLoss = 0
+  for (let i = 1; i < pts.length; i++) {
+    const diff = pts[i].ele - pts[i - 1].ele
+    if (diff > 0) totalGain += diff
+    else totalLoss -= diff
+  }
+  return { totalGain, totalLoss }
+}
+
+function buildRoadMesh(centerLine: Vec3[], width: number): THREE.Mesh {
+  const positions: number[] = []
+  const indices: number[] = []
+  const half = width / 2
+  const up = new THREE.Vector3(0, 1, 0)
+  for (let i = 0; i < centerLine.length; i++) {
+    const curr = centerLine[i]
+    const prev = centerLine[i - 1] ?? curr
+    const next = centerLine[i + 1] ?? curr
+    const dir = next.clone().sub(prev).setY(0).normalize()
+    const right = new THREE.Vector3().crossVectors(dir, up).normalize()
+    const leftPt = curr.clone().addScaledVector(right, -half)
+    const rightPt = curr.clone().addScaledVector(right, half)
+    positions.push(leftPt.x, leftPt.y, leftPt.z, rightPt.x, rightPt.y, rightPt.z)
+    if (i < centerLine.length - 1) {
+      const b = i * 2
+      indices.push(b, b + 1, b + 3, b, b + 3, b + 2)
+    }
+  }
+  const geom = new THREE.BufferGeometry()
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geom.setIndex(indices)
+  geom.computeVertexNormals()
+  const mat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
+  return new THREE.Mesh(geom, mat)
+}
+
+function buildCenterDashes(centerLine: Vec3[], lineWidth: number, dashLen: number, gapLen: number): THREE.Mesh {
+  const positions: number[] = []
+  const indices: number[] = []
+  const up = new THREE.Vector3(0, 1, 0)
+  const half = lineWidth / 2
+  let idx = 0
+  for (let i = 0; i < centerLine.length - 1; i++) {
+    const a = centerLine[i]
+    const b = centerLine[i + 1]
+    const segVec = b.clone().sub(a)
+    const segLen = segVec.length()
+    const dir = segVec.clone().normalize()
+    const right = new THREE.Vector3().crossVectors(dir, up).normalize()
+    for (let d = 0; d < segLen; d += dashLen + gapLen) {
+      const start = d
+      const end = Math.min(segLen, d + dashLen)
+      const p0 = a.clone().addScaledVector(dir, start)
+      const p1 = a.clone().addScaledVector(dir, end)
+      const left0 = p0.clone().addScaledVector(right, -half).setY(p0.y + 0.01)
+      const right0 = p0.clone().addScaledVector(right, half).setY(p0.y + 0.01)
+      const left1 = p1.clone().addScaledVector(right, -half).setY(p1.y + 0.01)
+      const right1 = p1.clone().addScaledVector(right, half).setY(p1.y + 0.01)
+      positions.push(left0.x, left0.y, left0.z, right0.x, right0.y, right0.z, left1.x, left1.y, left1.z, right1.x, right1.y, right1.z)
+      indices.push(idx, idx + 1, idx + 3, idx, idx + 3, idx + 2)
+      idx += 4
+    }
+  }
+  const geom = new THREE.BufferGeometry()
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geom.setIndex(indices)
+  geom.computeVertexNormals()
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff })
+  return new THREE.Mesh(geom, mat)
+}
+
+function removeIfPresent(name: string): void {
+  const o = scene.getObjectByName(name)
+  if (o) scene.remove(o)
+}
