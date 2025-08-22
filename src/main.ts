@@ -1,5 +1,6 @@
 // src/main.ts
 import * as THREE from 'three'
+import pkg from '../package.json'
 
 const N = 184 // nombre de cyclistes
 
@@ -8,6 +9,19 @@ const canvas = document.getElementById('app') as HTMLCanvasElement
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
+
+const versionEl = document.createElement('div')
+versionEl.textContent = `v${pkg.version}`
+versionEl.style.position = 'fixed'
+versionEl.style.bottom = '8px'
+versionEl.style.left = '50%'
+versionEl.style.transform = 'translateX(-50%)'
+versionEl.style.color = '#fff'
+versionEl.style.fontFamily = 'sans-serif'
+versionEl.style.fontSize = '14px'
+versionEl.style.zIndex = '10'
+versionEl.style.pointerEvents = 'none'
+document.body.appendChild(versionEl)
 
 // Scene & Camera
 const scene = new THREE.Scene()
