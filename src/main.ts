@@ -112,6 +112,30 @@ export type GPXPoint = { lat: number; lon: number; ele: number }
 export type Vec3 = THREE.Vector3
 
 const gpxInput = document.getElementById('gpx') as HTMLInputElement | null
+const roadWidthInput = document.getElementById('roadWidth') as HTMLInputElement
+const dashLengthInput = document.getElementById('dashLength') as HTMLInputElement
+const gapLengthInput = document.getElementById('gapLength') as HTMLInputElement
+
+let currentPath: Vec3[] | null = null
+
+function rebuildRoute() {
+  if (!currentPath) return
+  const width = Number.parseFloat(roadWidthInput.value)
+  const dash = Number.parseFloat(dashLengthInput.value)
+  const gap = Number.parseFloat(gapLengthInput.value)
+  removeIfPresent('routeMesh')
+  removeIfPresent('centerMarkings')
+  const road = buildRoadMesh(currentPath, width)
+  road.name = 'routeMesh'
+  scene.add(road)
+  const markings = buildCenterDashes(currentPath, 0.2, dash, gap)
+  markings.name = 'centerMarkings'
+  scene.add(markings)
+}
+
+roadWidthInput.addEventListener('change', rebuildRoute)
+dashLengthInput.addEventListener('change', rebuildRoute)
+gapLengthInput.addEventListener('change', rebuildRoute)
 
 gpxInput?.addEventListener('change', async () => {
   const file = gpxInput.files?.[0]
@@ -119,19 +143,12 @@ gpxInput?.addEventListener('change', async () => {
   const xmlText = await file.text()
 
   const points = parseGPX(xmlText)
-  const { path3D } = projectToLocal(points)
+  let { path3D } = projectToLocal(points)
+  path3D = simplifyPath(path3D, 1.0)
   const { totalGain, totalLoss } = elevationStats(points)
 
-  removeIfPresent('routeMesh')
-  removeIfPresent('centerMarkings')
-
-  const road = buildRoadMesh(path3D, 6)
-  road.name = 'routeMesh'
-  scene.add(road)
-
-  const markings = buildCenterDashes(path3D, 0.2, 3, 5)
-  markings.name = 'centerMarkings'
-  scene.add(markings)
+  currentPath = path3D
+  rebuildRoute()
 
   console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
 })
@@ -178,6 +195,47 @@ function elevationStats(pts: GPXPoint[]): { totalGain: number; totalLoss: number
     else totalLoss -= diff
   }
   return { totalGain, totalLoss }
+}
+
+function simplifyPath(path: Vec3[], epsilon: number): Vec3[] {
+  if (path.length < 3) return [...path]
+  const keep = new Array(path.length).fill(false)
+  keep[0] = keep[path.length - 1] = true
+  const stack: Array<[number, number]> = [[0, path.length - 1]]
+
+  const distXZ = (p: Vec3, a: Vec3, b: Vec3): number => {
+    const x0 = p.x, z0 = p.z
+    const x1 = a.x, z1 = a.z
+    const x2 = b.x, z2 = b.z
+    const dx = x2 - x1
+    const dz = z2 - z1
+    if (dx === 0 && dz === 0) return Math.hypot(x0 - x1, z0 - z1)
+    const t = ((x0 - x1) * dx + (z0 - z1) * dz) / (dx * dx + dz * dz)
+    const projx = x1 + t * dx
+    const projz = z1 + t * dz
+    return Math.hypot(x0 - projx, z0 - projz)
+  }
+
+  while (stack.length) {
+    const [start, end] = stack.pop()!
+    let maxDist = 0
+    let index = -1
+    for (let i = start + 1; i < end; i++) {
+      const d = distXZ(path[i], path[start], path[end])
+      if (d > maxDist) {
+        maxDist = d
+        index = i
+      }
+    }
+    if (index !== -1 && maxDist > epsilon) {
+      keep[index] = true
+      stack.push([start, index], [index, end])
+    }
+  }
+
+  const out: Vec3[] = []
+  for (let i = 0; i < path.length; i++) if (keep[i]) out.push(path[i])
+  return out
 }
 
 function buildRoadMesh(centerLine: Vec3[], width: number): THREE.Mesh {
