@@ -8,6 +8,11 @@
 <body style="margin:0;">
 <canvas id="app"></canvas>
 <input id="gpx" type="file" accept=".gpx" style="position:fixed;top:12px;left:12px;z-index:10" />
+<div id="controls" style="position:fixed;top:50px;left:12px;z-index:10;background:rgba(0,0,0,0.4);padding:4px;color:white;font:12px sans-serif;">
+  <label>Route <input id="roadWidth" type="number" value="6" step="0.1" style="width:60px" /></label><br />
+  <label>Dash <input id="dashLength" type="number" value="3" step="0.1" style="width:60px" /></label><br />
+  <label>Gap <input id="gapLength" type="number" value="5" step="0.1" style="width:60px" /></label>
+</div>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
