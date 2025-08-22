@@ -1,4 +1,12 @@
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
+import RAPIER, { init } from '@dimforge/rapier3d-compat'
+
+let world: RAPIER.World
+let positions: Float32Array
+let bodies: RAPIER.RigidBody[]
+let speeds: Float32Array
+let N: number
+
 function mulberry32(a: number) {
 return function () {
 let t = (a += 0x6d2b79f5)
