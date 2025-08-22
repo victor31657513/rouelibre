@@ -1,20 +1,28 @@
+import init, * as RAPIER from '@dimforge/rapier3d-compat'
+
+let world: RAPIER.World
+let N = 0
+let positions: Float32Array
+let bodies: RAPIER.RigidBody[] = []
+let speeds: Float32Array
+
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 function mulberry32(a: number) {
-return function () {
-let t = (a += 0x6d2b79f5)
-t = Math.imul(t ^ (t >>> 15), t | 1)
-t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-}
+  return function () {
+    let t = (a += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }
 
 
 self.onmessage = async (e: MessageEvent) => {
-const { type, payload } = e.data || {}
+const { type, payload }: { type: string; payload: any } = e.data || {}
 
 
-if (type === 'init') {
-await init() // charge le WASM
+  if (type === 'init') {
+  await (init as unknown as () => Promise<void>)() // charge le WASM
 world = new RAPIER.World({ x: 0, y: 0, z: 0 }) // pas de gravité pour commencer
 
 
