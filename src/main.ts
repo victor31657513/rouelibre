@@ -1,6 +1,8 @@
 // src/main.ts
 import * as THREE from 'three'
 import pkg from '../package.json'
+import type { GPXPoint, Vec3 } from './gpx'
+import { initRouteSelector } from './ui/routeSelector'
 
 const N = 184 // nombre de cyclistes
 
@@ -121,11 +123,6 @@ function tick() {
 requestAnimationFrame(tick)
 // GPX loading and road rendering
 
-// Types
-export type GPXPoint = { lat: number; lon: number; ele: number }
-export type Vec3 = THREE.Vector3
-
-const gpxSelect = document.getElementById('gpx') as HTMLSelectElement | null
 const roadWidthInput = document.getElementById('roadWidth') as HTMLInputElement
 const dashLengthInput = document.getElementById('dashLength') as HTMLInputElement
 const gapLengthInput = document.getElementById('gapLength') as HTMLInputElement
@@ -151,68 +148,15 @@ roadWidthInput.addEventListener('change', rebuildRoute)
 dashLengthInput.addEventListener('change', rebuildRoute)
 gapLengthInput.addEventListener('change', rebuildRoute)
 
-const gpxModules = import.meta.glob('/gpx/*.gpx', { as: 'url', eager: true })
-const gpxFiles = Object.entries(gpxModules).map(([path, url]) => ({
-  name: path.split('/').pop()!,
-  url: url as string,
-}))
-if (gpxSelect) {
-  for (const file of gpxFiles) {
-    const opt = document.createElement('option')
-    opt.value = file.url
-    opt.textContent = file.name
-    gpxSelect.appendChild(opt)
-  }
-
-  gpxSelect.addEventListener('change', async () => {
-    const url = gpxSelect.value
-    if (!url) return
-    const xmlText = await fetch(url).then((r) => r.text())
-
-    const points = parseGPX(xmlText)
-    let { path3D } = projectToLocal(points)
-    path3D = simplifyPath(path3D, 1.0)
+document.addEventListener('DOMContentLoaded', () => {
+  initRouteSelector('route-list', (path3D, points) => {
+    const simplified = simplifyPath(path3D, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
-
-    currentPath = path3D
+    currentPath = simplified
     rebuildRoute()
-
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
   })
-}
-
-function parseGPX(xml: string): GPXPoint[] {
-  const doc = new DOMParser().parseFromString(xml, 'application/xml')
-  const pts: GPXPoint[] = []
-  const trkpts = Array.from(doc.getElementsByTagName('trkpt'))
-  for (const pt of trkpts) {
-    const lat = pt.getAttribute('lat')
-    const lon = pt.getAttribute('lon')
-    const ele = pt.getElementsByTagName('ele')[0]?.textContent
-    if (lat && lon && ele) {
-      pts.push({ lat: Number.parseFloat(lat), lon: Number.parseFloat(lon), ele: Number.parseFloat(ele) })
-    }
-  }
-  return pts
-}
-
-function projectToLocal(pts: GPXPoint[]): { path3D: Vec3[] } {
-  if (pts.length === 0) return { path3D: [] }
-  const R = 6371000
-  const lat0 = (pts[0].lat * Math.PI) / 180
-  const lon0 = (pts[0].lon * Math.PI) / 180
-  const ele0 = pts[0].ele
-  const path3D: Vec3[] = []
-  for (const p of pts) {
-    const lat = (p.lat * Math.PI) / 180
-    const lon = (p.lon * Math.PI) / 180
-    const x = (lon - lon0) * Math.cos(lat0) * R
-    const z = (lat - lat0) * R
-    const y = p.ele - ele0
-    path3D.push(new THREE.Vector3(x, y, z))
-  }
-  return { path3D }
-}
+})
 
 function elevationStats(pts: GPXPoint[]): { totalGain: number; totalLoss: number } {
   let totalGain = 0
