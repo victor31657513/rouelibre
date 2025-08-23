@@ -12,6 +12,7 @@ const N = 184 // nombre de cyclistes
 const canvas = document.getElementById('app') as HTMLCanvasElement
 const loaderEl = document.getElementById('loader') as HTMLDivElement
 const loaderProgress = document.getElementById('loader-progress') as HTMLDivElement
+const homeBtn = document.getElementById('home-btn') as HTMLButtonElement
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -20,6 +21,13 @@ const versionEl = document.createElement('div')
 versionEl.textContent = `v${pkg.version}`
 versionEl.className = 'fixed bottom-2 left-1/2 -translate-x-1/2 text-white font-sans text-sm z-10 pointer-events-none'
 document.body.appendChild(versionEl)
+
+homeBtn.addEventListener('click', () => {
+  stopAnimation()
+  canvas.classList.add('hidden')
+  showRouteList()
+  homeBtn.classList.add('hidden')
+})
 
 // Scene & Camera
 const scene = new THREE.Scene()
@@ -95,6 +103,7 @@ addEventListener('resize', () => {
 
 // Boucle
 function tick() {
+  if (!animating) return
   const now = performance.now()
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
@@ -103,7 +112,7 @@ function tick() {
   worker.postMessage({ type: 'step', payload: { dt } })
 
   renderer.render(scene, camera)
-  requestAnimationFrame(tick)
+  if (animating) requestAnimationFrame(tick)
 }
 
 function startAnimation() {
@@ -112,6 +121,10 @@ function startAnimation() {
     last = performance.now()
     requestAnimationFrame(tick)
   }
+}
+
+function stopAnimation() {
+  animating = false
 }
 // GPX loading and road rendering
 
@@ -210,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loaderEl.classList.remove('flex')
     loaderEl.classList.toggle('hidden', true)
     canvas.classList.toggle('hidden', false)
+    homeBtn.classList.remove('hidden')
   })
 })
 
