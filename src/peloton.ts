@@ -28,7 +28,7 @@ export function initPeloton(path: Vec3[], N: number): Float32Array {
     const x = p0.x + nx * row * 1.2 + rx * col * 1.0
     const z = p0.z + nz * row * 1.2 + rz * col * 1.0
     positions[i * 3 + 0] = x
-    positions[i * 3 + 1] = p0.y + 0.85
+    positions[i * 3 + 1] = p0.y + 1
     positions[i * 3 + 2] = z
   }
   return positions
