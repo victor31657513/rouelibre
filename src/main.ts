@@ -88,6 +88,7 @@ let last = performance.now()
 let animating = false
 const cameraHeight = 1.7
 const cameraPivot = new THREE.Vector3()
+const cameraPrev = new THREE.Vector3(0, 10, 26)
 let orbitYaw = 0
 let orbitPitch = 0
 const orbitRadius = 10
@@ -167,6 +168,15 @@ canvas.addEventListener('click', (e) => {
   if (intersects.length && intersects[0].instanceId !== undefined) {
     setSelectedIndex(intersects[0].instanceId, N)
     focusSelected()
+  }
+})
+
+canvas.addEventListener('dblclick', (e) => {
+  if (e.button === 1) {
+    orbitYaw = 0
+    orbitPitch = 0
+    updateCamera()
+    cameraPrev.copy(camera.position)
   }
 })
 
