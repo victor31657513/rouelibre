@@ -4,13 +4,21 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Roue libre – Three + Rapier</title>
-  <script type="module" crossorigin src="/assets/index-0eGfUisn.js"></script>
+  <script type="module" crossorigin src="/assets/index-ysvZUDZo.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-BED-UgZ9.css">
 </head>
 <body class="m-0">
 <canvas id="app"></canvas>
-<div id="route-list" class="fixed top-3 left-3 z-10 bg-black/40 p-1 text-white text-xs font-sans"></div>
-<div id="controls" class="fixed top-12 left-3 z-10 bg-black/40 p-1 text-white text-xs font-sans">
+<div
+  id="route-list"
+  style="position:fixed;top:0.75rem;left:0.75rem;z-index:10;"
+  class="fixed top-3 left-3 z-10 bg-black/40 p-1 text-white text-xs font-sans"
+></div>
+<div
+  id="controls"
+  style="position:fixed;top:3rem;left:0.75rem;z-index:10;"
+  class="fixed top-12 left-3 z-10 bg-black/40 p-1 text-white text-xs font-sans"
+>
   <label>Route <input id="roadWidth" type="number" value="6" step="0.1" class="w-16" /></label><br />
   <label>Dash <input id="dashLength" type="number" value="3" step="0.1" class="w-16" /></label><br />
   <label>Gap <input id="gapLength" type="number" value="5" step="0.1" class="w-16" /></label>
