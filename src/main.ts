@@ -1,6 +1,7 @@
 // src/main.ts
 import * as THREE from 'three'
 import pkg from '../package.json'
+import './style.css'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
@@ -17,15 +18,7 @@ renderer.setSize(window.innerWidth, window.innerHeight)
 
 const versionEl = document.createElement('div')
 versionEl.textContent = `v${pkg.version}`
-versionEl.style.position = 'fixed'
-versionEl.style.bottom = '8px'
-versionEl.style.left = '50%'
-versionEl.style.transform = 'translateX(-50%)'
-versionEl.style.color = '#fff'
-versionEl.style.fontFamily = 'sans-serif'
-versionEl.style.fontSize = '14px'
-versionEl.style.zIndex = '10'
-versionEl.style.pointerEvents = 'none'
+versionEl.className = 'fixed bottom-2 left-1/2 -translate-x-1/2 text-white font-sans text-sm z-10 pointer-events-none'
 document.body.appendChild(versionEl)
 
 // Scene & Camera
