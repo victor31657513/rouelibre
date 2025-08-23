@@ -6,6 +6,7 @@ import 'flowbite'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
+import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 
 const N = 184 // nombre de cyclistes
 
@@ -85,9 +86,11 @@ const worker = new Worker(new URL('./physics/worker.ts', import.meta.url), { typ
 let positions = new Float32Array(N * 3)
 let last = performance.now()
 let animating = false
-let followRider = false
 const cameraHeight = 1.7
 const cameraPrev = new THREE.Vector3()
+
+const raycaster = new THREE.Raycaster()
+const mouse = new THREE.Vector2()
 
 worker.onmessage = (e: MessageEvent) => {
   const { type, data } = e.data || {}
@@ -115,28 +118,31 @@ addEventListener('resize', () => {
 })
 
 // Boucle
+function focusSelected() {
+  const base = selectedIndex * 3
+  const x = positions[base]
+  const y = positions[base + 1]
+  const z = positions[base + 2]
+  camera.position.set(x, y + cameraHeight, z)
+  const dx = x - cameraPrev.x
+  const dy = y - cameraPrev.y
+  const dz = z - cameraPrev.z
+  const len = Math.hypot(dx, dy, dz) || 1
+  camera.lookAt(
+    x + dx / len,
+    y + cameraHeight + dy / len,
+    z + dz / len
+  )
+  cameraPrev.set(x, y, z)
+}
+
 function tick() {
   if (!animating) return
   const now = performance.now()
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
 
-  if (followRider) {
-    const x = positions[0]
-    const y = positions[1]
-    const z = positions[2]
-    camera.position.set(x, y + cameraHeight, z)
-    const dx = x - cameraPrev.x
-    const dy = y - cameraPrev.y
-    const dz = z - cameraPrev.z
-    const len = Math.hypot(dx, dy, dz) || 1
-    camera.lookAt(
-      x + dx / len,
-      y + cameraHeight + dy / len,
-      z + dz / len
-    )
-    cameraPrev.set(x, y, z)
-  }
+  focusSelected()
 
   // demande un step physique
   worker.postMessage({ type: 'step', payload: { dt } })
@@ -144,6 +150,51 @@ function tick() {
   renderer.render(scene, camera)
   if (animating) requestAnimationFrame(tick)
 }
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect()
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  raycaster.setFromCamera(mouse, camera)
+  const intersects = raycaster.intersectObject(riders)
+  if (intersects.length && intersects[0].instanceId !== undefined) {
+    setSelectedIndex(intersects[0].instanceId, N)
+    cameraPrev.set(
+      positions[selectedIndex * 3],
+      positions[selectedIndex * 3 + 1],
+      positions[selectedIndex * 3 + 2]
+    )
+    focusSelected()
+  }
+})
+
+document.addEventListener('keydown', (e) => {
+  let delta = 0
+  switch (e.key) {
+    case 'ArrowLeft':
+      delta = -1
+      break
+    case 'ArrowRight':
+      delta = 1
+      break
+    case 'ArrowUp':
+      delta = -9
+      break
+    case 'ArrowDown':
+      delta = 9
+      break
+    default:
+      return
+  }
+  e.preventDefault()
+  changeSelectedIndex(delta, N)
+  cameraPrev.set(
+    positions[selectedIndex * 3],
+    positions[selectedIndex * 3 + 1],
+    positions[selectedIndex * 3 + 2]
+  )
+  focusSelected()
+})
 
 function startAnimation() {
   if (!animating) {
@@ -257,7 +308,9 @@ document.addEventListener('DOMContentLoaded', () => {
       riders.setMatrixAt(i, tmp.matrix)
     }
     riders.instanceMatrix.needsUpdate = true
-    followRider = true
+    setSelectedIndex(0, N)
+    cameraPrev.set(positions[0], positions[1], positions[2])
+    focusSelected()
     startAnimation()
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
