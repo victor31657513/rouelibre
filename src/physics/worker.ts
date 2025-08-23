@@ -59,6 +59,8 @@ self.onmessage = async (e: MessageEvent) => {
   }
 
   if (type === 'step') {
+    if (!world) return // ignore steps before initialization
+
     const dt: number = payload.dt
 
     // simple logique : avance sur +X avec légère ondulation en Z

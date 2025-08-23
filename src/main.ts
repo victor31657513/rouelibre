@@ -114,6 +114,7 @@ worker.onmessage = (e: MessageEvent) => {
       riders.setMatrixAt(i, tmp.matrix)
     }
     riders.instanceMatrix.needsUpdate = true
+    if (!animating) startAnimation()
   }
 }
 
@@ -362,7 +363,6 @@ document.addEventListener('DOMContentLoaded', () => {
     riders.instanceMatrix.needsUpdate = true
     focusSelected()
     cameraPrev.copy(camera.position)
-    startAnimation()
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
     loaderEl.classList.remove('flex')
