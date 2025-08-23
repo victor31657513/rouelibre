@@ -1,4 +1,4 @@
-import init, * as RAPIER from '@dimforge/rapier3d-compat'
+import * as RAPIER from '@dimforge/rapier3d-compat'
 
 let world: RAPIER.World
 let N = 0
@@ -22,7 +22,7 @@ self.onmessage = async (e: MessageEvent) => {
   const { type, payload }: { type: string; payload: any } = e.data || {}
 
   if (type === 'init') {
-    if (!world) await (init as unknown as () => Promise<void>)() // charge le WASM
+    if (!world) await RAPIER.init() // charge le WASM
     // réinitialise le monde à chaque nouvelle préparation de parcours
     world = new RAPIER.World({ x: 0, y: 0, z: 0 })
 
