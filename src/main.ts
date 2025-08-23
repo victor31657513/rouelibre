@@ -16,10 +16,10 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
 
-const versionEl = document.createElement('div')
-versionEl.textContent = `v${pkg.version}`
-versionEl.className = 'fixed bottom-2 left-1/2 -translate-x-1/2 text-white font-sans text-sm z-10 pointer-events-none'
-document.body.appendChild(versionEl)
+const versionEl = document.getElementById('version') as HTMLDivElement | null
+if (versionEl) {
+  versionEl.textContent = `v${pkg.version}`
+}
 
 // Scene & Camera
 const scene = new THREE.Scene()
