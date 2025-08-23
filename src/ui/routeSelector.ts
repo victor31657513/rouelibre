@@ -12,17 +12,30 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
   if (!files.length) {
     const empty = document.createElement('div')
     empty.textContent = 'Aucun parcours trouvé'
+    empty.classList.add('text-sm', 'text-gray-500', 'dark:text-gray-400')
     container.appendChild(empty)
     return
   }
 
   for (const file of files) {
     const item = document.createElement('div')
-    item.classList.add('mb-2')
+    item.classList.add(
+      'mb-2',
+      'p-2',
+      'rounded-lg',
+      'border',
+      'border-gray-200',
+      'bg-white',
+      'hover:bg-gray-100',
+      'dark:border-gray-700',
+      'dark:bg-gray-800',
+      'dark:hover:bg-gray-700',
+      'cursor-pointer'
+    )
 
     const label = document.createElement('div')
     label.textContent = file.name
-    label.classList.add('mb-0.5')
+    label.classList.add('mb-0.5', 'text-sm', 'font-medium', 'text-gray-900', 'dark:text-white')
     item.appendChild(label)
 
     container.appendChild(item)
@@ -30,7 +43,7 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
     const resFile = await fetch(`${base}${file.url}`)
     if (!resFile.ok) {
       const invalid = document.createElement('div')
-      invalid.classList.add('text-[#f88]')
+      invalid.classList.add('text-red-600', 'dark:text-red-400')
       invalid.textContent = 'Fichier invalide'
       item.appendChild(invalid)
       continue
@@ -40,14 +53,13 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
     const points = parseGPX(xmlText)
     if (!points.length) {
       const invalid = document.createElement('div')
-      invalid.classList.add('text-[#f88]')
+      invalid.classList.add('text-red-600', 'dark:text-red-400')
       invalid.textContent = 'Fichier invalide'
       item.appendChild(invalid)
       continue
     }
 
     const { path3D } = projectToLocal(points)
-    item.classList.add('cursor-pointer')
     const canvas = document.createElement('canvas')
     canvas.width = 120
     canvas.height = 40
