@@ -125,7 +125,7 @@ requestAnimationFrame(tick)
 export type GPXPoint = { lat: number; lon: number; ele: number }
 export type Vec3 = THREE.Vector3
 
-const gpxInput = document.getElementById('gpx') as HTMLInputElement | null
+const gpxSelect = document.getElementById('gpx') as HTMLSelectElement | null
 const roadWidthInput = document.getElementById('roadWidth') as HTMLInputElement
 const dashLengthInput = document.getElementById('dashLength') as HTMLInputElement
 const gapLengthInput = document.getElementById('gapLength') as HTMLInputElement
@@ -151,21 +151,35 @@ roadWidthInput.addEventListener('change', rebuildRoute)
 dashLengthInput.addEventListener('change', rebuildRoute)
 gapLengthInput.addEventListener('change', rebuildRoute)
 
-gpxInput?.addEventListener('change', async () => {
-  const file = gpxInput.files?.[0]
-  if (!file) return
-  const xmlText = await file.text()
+const gpxModules = import.meta.glob('/gpx/*.gpx', { as: 'url', eager: true })
+const gpxFiles = Object.entries(gpxModules).map(([path, url]) => ({
+  name: path.split('/').pop()!,
+  url: url as string,
+}))
+if (gpxSelect) {
+  for (const file of gpxFiles) {
+    const opt = document.createElement('option')
+    opt.value = file.url
+    opt.textContent = file.name
+    gpxSelect.appendChild(opt)
+  }
 
-  const points = parseGPX(xmlText)
-  let { path3D } = projectToLocal(points)
-  path3D = simplifyPath(path3D, 1.0)
-  const { totalGain, totalLoss } = elevationStats(points)
+  gpxSelect.addEventListener('change', async () => {
+    const url = gpxSelect.value
+    if (!url) return
+    const xmlText = await fetch(url).then((r) => r.text())
 
-  currentPath = path3D
-  rebuildRoute()
+    const points = parseGPX(xmlText)
+    let { path3D } = projectToLocal(points)
+    path3D = simplifyPath(path3D, 1.0)
+    const { totalGain, totalLoss } = elevationStats(points)
 
-  console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
-})
+    currentPath = path3D
+    rebuildRoute()
+
+    console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
+  })
+}
 
 function parseGPX(xml: string): GPXPoint[] {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
