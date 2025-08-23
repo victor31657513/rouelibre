@@ -1,4 +1,5 @@
 [
   { "name": "route1.gpx", "url": "gpx/route1.gpx" },
-  { "name": "route2.gpx", "url": "gpx/route2.gpx" }
+  { "name": "route2.gpx", "url": "gpx/route2.gpx" },
+  { "name": "Tour de France - Étape 14 - Pau > Luchon-Superbagnères", "url": "gpx/tour-de-france-2025-etape-14.gpx" },
 ]
