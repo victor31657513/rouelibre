@@ -6,11 +6,15 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
   const container = document.getElementById(containerId)
   if (!container) return
 
-  const modules = import.meta.glob('/gpx/*.gpx', { as: 'url', eager: true })
-  const files = Object.entries(modules).map(([path, url]) => ({
-    name: path.split('/').pop()!,
-    url: url as string,
-  }))
+  const res = await fetch('/gpx/index.json')
+  const files: { name: string; url: string }[] = await res.json()
+
+  if (!files.length) {
+    const empty = document.createElement('div')
+    empty.textContent = 'Aucun parcours trouvé'
+    container.appendChild(empty)
+    return
+  }
 
   for (const file of files) {
     const item = document.createElement('div')
