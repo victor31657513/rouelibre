@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import pkg from '../package.json'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
+import { initPeloton } from './peloton'
 
 const N = 184 // nombre de cyclistes
 
@@ -72,6 +73,7 @@ const worker = new Worker(new URL('./physics/worker.ts', import.meta.url), { typ
 
 let positions = new Float32Array(N * 3)
 let last = performance.now()
+let animating = false
 
 worker.onmessage = (e: MessageEvent) => {
   const { type, data } = e.data || {}
@@ -90,17 +92,6 @@ worker.onmessage = (e: MessageEvent) => {
     riders.instanceMatrix.needsUpdate = true
   }
 }
-
-// Envoi init avec positions de départ
-const initialPositions = new Float32Array(N * 3)
-for (let i = 0; i < N; i++) {
-  const row = Math.floor(i / 9)
-  const col = i % 9
-  initialPositions[i * 3 + 0] = -20 + row * 1.2
-  initialPositions[i * 3 + 1] = 0.85
-  initialPositions[i * 3 + 2] = -4 + col * 1.0
-}
-worker.postMessage({ type: 'init', payload: { N, positions: initialPositions.buffer } }, [initialPositions.buffer])
 
 // Resize
 addEventListener('resize', () => {
@@ -122,7 +113,13 @@ function tick() {
   requestAnimationFrame(tick)
 }
 
-requestAnimationFrame(tick)
+function startAnimation() {
+  if (!animating) {
+    animating = true
+    last = performance.now()
+    requestAnimationFrame(tick)
+  }
+}
 // GPX loading and road rendering
 
 const roadWidthInput = document.getElementById('roadWidth') as HTMLInputElement
@@ -193,6 +190,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const { totalGain, totalLoss } = elevationStats(points)
     currentPath = simplified
     rebuildRoute()
+
+    // initialise le peloton sur la route sélectionnée
+    const pelotonPos = initPeloton(simplified, N)
+    worker.postMessage(
+      { type: 'init', payload: { N, positions: pelotonPos.buffer } },
+      [pelotonPos.buffer]
+    )
+    for (let i = 0; i < N; i++) {
+      const x = pelotonPos[i * 3 + 0]
+      const y = pelotonPos[i * 3 + 1]
+      const z = pelotonPos[i * 3 + 2]
+      tmp.position.set(x, y, z)
+      tmp.rotation.set(0, 0, 0)
+      tmp.updateMatrix()
+      riders.setMatrixAt(i, tmp.matrix)
+    }
+    riders.instanceMatrix.needsUpdate = true
+    startAnimation()
+
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
     loaderEl.style.display = 'none'
     canvas.style.display = 'block'
