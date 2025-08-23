@@ -153,6 +153,14 @@ async function loadGPX(url: string, onProgress: (p: number) => void): Promise<{ 
   return { path3D, points }
 }
 
+function hideRouteList() {
+  document.getElementById('route-list')?.classList.add('hidden')
+}
+
+export function showRouteList() {
+  document.getElementById('route-list')?.classList.remove('hidden')
+}
+
 function rebuildRoute() {
   if (!currentPath) return
   removeIfPresent('routeMesh')
@@ -174,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const { path3D, points } = await loadGPX(url, (p) => {
       loaderProgress.style.width = `${p}%`
     })
+    hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
     currentPath = simplified
