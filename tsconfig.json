@@ -7,7 +7,7 @@
   "strict": true,
   "jsx": "react-jsx",
   "noEmit": true,
-  "types": ["three"],
+  "types": ["three", "vite/client"],
   "skipLibCheck": true,
   "forceConsistentCasingInFileNames": true,
   "baseUrl": ".",
