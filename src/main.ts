@@ -115,9 +115,10 @@ function startAnimation() {
 }
 // GPX loading and road rendering
 
-const roadWidthInput = document.getElementById('roadWidth') as HTMLInputElement
-const dashLengthInput = document.getElementById('dashLength') as HTMLInputElement
-const gapLengthInput = document.getElementById('gapLength') as HTMLInputElement
+const ROAD_WIDTH = 8
+const DASH_LENGTH = 2
+const GAP_LENGTH = 10
+const LINE_WIDTH = 0.15
 
 let currentPath: Vec3[] | null = null
 
@@ -154,22 +155,15 @@ async function loadGPX(url: string, onProgress: (p: number) => void): Promise<{ 
 
 function rebuildRoute() {
   if (!currentPath) return
-  const width = Number.parseFloat(roadWidthInput.value)
-  const dash = Number.parseFloat(dashLengthInput.value)
-  const gap = Number.parseFloat(gapLengthInput.value)
   removeIfPresent('routeMesh')
   removeIfPresent('centerMarkings')
-  const road = buildRoadMesh(currentPath, width)
+  const road = buildRoadMesh(currentPath, ROAD_WIDTH)
   road.name = 'routeMesh'
   scene.add(road)
-  const markings = buildCenterDashes(currentPath, 0.2, dash, gap)
+  const markings = buildCenterDashes(currentPath, LINE_WIDTH, DASH_LENGTH, GAP_LENGTH)
   markings.name = 'centerMarkings'
   scene.add(markings)
 }
-
-roadWidthInput.addEventListener('change', rebuildRoute)
-dashLengthInput.addEventListener('change', rebuildRoute)
-gapLengthInput.addEventListener('change', rebuildRoute)
 
 document.addEventListener('DOMContentLoaded', () => {
   initRouteSelector('route-list', async (_path3D, _points, url) => {

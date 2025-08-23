@@ -18,11 +18,11 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
 
   for (const file of files) {
     const item = document.createElement('div')
-    item.style.marginBottom = '8px'
+    item.classList.add('mb-2')
 
     const label = document.createElement('div')
     label.textContent = file.name
-    label.style.marginBottom = '2px'
+    label.classList.add('mb-0.5')
     item.appendChild(label)
 
     container.appendChild(item)
@@ -30,7 +30,7 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
     const resFile = await fetch(file.url)
     if (!resFile.ok) {
       const invalid = document.createElement('div')
-      invalid.style.color = '#f88'
+      invalid.classList.add('text-[#f88]')
       invalid.textContent = 'Fichier invalide'
       item.appendChild(invalid)
       continue
@@ -40,15 +40,14 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
     const points = parseGPX(xmlText)
     if (!points.length) {
       const invalid = document.createElement('div')
-      invalid.style.color = '#f88'
+      invalid.classList.add('text-[#f88]')
       invalid.textContent = 'Fichier invalide'
       item.appendChild(invalid)
       continue
     }
 
     const { path3D } = projectToLocal(points)
-
-    item.style.cursor = 'pointer'
+    item.classList.add('cursor-pointer')
     const canvas = document.createElement('canvas')
     canvas.width = 120
     canvas.height = 40
