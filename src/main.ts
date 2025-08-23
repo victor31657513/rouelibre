@@ -1,6 +1,6 @@
 // src/main.ts
 import * as THREE from 'three'
-import pkg from '../package.json'
+import pkg from '../package.json' assert { type: 'json' }
 import './style.css'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
@@ -17,10 +17,6 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
 
-const versionEl = document.getElementById('version') as HTMLDivElement | null
-if (versionEl) {
-  versionEl.textContent = `v${pkg.version}`
-}
 
 homeBtn.addEventListener('click', () => {
   stopAnimation()
@@ -187,6 +183,10 @@ function rebuildRoute() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const versionEl = document.getElementById('version') as HTMLDivElement | null
+  if (versionEl) {
+    versionEl.textContent = `v${pkg.version}`
+  }
   initRouteSelector('route-list', async (_path3D, _points, url) => {
     loaderEl.classList.add('flex')
     loaderEl.classList.toggle('hidden', false)
