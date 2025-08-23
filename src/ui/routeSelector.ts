@@ -5,8 +5,8 @@ export type RouteSelectCallback = (path: Vec3[], points: GPXPoint[], url: string
 export async function initRouteSelector(containerId: string, onSelect: RouteSelectCallback) {
   const container = document.getElementById(containerId)
   if (!container) return
-
-  const res = await fetch('/gpx/index.json')
+  const base = import.meta.env.BASE_URL
+  const res = await fetch(`${base}gpx/index.json`)
   const files: { name: string; url: string }[] = await res.json()
 
   if (!files.length) {
@@ -27,7 +27,7 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
 
     container.appendChild(item)
 
-    const resFile = await fetch(file.url)
+    const resFile = await fetch(`${base}${file.url}`)
     if (!resFile.ok) {
       const invalid = document.createElement('div')
       invalid.classList.add('text-[#f88]')
