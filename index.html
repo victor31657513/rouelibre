@@ -10,17 +10,17 @@
 <canvas id="app" class="block"></canvas>
 <button
   id="home-btn"
-  class="hidden fixed top-4 left-4 z-20 bg-white text-black text-xs font-sans px-2 py-1 rounded"
+  class="hidden fixed top-4 left-4 z-20 font-sans btn btn-sm btn-primary"
 >
   Accueil
 </button>
 <div
   id="route-list"
-  class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-black/40 p-1 text-white text-xs font-sans"
+  class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-full max-w-md space-y-2 rounded-lg bg-white/90 p-4 text-sm font-sans text-gray-900 shadow dark:bg-gray-800/90 dark:text-gray-200"
 ></div>
-<div id="loader" class="hidden fixed inset-0 bg-black/70 items-center justify-center z-[100]">
-  <div id="loader-bar" class="w-4/5 max-w-[400px] h-3 bg-gray-700">
-    <div id="loader-progress" class="h-full w-0 bg-blue-500"></div>
+<div id="loader" class="hidden fixed inset-0 z-[100] items-center justify-center bg-black/70">
+  <div id="loader-bar" class="w-4/5 max-w-[400px] h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+    <div id="loader-progress" class="h-full w-0 bg-blue-600"></div>
   </div>
 </div>
 <div

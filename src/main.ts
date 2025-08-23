@@ -2,6 +2,7 @@
 import * as THREE from 'three'
 import pkg from '../package.json'
 import './style.css'
+import 'flowbite'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
