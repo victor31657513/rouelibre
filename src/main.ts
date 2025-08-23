@@ -173,9 +173,10 @@ gapLengthInput.addEventListener('change', rebuildRoute)
 
 document.addEventListener('DOMContentLoaded', () => {
   initRouteSelector('route-list', async (_path3D, _points, url) => {
-    loaderEl.style.display = 'flex'
+    loaderEl.classList.add('flex')
+    loaderEl.classList.toggle('hidden', false)
     loaderProgress.style.width = '0%'
-    canvas.style.display = 'none'
+    canvas.classList.toggle('hidden', true)
     const { path3D, points } = await loadGPX(url, (p) => {
       loaderProgress.style.width = `${p}%`
     })
@@ -203,8 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
     startAnimation()
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
-    loaderEl.style.display = 'none'
-    canvas.style.display = 'block'
+    loaderEl.classList.remove('flex')
+    loaderEl.classList.toggle('hidden', true)
+    canvas.classList.toggle('hidden', false)
   })
 })
 
