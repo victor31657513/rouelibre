@@ -75,6 +75,9 @@ const worker = new Worker(new URL('./physics/worker.ts', import.meta.url), { typ
 let positions = new Float32Array(N * 3)
 let last = performance.now()
 let animating = false
+let followRider = false
+const cameraHeight = 1.7
+const cameraPrev = new THREE.Vector3()
 
 worker.onmessage = (e: MessageEvent) => {
   const { type, data } = e.data || {}
@@ -107,6 +110,23 @@ function tick() {
   const now = performance.now()
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
+
+  if (followRider) {
+    const x = positions[0]
+    const y = positions[1]
+    const z = positions[2]
+    camera.position.set(x, y + cameraHeight, z)
+    const dx = x - cameraPrev.x
+    const dy = y - cameraPrev.y
+    const dz = z - cameraPrev.z
+    const len = Math.hypot(dx, dy, dz) || 1
+    camera.lookAt(
+      x + dx / len,
+      y + cameraHeight + dy / len,
+      z + dz / len
+    )
+    cameraPrev.set(x, y, z)
+  }
 
   // demande un step physique
   worker.postMessage({ type: 'step', payload: { dt } })
@@ -195,6 +215,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const { path3D, points } = await loadGPX(url, (p) => {
       loaderProgress.style.width = `${p}%`
     })
+    const first = path3D[0]
+    const second = path3D[1] ?? path3D[0]
+    camera.position.set(first.x, first.y + cameraHeight, first.z)
+    camera.lookAt(second.x, second.y + cameraHeight, second.z)
+    cameraPrev.set(first.x, first.y, first.z)
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
@@ -203,20 +228,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // initialise le peloton sur la route sélectionnée
     const pelotonPos = initPeloton(simplified, N)
+    positions = new Float32Array(pelotonPos)
     worker.postMessage(
       { type: 'init', payload: { N, positions: pelotonPos.buffer } },
       [pelotonPos.buffer]
     )
     for (let i = 0; i < N; i++) {
-      const x = pelotonPos[i * 3 + 0]
-      const y = pelotonPos[i * 3 + 1]
-      const z = pelotonPos[i * 3 + 2]
+      const x = positions[i * 3 + 0]
+      const y = positions[i * 3 + 1]
+      const z = positions[i * 3 + 2]
       tmp.position.set(x, y, z)
       tmp.rotation.set(0, 0, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
     }
     riders.instanceMatrix.needsUpdate = true
+    followRider = true
     startAnimation()
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
