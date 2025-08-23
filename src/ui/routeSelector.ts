@@ -10,17 +10,17 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
   const files: { name: string; url: string }[] = await res.json()
 
   if (!files.length) {
-    const empty = document.createElement('div')
+    const empty = document.createElement('li')
     empty.textContent = 'Aucun parcours trouvé'
-    empty.classList.add('text-sm', 'text-gray-500', 'dark:text-gray-400')
+    empty.classList.add('list-group-item', 'text-sm', 'text-gray-500', 'dark:text-gray-400')
     container.appendChild(empty)
     return
   }
 
   for (const file of files) {
-    const item = document.createElement('div')
+    const item = document.createElement('li')
     item.classList.add(
-      'mb-2',
+      'list-group-item',
       'p-2',
       'rounded-lg',
       'border',
