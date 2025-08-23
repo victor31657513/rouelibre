@@ -335,6 +335,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // initialise le peloton sur la route sélectionnée
     const pelotonPos = initPeloton(simplified, N)
     positions = new Float32Array(pelotonPos)
+
+    const median = Math.floor(N / 2)
+    setSelectedIndex(median, N)
+    const base = median * 3
+    const cx = positions[base]
+    const cy = positions[base + 1]
+    const cz = positions[base + 2]
+    camera.position.set(cx, cy + cameraHeight, cz)
+    camera.lookAt(cx, cy + cameraHeight, cz)
+    cameraPrev.copy(camera.position)
+
     worker.postMessage(
       { type: 'init', payload: { N, positions: pelotonPos.buffer } },
       [pelotonPos.buffer]
@@ -349,8 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
       riders.setMatrixAt(i, tmp.matrix)
     }
     riders.instanceMatrix.needsUpdate = true
-    setSelectedIndex(0, N)
     focusSelected()
+    cameraPrev.copy(camera.position)
     startAnimation()
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
