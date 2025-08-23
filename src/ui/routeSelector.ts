@@ -1,6 +1,6 @@
 import { GPXPoint, Vec3, parseGPX, projectToLocal } from '../gpx'
 
-export type RouteSelectCallback = (path: Vec3[], points: GPXPoint[]) => void
+export type RouteSelectCallback = (path: Vec3[], points: GPXPoint[], url: string) => void
 
 export async function initRouteSelector(containerId: string, onSelect: RouteSelectCallback) {
   const container = document.getElementById(containerId)
@@ -54,6 +54,6 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
       ctx.stroke()
     }
 
-    item.addEventListener('click', () => onSelect(path3D, points))
+    item.addEventListener('click', () => onSelect(path3D, points, file.url))
   }
 }
