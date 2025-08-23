@@ -1,13 +1,15 @@
 // src/main.ts
 import * as THREE from 'three'
 import pkg from '../package.json'
-import type { GPXPoint, Vec3 } from './gpx'
+import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 
 const N = 184 // nombre de cyclistes
 
 // Renderer
 const canvas = document.getElementById('app') as HTMLCanvasElement
+const loaderEl = document.getElementById('loader') as HTMLDivElement
+const loaderProgress = document.getElementById('loader-progress') as HTMLDivElement
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -129,6 +131,37 @@ const gapLengthInput = document.getElementById('gapLength') as HTMLInputElement
 
 let currentPath: Vec3[] | null = null
 
+async function loadGPX(url: string, onProgress: (p: number) => void): Promise<{ path3D: Vec3[]; points: GPXPoint[] }> {
+  const res = await fetch(url)
+  const contentLength = Number(res.headers.get('Content-Length')) || 0
+  const reader = res.body?.getReader()
+  const chunks: Uint8Array[] = []
+  let received = 0
+  while (true) {
+    const { done, value } = await reader!.read()
+    if (done) break
+    if (value) {
+      chunks.push(value)
+      received += value.length
+      if (contentLength) {
+        onProgress(Math.round((received / contentLength) * 100))
+      }
+    }
+  }
+  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0)
+  const merged = new Uint8Array(totalLength)
+  let offset = 0
+  for (const c of chunks) {
+    merged.set(c, offset)
+    offset += c.length
+  }
+  if (!contentLength) onProgress(100)
+  const xmlText = new TextDecoder().decode(merged)
+  const points = parseGPX(xmlText)
+  const { path3D } = projectToLocal(points)
+  return { path3D, points }
+}
+
 function rebuildRoute() {
   if (!currentPath) return
   const width = Number.parseFloat(roadWidthInput.value)
@@ -149,12 +182,20 @@ dashLengthInput.addEventListener('change', rebuildRoute)
 gapLengthInput.addEventListener('change', rebuildRoute)
 
 document.addEventListener('DOMContentLoaded', () => {
-  initRouteSelector('route-list', (path3D, points) => {
+  initRouteSelector('route-list', async (_path3D, _points, url) => {
+    loaderEl.style.display = 'flex'
+    loaderProgress.style.width = '0%'
+    canvas.style.display = 'none'
+    const { path3D, points } = await loadGPX(url, (p) => {
+      loaderProgress.style.width = `${p}%`
+    })
     const simplified = simplifyPath(path3D, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
     currentPath = simplified
     rebuildRoute()
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
+    loaderEl.style.display = 'none'
+    canvas.style.display = 'block'
   })
 })
 
