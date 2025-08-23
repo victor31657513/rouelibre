@@ -7,6 +7,7 @@ import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
 import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
+import { updateCameraView } from './camera'
 
 const N = 184 // nombre de cyclistes
 
@@ -125,19 +126,16 @@ addEventListener('resize', () => {
 
 // Boucle
 function updateCamera() {
-  const base = selectedIndex * 3
-  cameraPivot.set(
-    positions[base],
-    positions[base + 1],
-    positions[base + 2]
+  updateCameraView(
+    camera,
+    cameraPivot,
+    positions,
+    selectedIndex,
+    orbitYaw,
+    orbitPitch,
+    orbitRadius,
+    cameraHeight
   )
-  const cosPitch = Math.cos(orbitPitch)
-  camera.position.set(
-    cameraPivot.x + orbitRadius * cosPitch * Math.sin(orbitYaw),
-    cameraPivot.y + cameraHeight + orbitRadius * Math.sin(orbitPitch),
-    cameraPivot.z + orbitRadius * cosPitch * Math.cos(orbitYaw)
-  )
-  camera.lookAt(cameraPivot.x, cameraPivot.y + cameraHeight, cameraPivot.z)
 }
 
 function focusSelected() {
@@ -226,8 +224,18 @@ document.addEventListener('keydown', (e) => {
       return
   }
   e.preventDefault()
+  const latest = positions
   changeSelectedIndex(delta, N)
-  focusSelected()
+  updateCameraView(
+    camera,
+    cameraPivot,
+    latest,
+    selectedIndex,
+    orbitYaw,
+    orbitPitch,
+    orbitRadius,
+    cameraHeight
+  )
 })
 
 function startAnimation() {
