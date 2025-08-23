@@ -33,6 +33,19 @@ const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerH
 camera.position.set(0, 10, 26)
 camera.lookAt(0, 0, 0)
 
+// Zoom
+const minFov = 20
+const maxFov = 100
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault()
+    camera.fov = THREE.MathUtils.clamp(camera.fov + e.deltaY * 0.05, minFov, maxFov)
+    camera.updateProjectionMatrix()
+  },
+  { passive: false }
+)
+
 // Lights
 const hemi = new THREE.HemisphereLight(0xffffff, 0x222244, 0.9)
 scene.add(hemi)
