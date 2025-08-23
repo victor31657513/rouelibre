@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Roue libre – Three + Rapier</title>
+<style>
+  #loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  #loader-bar {
+    width: 80%;
+    max-width: 400px;
+    height: 12px;
+    background: #444;
+  }
+  #loader-progress {
+    height: 100%;
+    width: 0%;
+    background: #3aa6ff;
+  }
+</style>
+  <script type="module" crossorigin src="/assets/index-CoCxvha1.js"></script>
+</head>
+<body style="margin:0;">
+<canvas id="app"></canvas>
+<div id="route-list" style="position:fixed;top:12px;left:12px;z-index:10;background:rgba(0,0,0,0.4);padding:4px;color:white;font:12px sans-serif;"></div>
+<div id="controls" style="position:fixed;top:50px;left:12px;z-index:10;background:rgba(0,0,0,0.4);padding:4px;color:white;font:12px sans-serif;">
+  <label>Route <input id="roadWidth" type="number" value="6" step="0.1" style="width:60px" /></label><br />
+  <label>Dash <input id="dashLength" type="number" value="3" step="0.1" style="width:60px" /></label><br />
+  <label>Gap <input id="gapLength" type="number" value="5" step="0.1" style="width:60px" /></label>
+</div>
+<div id="loader">
+  <div id="loader-bar">
+    <div id="loader-progress"></div>
+  </div>
+</div>
+</body>
+</html>
