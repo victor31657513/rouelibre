@@ -37,20 +37,26 @@ jobs:
           npm run check || true
           npm run build
 
-      - name: Prepare deploy tree
+      - name: Publish to deploy branch (fast-forward friendly)
         run: |
-          rm -rf out
-          mkdir -p out
+          set -e
+
+          if git ls-remote --exit-code --heads origin deploy >/dev/null 2>&1; then
+            git fetch origin deploy:deploy
+            git worktree add --force out deploy
+          else
+            git worktree add --force --detach out
+            cd out
+            git checkout --orphan deploy
+            cd ..
+          fi
+
+          rm -rf out/*
           cp -r dist/* out/
 
-      - name: Publish to deploy branch
-        run: |
           cd out
-          git init
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Deploy $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          git branch -M deploy
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          git push -f origin deploy
+          git commit -m "Deploy $(date -u +'%Y-%m-%dT%H:%M:%SZ') (${GITHUB_SHA})" || echo "No changes to commit"
+          git push -u origin HEAD:deploy
