@@ -18,7 +18,6 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
 
   for (const file of files) {
     const item = document.createElement('div')
-    item.style.cursor = 'pointer'
     item.style.marginBottom = '8px'
 
     const label = document.createElement('div')
@@ -26,16 +25,34 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
     label.style.marginBottom = '2px'
     item.appendChild(label)
 
+    container.appendChild(item)
+
+    const resFile = await fetch(file.url)
+    if (!resFile.ok) {
+      const invalid = document.createElement('div')
+      invalid.style.color = '#f88'
+      invalid.textContent = 'Fichier invalide'
+      item.appendChild(invalid)
+      continue
+    }
+
+    const xmlText = await resFile.text()
+    const points = parseGPX(xmlText)
+    if (!points.length) {
+      const invalid = document.createElement('div')
+      invalid.style.color = '#f88'
+      invalid.textContent = 'Fichier invalide'
+      item.appendChild(invalid)
+      continue
+    }
+
+    const { path3D } = projectToLocal(points)
+
+    item.style.cursor = 'pointer'
     const canvas = document.createElement('canvas')
     canvas.width = 120
     canvas.height = 40
     item.appendChild(canvas)
-
-    container.appendChild(item)
-
-    const xmlText = await fetch(file.url).then((r) => r.text())
-    const points = parseGPX(xmlText)
-    const { path3D } = projectToLocal(points)
 
     const ctx = canvas.getContext('2d')
     if (ctx && path3D.length) {
