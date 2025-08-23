@@ -22,8 +22,9 @@ self.onmessage = async (e: MessageEvent) => {
   const { type, payload }: { type: string; payload: any } = e.data || {}
 
   if (type === 'init') {
-    await (init as unknown as () => Promise<void>)() // charge le WASM
-    world = new RAPIER.World({ x: 0, y: 0, z: 0 }) // pas de gravité pour commencer
+    if (!world) await (init as unknown as () => Promise<void>)() // charge le WASM
+    // réinitialise le monde à chaque nouvelle préparation de parcours
+    world = new RAPIER.World({ x: 0, y: 0, z: 0 })
 
     N = payload.N as number
     const initial = new Float32Array(payload.positions)
