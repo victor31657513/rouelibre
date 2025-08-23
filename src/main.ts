@@ -87,7 +87,12 @@ let positions = new Float32Array(N * 3)
 let last = performance.now()
 let animating = false
 const cameraHeight = 1.7
-const cameraPrev = new THREE.Vector3()
+const cameraPivot = new THREE.Vector3()
+let orbitYaw = 0
+let orbitPitch = 0
+const orbitRadius = 10
+let isOrbiting = false
+const lastPointer = new THREE.Vector2()
 
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
@@ -118,22 +123,24 @@ addEventListener('resize', () => {
 })
 
 // Boucle
-function focusSelected() {
+function updateCamera() {
   const base = selectedIndex * 3
-  const x = positions[base]
-  const y = positions[base + 1]
-  const z = positions[base + 2]
-  camera.position.set(x, y + cameraHeight, z)
-  const dx = x - cameraPrev.x
-  const dy = y - cameraPrev.y
-  const dz = z - cameraPrev.z
-  const len = Math.hypot(dx, dy, dz) || 1
-  camera.lookAt(
-    x + dx / len,
-    y + cameraHeight + dy / len,
-    z + dz / len
+  cameraPivot.set(
+    positions[base],
+    positions[base + 1],
+    positions[base + 2]
   )
-  cameraPrev.set(x, y, z)
+  const cosPitch = Math.cos(orbitPitch)
+  camera.position.set(
+    cameraPivot.x + orbitRadius * cosPitch * Math.sin(orbitYaw),
+    cameraPivot.y + cameraHeight + orbitRadius * Math.sin(orbitPitch),
+    cameraPivot.z + orbitRadius * cosPitch * Math.cos(orbitYaw)
+  )
+  camera.lookAt(cameraPivot.x, cameraPivot.y + cameraHeight, cameraPivot.z)
+}
+
+function focusSelected() {
+  updateCamera()
 }
 
 function tick() {
@@ -142,7 +149,7 @@ function tick() {
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
 
-  focusSelected()
+  updateCamera()
 
   // demande un step physique
   worker.postMessage({ type: 'step', payload: { dt } })
@@ -159,12 +166,34 @@ canvas.addEventListener('click', (e) => {
   const intersects = raycaster.intersectObject(riders)
   if (intersects.length && intersects[0].instanceId !== undefined) {
     setSelectedIndex(intersects[0].instanceId, N)
-    cameraPrev.set(
-      positions[selectedIndex * 3],
-      positions[selectedIndex * 3 + 1],
-      positions[selectedIndex * 3 + 2]
-    )
     focusSelected()
+  }
+})
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button === 1) {
+    isOrbiting = true
+    lastPointer.set(e.clientX, e.clientY)
+    canvas.setPointerCapture(e.pointerId)
+  }
+})
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!isOrbiting) return
+  const dx = e.clientX - lastPointer.x
+  const dy = e.clientY - lastPointer.y
+  lastPointer.set(e.clientX, e.clientY)
+  orbitYaw -= dx * 0.005
+  orbitPitch -= dy * 0.005
+  const limit = Math.PI / 2 - 0.01
+  orbitPitch = THREE.MathUtils.clamp(orbitPitch, -limit, limit)
+  updateCamera()
+})
+
+canvas.addEventListener('pointerup', (e) => {
+  if (e.button === 1) {
+    isOrbiting = false
+    canvas.releasePointerCapture(e.pointerId)
   }
 })
 
@@ -188,11 +217,6 @@ document.addEventListener('keydown', (e) => {
   }
   e.preventDefault()
   changeSelectedIndex(delta, N)
-  cameraPrev.set(
-    positions[selectedIndex * 3],
-    positions[selectedIndex * 3 + 1],
-    positions[selectedIndex * 3 + 2]
-  )
   focusSelected()
 })
 
@@ -284,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const second = path3D[1] ?? path3D[0]
     camera.position.set(first.x, first.y + cameraHeight, first.z)
     camera.lookAt(second.x, second.y + cameraHeight, second.z)
-    cameraPrev.set(first.x, first.y, first.z)
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
@@ -309,7 +332,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     riders.instanceMatrix.needsUpdate = true
     setSelectedIndex(0, N)
-    cameraPrev.set(positions[0], positions[1], positions[2])
     focusSelected()
     startAnimation()
 
