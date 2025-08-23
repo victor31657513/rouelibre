@@ -40,7 +40,7 @@ self.onmessage = async (e: MessageEvent) => {
       const bd = RAPIER.RigidBodyDesc.kinematicPositionBased()
       const rb = world.createRigidBody(bd)
       // largeur/hauteur/profondeur proches du rendu
-      const cd = RAPIER.ColliderDesc.cuboid(0.25, 0.85, 0.5)
+      const cd = RAPIER.ColliderDesc.cuboid(1, 1, 0.35)
       world.createCollider(cd, rb)
       rb.setTranslation(
         { x: initial[i * 3 + 0], y: initial[i * 3 + 1], z: initial[i * 3 + 2] },
@@ -69,7 +69,7 @@ self.onmessage = async (e: MessageEvent) => {
       const nx = cur.x + speed * dt
       const nz =
         cur.z + Math.sin((cur.x + i * 0.1) * 0.2) * 0.02 // micro oscillation
-      rb.setNextKinematicTranslation({ x: nx, y: 0.85, z: nz })
+      rb.setNextKinematicTranslation({ x: nx, y: 1, z: nz })
     }
 
     world.step()

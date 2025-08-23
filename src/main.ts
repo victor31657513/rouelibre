@@ -62,7 +62,7 @@ ground.rotation.x = -Math.PI / 2
 scene.add(ground)
 
 // Instanced boxes (parallélépipèdes) pour les cyclistes
-const bodyGeo = new THREE.BoxGeometry(0.5, 1.7, 1.0)
+const bodyGeo = new THREE.BoxGeometry(2, 2, 0.7)
 const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3aa6ff, metalness: 0.2, roughness: 0.7 })
 const riders = new THREE.InstancedMesh(bodyGeo, bodyMat, N)
 riders.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
@@ -73,7 +73,7 @@ const tmp = new THREE.Object3D()
 for (let i = 0; i < N; i++) {
   const row = Math.floor(i / 9)
   const col = i % 9
-  tmp.position.set(-20 + row * 1.2, 0.85, -4 + col * 1.0)
+  tmp.position.set(-20 + row * 1.2, 1, -4 + col * 1.0)
   tmp.rotation.set(0, 0, 0)
   tmp.updateMatrix()
   riders.setMatrixAt(i, tmp.matrix)
@@ -86,7 +86,7 @@ const worker = new Worker(new URL('./physics/worker.ts', import.meta.url), { typ
 let positions = new Float32Array(N * 3)
 let last = performance.now()
 let animating = false
-const cameraHeight = 1.7
+const cameraHeight = 2
 const cameraPrev = new THREE.Vector3()
 
 const raycaster = new THREE.Raycaster()
