@@ -6,8 +6,8 @@ import 'flowbite'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
-import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
-import { updateCameraView } from './camera'
+import { setSelectedIndex, changeSelectedIndex } from './selection'
+import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
 
 const N = 184 // nombre de cyclistes
 
@@ -34,6 +34,10 @@ scene.background = new THREE.Color(0x111318)
 const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000)
 camera.position.set(0, 10, 26)
 camera.lookAt(0, 0, 0)
+
+// Stabilized follow camera
+const followCam = new StabilizedFollowCamera(camera, scene)
+
 
 // Zoom
 const minFov = 20
@@ -69,6 +73,9 @@ const riders = new THREE.InstancedMesh(bodyGeo, bodyMat, N)
 riders.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
 scene.add(riders)
 
+// Individual rider objects for camera tracking
+const riderObjs: THREE.Object3D[] = Array.from({ length: N }, () => new THREE.Object3D())
+
 // Matrices initiales (rangées en peloton 9 de front)
 const tmp = new THREE.Object3D()
 for (let i = 0; i < N; i++) {
@@ -78,6 +85,7 @@ for (let i = 0; i < N; i++) {
   tmp.rotation.set(0, -Math.PI / 2, 0)
   tmp.updateMatrix()
   riders.setMatrixAt(i, tmp.matrix)
+  riderObjs[i].position.copy(tmp.position)
 }
 riders.instanceMatrix.needsUpdate = true
 
@@ -87,14 +95,55 @@ const worker = new Worker(new URL('./physics/worker.ts', import.meta.url), { typ
 let positions = new Float32Array(N * 4)
 let last = performance.now()
 let animating = false
-const cameraHeight = 1.7
-const cameraPivot = new THREE.Vector3()
-const cameraPrev = new THREE.Vector3(0, 10, 26)
-const followDistance = 10
-const damping = 0.1
 
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
+
+function initCameraUI(cam: StabilizedFollowCamera): void {
+  const root = document.getElementById('ui-root')
+  if (!root) return
+  const panel = document.createElement('div')
+  panel.className =
+    'absolute top-4 right-4 bg-gray-800/70 text-white p-2 rounded pointer-events-auto space-y-1'
+  panel.innerHTML = `
+    <label class="flex items-center gap-2 text-xs">Deadzone
+      <input id="deadzone" type="range" min="0" max="30" value="${cam.deadzoneDeg}" class="w-24" />
+      <span id="deadzoneVal">${cam.deadzoneDeg}</span>
+    </label>
+    <label class="flex items-center gap-2 text-xs">Damping
+      <input id="damping" type="range" min="1" max="20" value="${cam.posDamping}" class="w-24" />
+      <span id="dampingVal">${cam.posDamping}</span>
+    </label>
+    <label class="flex items-center gap-2 text-xs">Bypass
+      <input id="bypass" type="range" min="0" max="1" step="0.01" value="${cam.chicaneBypassWeight}" class="w-24" />
+      <span id="bypassVal">${cam.chicaneBypassWeight}</span>
+    </label>
+  `
+  root.appendChild(panel)
+  const deadzoneInput = panel.querySelector('#deadzone') as HTMLInputElement
+  const dampingInput = panel.querySelector('#damping') as HTMLInputElement
+  const bypassInput = panel.querySelector('#bypass') as HTMLInputElement
+  const deadzoneVal = panel.querySelector('#deadzoneVal') as HTMLSpanElement
+  const dampingVal = panel.querySelector('#dampingVal') as HTMLSpanElement
+  const bypassVal = panel.querySelector('#bypassVal') as HTMLSpanElement
+  deadzoneInput.addEventListener('input', () => {
+    const v = parseFloat(deadzoneInput.value)
+    cam.setDeadzoneDeg(v)
+    deadzoneVal.textContent = v.toFixed(1)
+  })
+  dampingInput.addEventListener('input', () => {
+    const v = parseFloat(dampingInput.value)
+    cam.setPosDamping(v)
+    dampingVal.textContent = v.toFixed(1)
+  })
+  bypassInput.addEventListener('input', () => {
+    const v = parseFloat(bypassInput.value)
+    cam.setChicaneBypassWeight(v)
+    bypassVal.textContent = v.toFixed(2)
+  })
+}
+
+initCameraUI(followCam)
 
 worker.onmessage = (e: MessageEvent) => {
   const { type, data } = e.data || {}
@@ -111,6 +160,7 @@ worker.onmessage = (e: MessageEvent) => {
       tmp.rotation.set(0, yaw - Math.PI / 2, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
+      riderObjs[i].position.set(x, y, z)
     }
     riders.instanceMatrix.needsUpdate = true
     if (!animating) startAnimation()
@@ -125,21 +175,12 @@ addEventListener('resize', () => {
 })
 
 // Boucle
-function updateCamera() {
-  updateCameraView(
-    camera,
-    cameraPrev,
-    cameraPivot,
-    positions,
-    selectedIndex,
-    followDistance,
-    cameraHeight,
-    damping
-  )
+function updateCamera(dt: number) {
+  followCam.update(dt, riderObjs)
 }
 
 function focusSelected() {
-  updateCamera()
+  updateCamera(0.016)
 }
 
 function tick() {
@@ -148,7 +189,7 @@ function tick() {
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
 
-  updateCamera()
+  updateCamera(dt)
 
   // demande un step physique
   worker.postMessage({ type: 'step', payload: { dt } })
@@ -188,18 +229,8 @@ document.addEventListener('keydown', (e) => {
       return
   }
   e.preventDefault()
-  const latest = positions
   changeSelectedIndex(delta, N)
-  updateCameraView(
-    camera,
-    cameraPrev,
-    cameraPivot,
-    latest,
-    selectedIndex,
-    followDistance,
-    cameraHeight,
-    damping
-  )
+  followCam.update(0.016, riderObjs)
 })
 
 function startAnimation() {
@@ -286,10 +317,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const { path3D, points } = await loadGPX(url, (p) => {
       loaderProgress.style.width = `${p}%`
     })
-    const first = path3D[0]
-    const second = path3D[1] ?? path3D[0]
-    camera.position.set(first.x, first.y + cameraHeight, first.z)
-    camera.lookAt(second.x, second.y + cameraHeight, second.z)
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
@@ -308,13 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const median = Math.floor(N / 2)
     setSelectedIndex(median, N)
-    const base = median * 4
-    const cx = positions[base]
-    const cy = positions[base + 1]
-    const cz = positions[base + 2]
-    camera.position.set(cx, cy + cameraHeight, cz)
-    camera.lookAt(cx, cy + cameraHeight, cz)
-    cameraPrev.copy(camera.position)
 
     const pathArray = new Float32Array(simplified.length * 3)
     for (let i = 0; i < simplified.length; i++) {
@@ -337,10 +357,10 @@ document.addEventListener('DOMContentLoaded', () => {
       tmp.rotation.set(0, 0, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
+      riderObjs[i].position.copy(tmp.position)
     }
     riders.instanceMatrix.needsUpdate = true
     focusSelected()
-    cameraPrev.copy(camera.position)
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
     loaderEl.classList.remove('flex')
