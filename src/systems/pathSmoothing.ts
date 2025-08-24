@@ -77,3 +77,15 @@ export function createSplineHelper(spline: PathSpline, segments = 100): LineSegm
   const mat = new LineBasicMaterial({ color: 0xff0000 })
   return new LineSegments(geom, mat)
 }
+
+export function resamplePath(waypoints: Vector3[], step: number): Vector3[] {
+  const spline = new PathSpline(waypoints)
+  const resampled: Vector3[] = []
+  for (let d = 0; d <= spline.totalLength; d += step) {
+    resampled.push(spline.sampleByDistance(d).position)
+  }
+  const last = resampled[resampled.length - 1]
+  const end = waypoints[waypoints.length - 1]
+  if (!last.equals(end)) resampled.push(end.clone())
+  return resampled
+}

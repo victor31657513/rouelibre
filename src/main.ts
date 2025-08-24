@@ -6,6 +6,7 @@ import 'flowbite'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
+import { resamplePath } from './systems/pathSmoothing'
 import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
 
@@ -319,12 +320,13 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
+    const smoothed = resamplePath(simplified, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
-    currentPath = simplified
+    currentPath = smoothed
     rebuildRoute()
 
     // initialise le peloton sur la route sélectionnée
-    const pelotonPos = initPeloton(simplified, N)
+    const pelotonPos = initPeloton(smoothed, N)
     positions = new Float32Array(N * 4)
     for (let i = 0; i < N; i++) {
       positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
