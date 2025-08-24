@@ -10,8 +10,8 @@ const cameraHeight = 1.7
 describe('camera', () => {
   it('uses new coordinates immediately when index changes', () => {
     const positions = new Float32Array([
-      0, 0, 0,
-      10, 0, 0
+      0, 0, 0, 0,
+      10, 0, 0, 0
     ])
     const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1000)
     const pivot = new THREE.Vector3()

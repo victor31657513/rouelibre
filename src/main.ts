@@ -84,7 +84,7 @@ riders.instanceMatrix.needsUpdate = true
 // Worker de physique
 const worker = new Worker(new URL('./physics/worker.ts', import.meta.url), { type: 'module' })
 
-let positions = new Float32Array(N * 3)
+let positions = new Float32Array(N * 4)
 let last = performance.now()
 let animating = false
 const cameraHeight = 1.7
@@ -105,11 +105,13 @@ worker.onmessage = (e: MessageEvent) => {
     positions = new Float32Array(data)
     // applique positions -> matrices
     for (let i = 0; i < N; i++) {
-      const x = positions[i * 3 + 0]
-      const y = positions[i * 3 + 1]
-      const z = positions[i * 3 + 2]
+      const base = i * 4
+      const x = positions[base + 0]
+      const y = positions[base + 1]
+      const z = positions[base + 2]
+      const yaw = positions[base + 3]
       tmp.position.set(x, y, z)
-      tmp.rotation.set(0, 0, 0)
+      tmp.rotation.set(0, yaw, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
     }
@@ -335,11 +337,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // initialise le peloton sur la route sélectionnée
     const pelotonPos = initPeloton(simplified, N)
-    positions = new Float32Array(pelotonPos)
+    positions = new Float32Array(N * 4)
+    for (let i = 0; i < N; i++) {
+      positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
+      positions[i * 4 + 1] = pelotonPos[i * 3 + 1]
+      positions[i * 4 + 2] = pelotonPos[i * 3 + 2]
+      positions[i * 4 + 3] = 0
+    }
 
     const median = Math.floor(N / 2)
     setSelectedIndex(median, N)
-    const base = median * 3
+    const base = median * 4
     const cx = positions[base]
     const cy = positions[base + 1]
     const cz = positions[base + 2]
@@ -347,14 +355,23 @@ document.addEventListener('DOMContentLoaded', () => {
     camera.lookAt(cx, cy + cameraHeight, cz)
     cameraPrev.copy(camera.position)
 
+    const pathArray = new Float32Array(simplified.length * 3)
+    for (let i = 0; i < simplified.length; i++) {
+      const p = simplified[i]
+      pathArray[i * 3 + 0] = p.x
+      pathArray[i * 3 + 1] = p.y
+      pathArray[i * 3 + 2] = p.z
+    }
+
     worker.postMessage(
-      { type: 'init', payload: { N, positions: pelotonPos.buffer } },
-      [pelotonPos.buffer]
+      { type: 'init', payload: { N, positions: pelotonPos.buffer, path: pathArray.buffer } },
+      [pelotonPos.buffer, pathArray.buffer]
     )
     for (let i = 0; i < N; i++) {
-      const x = positions[i * 3 + 0]
-      const y = positions[i * 3 + 1]
-      const z = positions[i * 3 + 2]
+      const base = i * 4
+      const x = positions[base + 0]
+      const y = positions[base + 1]
+      const z = positions[base + 2]
       tmp.position.set(x, y, z)
       tmp.rotation.set(0, 0, 0)
       tmp.updateMatrix()

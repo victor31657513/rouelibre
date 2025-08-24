@@ -2,9 +2,18 @@ import * as RAPIER from '@dimforge/rapier3d-compat'
 
 let world: RAPIER.World
 let N = 0
-let positions: Float32Array
+// buffer envoyé au thread principal : [x, y, z, yaw]*N
+let state: Float32Array
 let bodies: RAPIER.RigidBody[] = []
 let speeds: Float32Array
+// trajectoire à suivre
+let path: Float32Array
+let segLengths: Float32Array
+let cumLengths: Float32Array
+let totalLength = 0
+let progress: Float32Array
+let offsets: Float32Array
+let segments: Uint32Array
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 
@@ -28,36 +37,87 @@ self.onmessage = async (e: MessageEvent) => {
 
     N = payload.N as number
     const initial = new Float32Array(payload.positions)
-    positions = new Float32Array(N * 3)
-    positions.set(initial)
+    path = new Float32Array(payload.path)
 
-    // corps cinématiques (on contrôle la translation)
+    const pts = path.length / 3
+    segLengths = new Float32Array(pts - 1)
+    cumLengths = new Float32Array(pts)
+    cumLengths[0] = 0
+    for (let i = 0; i < pts - 1; i++) {
+      const ax = path[i * 3 + 0]
+      const ay = path[i * 3 + 1]
+      const az = path[i * 3 + 2]
+      const bx = path[(i + 1) * 3 + 0]
+      const by = path[(i + 1) * 3 + 1]
+      const bz = path[(i + 1) * 3 + 2]
+      const len = Math.hypot(bx - ax, by - ay, bz - az)
+      segLengths[i] = len
+      cumLengths[i + 1] = cumLengths[i] + len
+    }
+    totalLength = cumLengths[pts - 1]
+
+    // buffers pour le calcul
+    state = new Float32Array(N * 4)
     bodies = new Array(N)
-    const rng = mulberry32(123456)
     speeds = new Float32Array(N)
+    progress = new Float32Array(N)
+    offsets = new Float32Array(N)
+    segments = new Uint32Array(N)
+    const rng = mulberry32(123456)
 
     for (let i = 0; i < N; i++) {
       const bd = RAPIER.RigidBodyDesc.kinematicPositionBased()
       const rb = world.createRigidBody(bd)
-      // largeur/hauteur/profondeur proches du rendu
       const cd = RAPIER.ColliderDesc.cuboid(1, 1, 0.35)
       world.createCollider(cd, rb)
-      rb.setTranslation(
-        { x: initial[i * 3 + 0], y: initial[i * 3 + 1], z: initial[i * 3 + 2] },
-        true
-      )
       bodies[i] = rb
-      // vitesse de base + petite variance (m/s)
+
+      // progression initiale le long de la route
+      const row = Math.floor(i / 9)
+      let s = row * 1.2
+      if (totalLength > 0) s = s % totalLength
+      let seg = 0
+      while (seg < segLengths.length && s > cumLengths[seg + 1]) seg++
+      segments[i] = seg
+      progress[i] = s
+
+      const base = seg * 3
+      const segLen = segLengths[seg] || 1
+      const ax = path[base]
+      const ay = path[base + 1]
+      const az = path[base + 2]
+      const bx = path[base + 3]
+      const by = path[base + 4]
+      const bz = path[base + 5]
+      const t = (s - cumLengths[seg]) / segLen
+      const dirx = (bx - ax) / segLen
+      const dirz = (bz - az) / segLen
+      const rightx = -dirz
+      const rightz = dirx
+      const centerx = ax + dirx * (s - cumLengths[seg])
+      const centerz = az + dirz * (s - cumLengths[seg])
+      const ix = initial[i * 3 + 0]
+      const iz = initial[i * 3 + 2]
+      const offset = (ix - centerx) * rightx + (iz - centerz) * rightz
+      offsets[i] = offset
+
+      const x = centerx + rightx * offset
+      const y = ay + (by - ay) * t + 1
+      const z = centerz + rightz * offset
+      rb.setTranslation({ x, y, z }, true)
+      const yaw = Math.atan2(dirx, dirz)
+      state[i * 4 + 0] = x
+      state[i * 4 + 1] = y
+      state[i * 4 + 2] = z
+      state[i * 4 + 3] = yaw
       speeds[i] = 7.0 + rng() * 1.0 // ~25–29 km/h pour démo
     }
 
-    // premier envoi
     ;(self as unknown as Worker).postMessage(
-      { type: 'state', data: positions.buffer },
-      [positions.buffer]
+      { type: 'state', data: state.buffer },
+      [state.buffer]
     )
-    // recréer un buffer côté worker (car transféré)
-    positions = new Float32Array(N * 3)
+    state = new Float32Array(N * 4)
   }
 
   if (type === 'step') {
@@ -65,33 +125,50 @@ self.onmessage = async (e: MessageEvent) => {
 
     const dt: number = payload.dt
 
-    // simple logique : avance sur +X avec légère ondulation en Z
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
-      const cur = rb.translation()
-      const speed = speeds[i]
-      const nx = cur.x + speed * dt
-      const nz =
-        cur.z + Math.sin((cur.x + i * 0.1) * 0.2) * 0.02 // micro oscillation
-      rb.setNextKinematicTranslation({ x: nx, y: 1, z: nz })
+      let s = progress[i] + speeds[i] * dt
+      if (totalLength > 0) s = s % totalLength
+      let seg = segments[i]
+      while (seg < segLengths.length && s > cumLengths[seg + 1]) seg++
+      segments[i] = seg
+      progress[i] = s
+
+      const base = seg * 3
+      const segLen = segLengths[seg] || 1
+      const ax = path[base]
+      const ay = path[base + 1]
+      const az = path[base + 2]
+      const bx = path[base + 3]
+      const by = path[base + 4]
+      const bz = path[base + 5]
+      const dirx = (bx - ax) / segLen
+      const dirz = (bz - az) / segLen
+      const rightx = -dirz
+      const rightz = dirx
+      const sAlong = s - cumLengths[seg]
+      const centerx = ax + dirx * sAlong
+      const centery = ay + (by - ay) * (sAlong / segLen)
+      const centerz = az + dirz * sAlong
+      const offset = offsets[i]
+      const x = centerx + rightx * offset
+      const y = centery + 1
+      const z = centerz + rightz * offset
+      rb.setNextKinematicTranslation({ x, y, z })
+      const yaw = Math.atan2(dirx, dirz)
+      const base4 = i * 4
+      state[base4 + 0] = x
+      state[base4 + 1] = y
+      state[base4 + 2] = z
+      state[base4 + 3] = yaw
     }
 
     world.step()
 
-    // remplir le buffer positions
-    for (let i = 0; i < N; i++) {
-      const t = bodies[i].translation()
-      positions[i * 3 + 0] = t.x
-      positions[i * 3 + 1] = t.y
-      positions[i * 3 + 2] = t.z
-    }
-
-    // transférer le buffer (zéro copie)
     ;(self as unknown as Worker).postMessage(
-      { type: 'state', data: positions.buffer },
-      [positions.buffer]
+      { type: 'state', data: state.buffer },
+      [state.buffer]
     )
-    // recréer un buffer côté worker (car transféré)
-    positions = new Float32Array(N * 3)
+    state = new Float32Array(N * 4)
   }
 }

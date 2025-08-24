@@ -10,7 +10,7 @@ export function updateCameraView(
   orbitRadius: number,
   cameraHeight: number
 ): void {
-  const base = index * 3
+  const base = index * 4
   pivot.set(
     positions[base],
     positions[base + 1],
