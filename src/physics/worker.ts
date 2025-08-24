@@ -56,6 +56,8 @@ self.onmessage = async (e: MessageEvent) => {
       { type: 'state', data: positions.buffer },
       [positions.buffer]
     )
+    // recréer un buffer côté worker (car transféré)
+    positions = new Float32Array(N * 3)
   }
 
   if (type === 'step') {
