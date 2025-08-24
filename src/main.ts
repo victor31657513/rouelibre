@@ -75,7 +75,7 @@ for (let i = 0; i < N; i++) {
   const row = Math.floor(i / 9)
   const col = i % 9
   tmp.position.set(-20 + row * 1.2, 1, -4 + col * 1.0)
-  tmp.rotation.set(0, 0, 0)
+  tmp.rotation.set(0, -Math.PI / 2, 0)
   tmp.updateMatrix()
   riders.setMatrixAt(i, tmp.matrix)
 }
@@ -108,7 +108,7 @@ worker.onmessage = (e: MessageEvent) => {
       const z = positions[base + 2]
       const yaw = positions[base + 3]
       tmp.position.set(x, y, z)
-      tmp.rotation.set(0, yaw, 0)
+      tmp.rotation.set(0, yaw - Math.PI / 2, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
     }
