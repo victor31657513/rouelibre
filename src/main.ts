@@ -6,7 +6,7 @@ import 'flowbite'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
-import { setSelectedIndex, changeSelectedIndex } from './selection'
+import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
 
 const N = 184 // nombre de cyclistes
@@ -36,7 +36,7 @@ camera.position.set(0, 10, 26)
 camera.lookAt(0, 0, 0)
 
 // Stabilized follow camera
-const followCam = new StabilizedFollowCamera(camera, scene)
+const followCam = new StabilizedFollowCamera(camera)
 
 
 // Zoom
@@ -176,7 +176,7 @@ addEventListener('resize', () => {
 
 // Boucle
 function updateCamera(dt: number) {
-  followCam.update(dt, riderObjs)
+  followCam.update(dt, [riderObjs[selectedIndex]])
 }
 
 function focusSelected() {
@@ -230,7 +230,7 @@ document.addEventListener('keydown', (e) => {
   }
   e.preventDefault()
   changeSelectedIndex(delta, N)
-  followCam.update(0.016, riderObjs)
+  updateCamera(0.016)
 })
 
 function startAnimation() {

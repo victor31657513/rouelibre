@@ -4,10 +4,9 @@ import { StabilizedFollowCamera } from '../src/camera/StabilizedFollowCamera'
 
 describe('StabilizedFollowCamera', () => {
   it('clamps yaw rate', () => {
-    const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera()
     camera.position.set(0, 0, 0)
-    const follow = new StabilizedFollowCamera(camera, scene)
+    const follow = new StabilizedFollowCamera(camera)
     follow.setFollowOffset(new THREE.Vector3(0, 0, 0))
     const rider = new THREE.Object3D()
     rider.position.set(0, 0, 10)
@@ -18,10 +17,9 @@ describe('StabilizedFollowCamera', () => {
   })
 
   it('honors deadzone', () => {
-    const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera()
     camera.position.set(0, 0, 0)
-    const follow = new StabilizedFollowCamera(camera, scene)
+    const follow = new StabilizedFollowCamera(camera)
     follow.setFollowOffset(new THREE.Vector3(0, 0, 0))
     const angle = THREE.MathUtils.degToRad(5)
     const rider = new THREE.Object3D()

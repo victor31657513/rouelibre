@@ -27,16 +27,10 @@ export class StabilizedFollowCamera {
   chicaneBypassWeight: number
   lowPassAlpha: number
 
-  private _posVelocity = new THREE.Vector3()
   private _smoothedQuat = new THREE.Quaternion()
   private _prevRiderPositions: THREE.Vector3[] = []
 
-  // debug helpers
-  private _followArrow: THREE.ArrowHelper
-  private _bypassArrow: THREE.ArrowHelper
-  private _deadzoneLines: THREE.LineSegments
-
-  constructor(camera: THREE.PerspectiveCamera, scene: THREE.Scene, params: FollowCameraParams = {}) {
+  constructor(camera: THREE.PerspectiveCamera, params: FollowCameraParams = {}) {
     this.camera = camera
     this.followOffset = params.followOffset?.clone() ?? new THREE.Vector3(0, 6, -10)
     this.posDamping = params.posDamping ?? 6
@@ -49,17 +43,6 @@ export class StabilizedFollowCamera {
     this.lowPassAlpha = params.lowPassAlpha ?? 0.12
 
     this._smoothedQuat.copy(camera.quaternion)
-
-    // debug helpers
-    this._followArrow = new THREE.ArrowHelper(new THREE.Vector3(), camera.position.clone(), 5, 0x00ff00)
-    this._bypassArrow = new THREE.ArrowHelper(new THREE.Vector3(), camera.position.clone(), 5, 0xff0000)
-    const dzGeom = new THREE.BufferGeometry()
-    dzGeom.setAttribute('position', new THREE.Float32BufferAttribute(12, 3))
-    const dzMat = new THREE.LineBasicMaterial({ color: 0xffff00 })
-    this._deadzoneLines = new THREE.LineSegments(dzGeom, dzMat)
-    scene.add(this._followArrow)
-    scene.add(this._bypassArrow)
-    scene.add(this._deadzoneLines)
   }
 
   // setters for tweaking parameters
@@ -105,26 +88,8 @@ export class StabilizedFollowCamera {
     else bypassDir.copy(followDir)
     const desiredForward = followDir.clone().lerp(bypassDir, this.chicaneBypassWeight).normalize()
 
-    // update debug arrows
-    this._followArrow.position.copy(this.camera.position)
-    this._followArrow.setDirection(followDir)
-    this._bypassArrow.position.copy(this.camera.position)
-    this._bypassArrow.setDirection(bypassDir)
-
-    // deadzone rays
-    const dzRad = THREE.MathUtils.degToRad(this.deadzoneDeg)
     const forward = this.camera.getWorldDirection(new THREE.Vector3())
     const up = new THREE.Vector3(0, 1, 0)
-    const leftDir = forward.clone().applyAxisAngle(up, dzRad)
-    const rightDir = forward.clone().applyAxisAngle(up, -dzRad)
-    const dzPos = this._deadzoneLines.geometry.getAttribute('position') as THREE.Float32BufferAttribute
-    const camPos = this.camera.position
-    const len = 5
-    dzPos.setXYZ(0, camPos.x, camPos.y, camPos.z)
-    dzPos.setXYZ(1, camPos.x + leftDir.x * len, camPos.y + leftDir.y * len, camPos.z + leftDir.z * len)
-    dzPos.setXYZ(2, camPos.x, camPos.y, camPos.z)
-    dzPos.setXYZ(3, camPos.x + rightDir.x * len, camPos.y + rightDir.y * len, camPos.z + rightDir.z * len)
-    dzPos.needsUpdate = true
 
     const angle = THREE.MathUtils.radToDeg(followDir.angleTo(forward))
     if (angle < this.deadzoneDeg) {
