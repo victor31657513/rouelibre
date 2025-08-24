@@ -1,4 +1,6 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
+import { Vector3 } from 'three'
+import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing'
 
 let world: RAPIER.World
 let N = 0
@@ -6,14 +8,20 @@ let N = 0
 let state: Float32Array
 let bodies: RAPIER.RigidBody[] = []
 let speeds: Float32Array
-// trajectoire à suivre
-let path: Float32Array
-let segLengths: Float32Array
-let cumLengths: Float32Array
-let totalLength = 0
 let progress: Float32Array
 let offsets: Float32Array
-let segments: Uint32Array
+let yawRates: Float32Array
+
+// trajectoire lissée
+let spline: PathSpline
+let totalLength = 0
+
+// paramètres ajustables
+let lookAhead = 5
+let maxYawRate = 120
+let maxYawAccel = 480
+let minRadius = 12
+let speedScale = 0.8
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 
@@ -37,24 +45,13 @@ self.onmessage = async (e: MessageEvent) => {
 
     N = payload.N as number
     const initial = new Float32Array(payload.positions)
-    path = new Float32Array(payload.path)
-
-    const pts = path.length / 3
-    segLengths = new Float32Array(pts - 1)
-    cumLengths = new Float32Array(pts)
-    cumLengths[0] = 0
-    for (let i = 0; i < pts - 1; i++) {
-      const ax = path[i * 3 + 0]
-      const ay = path[i * 3 + 1]
-      const az = path[i * 3 + 2]
-      const bx = path[(i + 1) * 3 + 0]
-      const by = path[(i + 1) * 3 + 1]
-      const bz = path[(i + 1) * 3 + 2]
-      const len = Math.hypot(bx - ax, by - ay, bz - az)
-      segLengths[i] = len
-      cumLengths[i + 1] = cumLengths[i] + len
+    const raw = new Float32Array(payload.path)
+    const waypoints: Vector3[] = []
+    for (let i = 0; i < raw.length; i += 3) {
+      waypoints.push(new Vector3(raw[i], raw[i + 1], raw[i + 2]))
     }
-    totalLength = cumLengths[pts - 1]
+    spline = new PathSpline(waypoints)
+    totalLength = spline.totalLength
 
     // buffers pour le calcul
     state = new Float32Array(N * 4)
@@ -62,7 +59,7 @@ self.onmessage = async (e: MessageEvent) => {
     speeds = new Float32Array(N)
     progress = new Float32Array(N)
     offsets = new Float32Array(N)
-    segments = new Uint32Array(N)
+    yawRates = new Float32Array(N)
     const rng = mulberry32(123456)
 
     for (let i = 0; i < N; i++) {
@@ -70,47 +67,32 @@ self.onmessage = async (e: MessageEvent) => {
       const rb = world.createRigidBody(bd)
       const cd = RAPIER.ColliderDesc.cuboid(1, 1, 0.35)
       world.createCollider(cd, rb)
+      rb.setAngularDamping(2.0)
       bodies[i] = rb
 
-      // progression initiale le long de la route
       const row = Math.floor(i / 9)
       let s = row * 1.2
       if (totalLength > 0) s = s % totalLength
-      let seg = 0
-      while (seg < segLengths.length && s > cumLengths[seg + 1]) seg++
-      segments[i] = seg
       progress[i] = s
 
-      const base = seg * 3
-      const segLen = segLengths[seg] || 1
-      const ax = path[base]
-      const ay = path[base + 1]
-      const az = path[base + 2]
-      const bx = path[base + 3]
-      const by = path[base + 4]
-      const bz = path[base + 5]
-      const t = (s - cumLengths[seg]) / segLen
-      const dirx = (bx - ax) / segLen
-      const dirz = (bz - az) / segLen
-      const rightx = -dirz
-      const rightz = dirx
-      const centerx = ax + dirx * (s - cumLengths[seg])
-      const centerz = az + dirz * (s - cumLengths[seg])
+      const sample = spline.sampleByDistance(s)
+      const tangent = sample.tangent
+      const right = new Vector3(-tangent.z, 0, tangent.x).normalize()
+      const center = sample.position
       const ix = initial[i * 3 + 0]
       const iz = initial[i * 3 + 2]
-      const offset = (ix - centerx) * rightx + (iz - centerz) * rightz
+      const offset = (ix - center.x) * right.x + (iz - center.z) * right.z
       offsets[i] = offset
 
-      const x = centerx + rightx * offset
-      const y = ay + (by - ay) * t + 1
-      const z = centerz + rightz * offset
-      rb.setTranslation({ x, y, z }, true)
-      const yaw = Math.atan2(dirx, dirz)
-      state[i * 4 + 0] = x
-      state[i * 4 + 1] = y
-      state[i * 4 + 2] = z
+      const pos = center.clone().add(right.multiplyScalar(offset))
+      rb.setTranslation({ x: pos.x, y: pos.y + 1, z: pos.z }, true)
+      const yaw = Math.atan2(tangent.x, tangent.z)
+      state[i * 4 + 0] = pos.x
+      state[i * 4 + 1] = pos.y + 1
+      state[i * 4 + 2] = pos.z
       state[i * 4 + 3] = yaw
-      speeds[i] = 7.0 + rng() * 1.0 // ~25–29 km/h pour démo
+      speeds[i] = 7.0 + rng() * 1.0
+      yawRates[i] = 0
     }
 
     ;(self as unknown as Worker).postMessage(
@@ -129,37 +111,38 @@ self.onmessage = async (e: MessageEvent) => {
       const rb = bodies[i]
       let s = progress[i] + speeds[i] * dt
       if (totalLength > 0) s = s % totalLength
-      let seg = segments[i]
-      while (seg < segLengths.length && s > cumLengths[seg + 1]) seg++
-      segments[i] = seg
       progress[i] = s
 
-      const base = seg * 3
-      const segLen = segLengths[seg] || 1
-      const ax = path[base]
-      const ay = path[base + 1]
-      const az = path[base + 2]
-      const bx = path[base + 3]
-      const by = path[base + 4]
-      const bz = path[base + 5]
-      const dirx = (bx - ax) / segLen
-      const dirz = (bz - az) / segLen
-      const rightx = -dirz
-      const rightz = dirx
-      const sAlong = s - cumLengths[seg]
-      const centerx = ax + dirx * sAlong
-      const centery = ay + (by - ay) * (sAlong / segLen)
-      const centerz = az + dirz * sAlong
+      let ahead = s + lookAhead
+      const curvature = spline.estimateCurvature(ahead / totalLength)
+      if (curvature > 1 / minRadius) {
+        ahead += lookAhead
+        speeds[i] *= speedScale
+      }
+
+      const sample = spline.sampleByDistance(s)
+      const center = sample.position
+      const tangent = sample.tangent
+      const right = new Vector3(-tangent.z, 0, tangent.x).normalize()
       const offset = offsets[i]
-      const x = centerx + rightx * offset
-      const y = centery + 1
-      const z = centerz + rightz * offset
-      rb.setNextKinematicTranslation({ x, y, z })
-      const yaw = Math.atan2(dirx, dirz)
+      const pos = center.clone().add(right.clone().multiplyScalar(offset))
+
+      const look = spline.sampleByDistance(ahead)
+      const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
+      const currentYaw = state[i * 4 + 3]
+      const yawState: YawState = { yawRate: yawRates[i] }
+      const yaw = smoothLimitAngle(currentYaw, targetYaw, yawState, maxYawRate, maxYawAccel, dt)
+      yawRates[i] = yawState.yawRate
+
+      rb.setNextKinematicTranslation({ x: pos.x, y: center.y + 1, z: pos.z })
+      const half = yaw / 2
+      rb.setNextKinematicRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
+      rb.setAngvel({ x: 0, y: yawRates[i], z: 0 }, true)
+
       const base4 = i * 4
-      state[base4 + 0] = x
-      state[base4 + 1] = y
-      state[base4 + 2] = z
+      state[base4 + 0] = pos.x
+      state[base4 + 1] = center.y + 1
+      state[base4 + 2] = pos.z
       state[base4 + 3] = yaw
     }
 
@@ -170,5 +153,13 @@ self.onmessage = async (e: MessageEvent) => {
       [state.buffer]
     )
     state = new Float32Array(N * 4)
+  }
+
+  if (type === 'params') {
+    lookAhead = payload.lookAhead ?? lookAhead
+    maxYawRate = payload.maxYawRate ?? maxYawRate
+    maxYawAccel = payload.maxYawAccel ?? maxYawAccel
+    minRadius = payload.minRadius ?? minRadius
+    speedScale = payload.speedScale ?? speedScale
   }
 }
