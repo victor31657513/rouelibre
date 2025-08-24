@@ -12,7 +12,7 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
   if (!files.length) {
     const empty = document.createElement('li')
     empty.textContent = 'Aucun parcours trouvé'
-    empty.classList.add('list-group-item', 'text-sm', 'text-gray-500', 'dark:text-gray-400')
+    empty.classList.add('p-2', 'text-sm', 'text-gray-500', 'dark:text-gray-400')
     container.appendChild(empty)
     return
   }
@@ -20,17 +20,13 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
   for (const file of files) {
     const item = document.createElement('li')
     item.classList.add(
-      'list-group-item',
-      'p-2',
-      'rounded-lg',
-      'border',
-      'border-gray-200',
+      'cursor-pointer',
+      'px-4',
+      'py-2',
       'bg-white',
       'hover:bg-gray-100',
-      'dark:border-gray-700',
       'dark:bg-gray-800',
-      'dark:hover:bg-gray-700',
-      'cursor-pointer'
+      'dark:hover:bg-gray-700'
     )
 
     const label = document.createElement('div')
