@@ -90,11 +90,8 @@ let animating = false
 const cameraHeight = 1.7
 const cameraPivot = new THREE.Vector3()
 const cameraPrev = new THREE.Vector3(0, 10, 26)
-let orbitYaw = 0
-let orbitPitch = 0
-const orbitRadius = 10
-let isOrbiting = false
-const lastPointer = new THREE.Vector2()
+const followDistance = 10
+const damping = 0.1
 
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
@@ -131,13 +128,13 @@ addEventListener('resize', () => {
 function updateCamera() {
   updateCameraView(
     camera,
+    cameraPrev,
     cameraPivot,
     positions,
     selectedIndex,
-    orbitYaw,
-    orbitPitch,
-    orbitRadius,
-    cameraHeight
+    followDistance,
+    cameraHeight,
+    damping
   )
 }
 
@@ -172,42 +169,6 @@ canvas.addEventListener('click', (e) => {
   }
 })
 
-canvas.addEventListener('dblclick', (e) => {
-  if (e.button === 1) {
-    orbitYaw = 0
-    orbitPitch = 0
-    updateCamera()
-    cameraPrev.copy(camera.position)
-  }
-})
-
-canvas.addEventListener('pointerdown', (e) => {
-  if (e.button === 1) {
-    isOrbiting = true
-    lastPointer.set(e.clientX, e.clientY)
-    canvas.setPointerCapture(e.pointerId)
-  }
-})
-
-canvas.addEventListener('pointermove', (e) => {
-  if (!isOrbiting) return
-  const dx = e.clientX - lastPointer.x
-  const dy = e.clientY - lastPointer.y
-  lastPointer.set(e.clientX, e.clientY)
-  orbitYaw -= dx * 0.005
-  orbitPitch -= dy * 0.005
-  const limit = Math.PI / 2 - 0.01
-  orbitPitch = THREE.MathUtils.clamp(orbitPitch, -limit, limit)
-  updateCamera()
-})
-
-canvas.addEventListener('pointerup', (e) => {
-  if (e.button === 1) {
-    isOrbiting = false
-    canvas.releasePointerCapture(e.pointerId)
-  }
-})
-
 document.addEventListener('keydown', (e) => {
   let delta = 0
   switch (e.key) {
@@ -231,13 +192,13 @@ document.addEventListener('keydown', (e) => {
   changeSelectedIndex(delta, N)
   updateCameraView(
     camera,
+    cameraPrev,
     cameraPivot,
     latest,
     selectedIndex,
-    orbitYaw,
-    orbitPitch,
-    orbitRadius,
-    cameraHeight
+    followDistance,
+    cameraHeight,
+    damping
   )
 })
 
