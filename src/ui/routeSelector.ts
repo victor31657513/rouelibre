@@ -1,4 +1,5 @@
 import { GPXPoint, Vec3, parseGPX, projectToLocal } from '../gpx'
+import { List } from './List'
 
 export type RouteSelectCallback = (path: Vec3[], points: GPXPoint[], url: string) => void
 
@@ -12,76 +13,72 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
   if (!files.length) {
     const empty = document.createElement('li')
     empty.textContent = 'Aucun parcours trouvé'
-    empty.classList.add('p-2', 'text-sm', 'text-gray-500', 'dark:text-gray-400')
+    empty.classList.add('p-2', 'text-sm', 'text-base-content/60')
     container.appendChild(empty)
     return
   }
+  const list = new List<{ name: string; url: string }>({
+    container,
+    renderItem: async (file) => {
+      const li = document.createElement('li')
+      const btn = document.createElement('button')
+      btn.className = 'flex w-full flex-col items-start gap-1 px-4 py-2 text-left'
 
-  for (const file of files) {
-    const item = document.createElement('li')
-    item.classList.add(
-      'cursor-pointer',
-      'px-4',
-      'py-2',
-      'bg-white',
-      'hover:bg-gray-100',
-      'dark:bg-gray-800',
-      'dark:hover:bg-gray-700'
-    )
+      const label = document.createElement('span')
+      label.textContent = file.name
+      label.className = 'text-sm font-medium'
+      btn.appendChild(label)
 
-    const label = document.createElement('div')
-    label.textContent = file.name
-    label.classList.add('mb-0.5', 'text-sm', 'font-medium', 'text-gray-900', 'dark:text-white')
-    item.appendChild(label)
+      const resFile = await fetch(`${base}${file.url}`)
+      if (!resFile.ok) {
+        const invalid = document.createElement('span')
+        invalid.className = 'text-error'
+        invalid.textContent = 'Fichier invalide'
+        btn.appendChild(invalid)
+      } else {
+        const xmlText = await resFile.text()
+        const points = parseGPX(xmlText)
+        if (!points.length) {
+          const invalid = document.createElement('span')
+          invalid.className = 'text-error'
+          invalid.textContent = 'Fichier invalide'
+          btn.appendChild(invalid)
+        } else {
+          const { path3D } = projectToLocal(points)
+          const canvas = document.createElement('canvas')
+          canvas.width = 120
+          canvas.height = 40
+          btn.appendChild(canvas)
 
-    container.appendChild(item)
+          const ctx = canvas.getContext('2d')
+          if (ctx && path3D.length) {
+            const distances: number[] = [0]
+            for (let i = 1; i < path3D.length; i++) {
+              distances[i] = distances[i - 1] + path3D[i].distanceTo(path3D[i - 1])
+            }
+            const total = distances[distances.length - 1] || 1
+            const minY = Math.min(...path3D.map((p) => p.y))
+            const maxY = Math.max(...path3D.map((p) => p.y))
+            const range = maxY - minY || 1
+            ctx.strokeStyle = '#fff'
+            ctx.beginPath()
+            for (let i = 0; i < path3D.length; i++) {
+              const x = (distances[i] / total) * canvas.width
+              const y = canvas.height - ((path3D[i].y - minY) / range) * canvas.height
+              if (i === 0) ctx.moveTo(x, y)
+              else ctx.lineTo(x, y)
+            }
+            ctx.stroke()
+          }
 
-    const resFile = await fetch(`${base}${file.url}`)
-    if (!resFile.ok) {
-      const invalid = document.createElement('div')
-      invalid.classList.add('text-red-600', 'dark:text-red-400')
-      invalid.textContent = 'Fichier invalide'
-      item.appendChild(invalid)
-      continue
-    }
-
-    const xmlText = await resFile.text()
-    const points = parseGPX(xmlText)
-    if (!points.length) {
-      const invalid = document.createElement('div')
-      invalid.classList.add('text-red-600', 'dark:text-red-400')
-      invalid.textContent = 'Fichier invalide'
-      item.appendChild(invalid)
-      continue
-    }
-
-    const { path3D } = projectToLocal(points)
-    const canvas = document.createElement('canvas')
-    canvas.width = 120
-    canvas.height = 40
-    item.appendChild(canvas)
-
-    const ctx = canvas.getContext('2d')
-    if (ctx && path3D.length) {
-      const distances: number[] = [0]
-      for (let i = 1; i < path3D.length; i++) {
-        distances[i] = distances[i - 1] + path3D[i].distanceTo(path3D[i - 1])
+          btn.addEventListener('click', () => onSelect(path3D, points, file.url))
+        }
       }
-      const total = distances[distances.length - 1] || 1
-      const minY = Math.min(...path3D.map((p) => p.y))
-      const maxY = Math.max(...path3D.map((p) => p.y))
-      const range = maxY - minY || 1
-      ctx.strokeStyle = '#fff'
-      ctx.beginPath()
-      for (let i = 0; i < path3D.length; i++) {
-        const x = (distances[i] / total) * canvas.width
-        const y = canvas.height - ((path3D[i].y - minY) / range) * canvas.height
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      }
-      ctx.stroke()
-    }
 
-    item.addEventListener('click', () => onSelect(path3D, points, file.url))
-  }
+      li.appendChild(btn)
+      return li
+    },
+  })
+
+  await list.setItems(files)
 }

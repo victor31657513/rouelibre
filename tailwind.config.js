@@ -3,13 +3,12 @@ export default {
   darkMode: 'class',
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx,html}",
-    "./node_modules/flowbite/**/*.js"
+    "./src/**/*.{js,ts,jsx,tsx,html}"
   ],
   theme: {
     extend: {},
   },
   plugins: [
-    require('flowbite/plugin')
+    require('daisyui')
   ],
 }
