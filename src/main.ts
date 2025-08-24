@@ -40,6 +40,48 @@ camera.lookAt(0, 0, 0)
 const followCam = new StabilizedFollowCamera(camera)
 
 
+// Camera rotation with middle mouse
+let rotating = false
+let lastX = 0
+let lastY = 0
+let yawOffset = 0
+let pitchOffset = 0
+let lastMiddleTime = 0
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button === 1) {
+    e.preventDefault()
+    rotating = true
+    lastX = e.clientX
+    lastY = e.clientY
+  }
+})
+
+addEventListener('mouseup', (e) => {
+  if (e.button === 1) {
+    const now = performance.now()
+    if (now - lastMiddleTime < 300) {
+      yawOffset = 0
+      pitchOffset = 0
+      focusSelected()
+    }
+    lastMiddleTime = now
+    rotating = false
+  }
+})
+
+canvas.addEventListener('mousemove', (e) => {
+  if (rotating) {
+    const dx = e.clientX - lastX
+    const dy = e.clientY - lastY
+    yawOffset += dx * 0.005
+    pitchOffset += dy * 0.005
+    pitchOffset = THREE.MathUtils.clamp(pitchOffset, -Math.PI / 3, Math.PI / 3)
+    lastX = e.clientX
+    lastY = e.clientY
+  }
+})
+
 // Zoom
 const minFov = 20
 const maxFov = 100
@@ -178,10 +220,17 @@ addEventListener('resize', () => {
 // Boucle
 function updateCamera(dt: number) {
   followCam.update(dt, [riderObjs[selectedIndex]])
+  const offsetQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(pitchOffset, yawOffset, 0, 'YXZ')
+  )
+  camera.quaternion.multiply(offsetQuat)
+  ;(followCam as unknown as { _smoothedQuat: THREE.Quaternion })._smoothedQuat.copy(
+    camera.quaternion
+  )
 }
 
 function focusSelected() {
-  followCam.update(0.016, [riderObjs[selectedIndex]])
+  updateCamera(0.016)
 }
 
 function tick() {
