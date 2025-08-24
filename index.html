@@ -1,13 +1,25 @@
 <!doctype html>
-<html lang="fr" class="dark">
+<html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<link rel="icon" href="/favicon.ico" />
-<title>Roue libre – Three + Rapier</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roue libre – Three + Rapier</title>
+  <meta name="description" content="Roue libre showcase using Three.js and Rapier" />
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    body { font-family: system-ui, sans-serif; }
+  </style>
+  <script>
+    (() => {
+      if (localStorage.getItem('theme') === 'dark') {
+        document.documentElement.classList.add('dark')
+      }
+    })()
+  </script>
 </head>
 <body class="m-0 overflow-hidden bg-neutral-900">
 <canvas id="app" class="block"></canvas>
+<div id="ui-root" class="fixed inset-0 z-50 pointer-events-none"></div>
 <button
   id="home-btn"
   class="hidden fixed top-4 left-4 z-20 font-sans btn btn-sm btn-primary"
