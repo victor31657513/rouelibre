@@ -47,7 +47,7 @@ let yawOffset = 0
 let pitchOffset = 0
 let lastMiddleTime = 0
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('mousedown', (e: MouseEvent) => {
   if (e.button === 1) {
     e.preventDefault()
     rotating = true
@@ -56,7 +56,7 @@ canvas.addEventListener('mousedown', (e) => {
   }
 })
 
-addEventListener('mouseup', (e) => {
+addEventListener('mouseup', (e: MouseEvent) => {
   if (e.button === 1) {
     const now = performance.now()
     if (now - lastMiddleTime < 300) {
@@ -69,7 +69,7 @@ addEventListener('mouseup', (e) => {
   }
 })
 
-canvas.addEventListener('mousemove', (e) => {
+canvas.addEventListener('mousemove', (e: MouseEvent) => {
   if (rotating) {
     const dx = e.clientX - lastX
     const dy = e.clientY - lastY
@@ -86,7 +86,7 @@ const minFov = 20
 const maxFov = 100
 canvas.addEventListener(
   'wheel',
-  (e) => {
+  (e: WheelEvent) => {
     e.preventDefault()
     camera.fov = THREE.MathUtils.clamp(camera.fov + e.deltaY * 0.05, minFov, maxFov)
     camera.updateProjectionMatrix()
