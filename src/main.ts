@@ -40,8 +40,8 @@ const followCam = new StabilizedFollowCamera(camera)
 
 
 // Camera rotation with middle mouse
+const ROT_SENSITIVITY = 0.005
 let rotating = false
-let lastX = 0
 let yawOffset = 0
 let lastMiddleTime = 0
 
@@ -49,7 +49,6 @@ canvas.addEventListener('mousedown', (e: MouseEvent) => {
   if (e.button === 1) {
     e.preventDefault()
     rotating = true
-    lastX = e.clientX
   }
 })
 
@@ -67,9 +66,7 @@ addEventListener('mouseup', (e: MouseEvent) => {
 
 canvas.addEventListener('mousemove', (e: MouseEvent) => {
   if (rotating) {
-    const dx = e.clientX - lastX
-    yawOffset += dx * 0.002
-    lastX = e.clientX
+    yawOffset += e.movementX * ROT_SENSITIVITY
   }
 })
 
@@ -210,7 +207,9 @@ addEventListener('resize', () => {
 
 // Boucle
 function updateCamera(dt: number) {
+  const prevQuat = camera.quaternion.clone()
   followCam.update(dt, [riderObjs[selectedIndex]])
+  if (rotating) camera.quaternion.copy(prevQuat)
   const offsetQuat = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(0, yawOffset, 0, 'YXZ')
   )
