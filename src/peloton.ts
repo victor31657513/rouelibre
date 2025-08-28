@@ -1,13 +1,10 @@
 import type { Vec3 } from './gpx'
 
-export let simulationStarted = false
-
 /**
  * Initialise les positions des cyclistes sur le début du parcours sélectionné
  * en formant un peloton de 9 de front.
  */
 export function initPeloton(path: Vec3[], N: number): Float32Array {
-  simulationStarted = true
   const positions = new Float32Array(N * 3)
   if (path.length < 2) return positions
 
