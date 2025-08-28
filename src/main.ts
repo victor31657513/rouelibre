@@ -16,6 +16,11 @@ const canvas = document.getElementById('app') as HTMLCanvasElement
 const loaderEl = document.getElementById('loader') as HTMLDivElement
 const loaderProgress = document.getElementById('loader-progress') as HTMLDivElement
 const homeBtn = document.getElementById('home-btn') as HTMLButtonElement
+const startBtn = document.getElementById('start-btn') as HTMLButtonElement
+const pauseBtn = document.getElementById('pause-btn') as HTMLButtonElement
+const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement
+let currentPath: Vec3[] | null = null
+let pathData: Float32Array | null = null
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -26,6 +31,59 @@ homeBtn.addEventListener('click', () => {
   canvas.classList.add('hidden')
   showRouteList()
   homeBtn.classList.add('hidden')
+  startBtn.disabled = true
+  pauseBtn.disabled = true
+  resetBtn.disabled = true
+})
+
+startBtn.addEventListener('click', () => {
+  startAnimation()
+  startBtn.disabled = true
+  startBtn.textContent = 'Start'
+  pauseBtn.disabled = false
+})
+
+pauseBtn.addEventListener('click', () => {
+  stopAnimation()
+  startBtn.disabled = false
+  startBtn.textContent = 'Reprendre'
+  pauseBtn.disabled = true
+})
+
+resetBtn.addEventListener('click', () => {
+  stopAnimation()
+  if (currentPath && pathData) {
+    const pelotonPos = initPeloton(currentPath, N)
+    positions = new Float32Array(N * 4)
+    for (let i = 0; i < N; i++) {
+      positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
+      positions[i * 4 + 1] = pelotonPos[i * 3 + 1]
+      positions[i * 4 + 2] = pelotonPos[i * 3 + 2]
+      positions[i * 4 + 3] = 0
+    }
+    const pathCopy = pathData.slice()
+    worker.postMessage(
+      { type: 'init', payload: { N, positions: pelotonPos.buffer, path: pathCopy.buffer } },
+      [pelotonPos.buffer, pathCopy.buffer]
+    )
+    for (let i = 0; i < N; i++) {
+      const base = i * 4
+      const x = positions[base + 0]
+      const y = positions[base + 1]
+      const z = positions[base + 2]
+      tmp.position.set(x, y, z)
+      tmp.rotation.set(0, 0, 0)
+      tmp.updateMatrix()
+      riders.setMatrixAt(i, tmp.matrix)
+      riderObjs[i].position.copy(tmp.position)
+    }
+    riders.instanceMatrix.needsUpdate = true
+    focusSelected()
+    renderer.render(scene, camera)
+  }
+  startBtn.disabled = false
+  startBtn.textContent = 'Start'
+  pauseBtn.disabled = true
 })
 
 // Scene & Camera
@@ -198,7 +256,6 @@ worker.onmessage = (e: MessageEvent) => {
       riderObjs[i].position.set(x, y, z)
     }
     riders.instanceMatrix.needsUpdate = true
-    if (!animating) startAnimation()
   }
 }
 
@@ -295,7 +352,6 @@ const DASH_LENGTH = 2
 const GAP_LENGTH = 10
 const LINE_WIDTH = 0.15
 
-let currentPath: Vec3[] | null = null
 
 async function loadGPX(url: string, onProgress: (p: number) => void): Promise<{ path3D: Vec3[]; points: GPXPoint[] }> {
   const res = await fetch(url)
@@ -388,6 +444,7 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       pathArray[i * 3 + 2] = p.z
     }
 
+    pathData = pathArray.slice()
     worker.postMessage(
       { type: 'init', payload: { N, positions: pelotonPos.buffer, path: pathArray.buffer } },
       [pelotonPos.buffer, pathArray.buffer]
@@ -405,12 +462,17 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     }
     riders.instanceMatrix.needsUpdate = true
     focusSelected()
+    renderer.render(scene, camera)
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
     loaderEl.classList.remove('flex')
     loaderEl.classList.toggle('hidden', true)
     canvas.classList.toggle('hidden', false)
     homeBtn.classList.remove('hidden')
+    startBtn.disabled = false
+    startBtn.textContent = 'Start'
+    pauseBtn.disabled = true
+    resetBtn.disabled = false
   })
 
 
