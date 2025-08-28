@@ -60,8 +60,12 @@ addEventListener('mouseup', (e: MouseEvent) => {
       focusSelected()
     }
     lastMiddleTime = now
-    rotating = false
   }
+  rotating = false
+})
+
+canvas.addEventListener('mouseleave', () => {
+  rotating = false
 })
 
 canvas.addEventListener('mousemove', (e: MouseEvent) => {
