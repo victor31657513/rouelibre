@@ -348,12 +348,11 @@ function rebuildRoute() {
   scene.add(markings)
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const versionEl = document.getElementById('version') as HTMLDivElement | null
-  if (versionEl) {
-    versionEl.textContent = `v${pkg.version}`
-  }
-  initRouteSelector('route-list', async (_path3D, _points, url) => {
+const versionEl = document.getElementById('version') as HTMLDivElement | null
+if (versionEl) {
+  versionEl.textContent = `v${pkg.version}`
+}
+initRouteSelector('route-list', async (_path3D, _points, url) => {
     loaderEl.classList.add('flex')
     loaderEl.classList.toggle('hidden', false)
     loaderProgress.style.width = '0%'
@@ -413,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.classList.toggle('hidden', false)
     homeBtn.classList.remove('hidden')
   })
-})
+
 
 function elevationStats(pts: GPXPoint[]): { totalGain: number; totalLoss: number } {
   let totalGain = 0
