@@ -122,5 +122,44 @@ export class StabilizedFollowCamera {
     this.camera.quaternion.slerp(finalQuat, 1 - Math.exp(-this.rotDamping * dt))
     this._smoothedQuat.copy(this.camera.quaternion)
   }
+
+  snapTo(riders: THREE.Object3D[]): void {
+    if (riders.length === 0) return
+    const box = new THREE.Box3()
+    const avgVel = new THREE.Vector3()
+    if (this._prevRiderPositions.length !== riders.length) {
+      this._prevRiderPositions = riders.map((r) => r.position.clone())
+    }
+    for (let i = 0; i < riders.length; i++) {
+      const pos = riders[i].position
+      box.expandByPoint(pos)
+      const vel = new THREE.Vector3().subVectors(pos, this._prevRiderPositions[i])
+      avgVel.add(vel)
+      this._prevRiderPositions[i].copy(pos)
+    }
+    avgVel.divideScalar(riders.length)
+    const center = box.getCenter(new THREE.Vector3())
+    const predictedTarget = center.addScaledVector(avgVel, this.lookAheadTime)
+    const desiredPos = predictedTarget.clone().add(this.followOffset)
+    this.camera.position.copy(desiredPos)
+
+    const followDir = predictedTarget.clone().sub(this.camera.position).normalize()
+    const bypassDir = avgVel.clone().setY(0)
+    if (bypassDir.lengthSq() > 1e-6) bypassDir.normalize()
+    else bypassDir.copy(followDir)
+    const desiredForward = followDir
+      .clone()
+      .lerp(bypassDir, this.chicaneBypassWeight)
+      .normalize()
+    const up = new THREE.Vector3(0, 1, 0)
+    this.camera.quaternion.setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(
+        this.camera.position,
+        this.camera.position.clone().add(desiredForward),
+        up
+      )
+    )
+    this._smoothedQuat.copy(this.camera.quaternion)
+  }
 }
 

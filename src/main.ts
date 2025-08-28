@@ -224,7 +224,7 @@ function updateCamera(dt: number) {
 }
 
 function focusSelected() {
-  updateCamera(0.016)
+  followCam.snapTo([riderObjs[selectedIndex]])
 }
 
 function tick() {
