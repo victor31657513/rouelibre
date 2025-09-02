@@ -4,3 +4,35 @@
 body {
   margin: 0;
 }
+
+/* Ensure UI elements remain visible even without Tailwind utilities */
+#controls {
+  position: fixed;
+  bottom: 1rem; /* bottom-4 */
+  right: 1rem; /* right-4 */
+  z-index: 50; /* z-50 */
+  display: flex; /* flex */
+  gap: 0.5rem; /* gap-2 */
+  pointer-events: auto; /* pointer-events-auto */
+}
+
+#version {
+  position: fixed;
+  bottom: 0.5rem; /* bottom-2 */
+  left: 50%; /* left-1/2 */
+  transform: translateX(-50%); /* -translate-x-1/2 */
+  z-index: 50; /* z-50 */
+  pointer-events: none; /* pointer-events-none */
+  color: #fff; /* text-white */
+  font-family: system-ui, sans-serif; /* font-sans */
+  font-size: 0.875rem; /* text-sm */
+  opacity: 1; /* opacity-100 */
+}
+
+#home-btn {
+  position: fixed;
+  top: 1rem; /* top-4 */
+  left: 1rem; /* left-4 */
+  z-index: 50; /* z-50 */
+  font-family: system-ui, sans-serif; /* font-sans */
+}
