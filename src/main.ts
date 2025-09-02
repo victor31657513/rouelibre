@@ -192,52 +192,6 @@ let animating = false
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 
-function initCameraUI(cam: StabilizedFollowCamera): void {
-  const root = document.getElementById('ui-root')
-  if (!root) return
-  const panel = document.createElement('div')
-  panel.className =
-    'absolute top-4 right-4 bg-gray-800/70 text-white p-2 rounded pointer-events-auto space-y-1'
-  panel.innerHTML = `
-    <label class="flex items-center gap-2 text-xs">Deadzone
-      <input id="deadzone" type="range" min="0" max="30" value="${cam.deadzoneDeg}" class="w-24" />
-      <span id="deadzoneVal">${cam.deadzoneDeg}</span>
-    </label>
-    <label class="flex items-center gap-2 text-xs">Damping
-      <input id="damping" type="range" min="1" max="20" value="${cam.posDamping}" class="w-24" />
-      <span id="dampingVal">${cam.posDamping}</span>
-    </label>
-    <label class="flex items-center gap-2 text-xs">Bypass
-      <input id="bypass" type="range" min="0" max="1" step="0.01" value="${cam.chicaneBypassWeight}" class="w-24" />
-      <span id="bypassVal">${cam.chicaneBypassWeight}</span>
-    </label>
-  `
-  root.appendChild(panel)
-  const deadzoneInput = panel.querySelector('#deadzone') as HTMLInputElement
-  const dampingInput = panel.querySelector('#damping') as HTMLInputElement
-  const bypassInput = panel.querySelector('#bypass') as HTMLInputElement
-  const deadzoneVal = panel.querySelector('#deadzoneVal') as HTMLSpanElement
-  const dampingVal = panel.querySelector('#dampingVal') as HTMLSpanElement
-  const bypassVal = panel.querySelector('#bypassVal') as HTMLSpanElement
-  deadzoneInput.addEventListener('input', () => {
-    const v = parseFloat(deadzoneInput.value)
-    cam.setDeadzoneDeg(v)
-    deadzoneVal.textContent = v.toFixed(1)
-  })
-  dampingInput.addEventListener('input', () => {
-    const v = parseFloat(dampingInput.value)
-    cam.setPosDamping(v)
-    dampingVal.textContent = v.toFixed(1)
-  })
-  bypassInput.addEventListener('input', () => {
-    const v = parseFloat(bypassInput.value)
-    cam.setChicaneBypassWeight(v)
-    bypassVal.textContent = v.toFixed(2)
-  })
-}
-
-initCameraUI(followCam)
-
 worker.onmessage = (e: MessageEvent) => {
   const { type, data } = e.data || {}
   if (type === 'state') {
