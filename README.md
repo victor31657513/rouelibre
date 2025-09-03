@@ -3,6 +3,13 @@ Simulation de cyclisme
 
 > Ajouter toute nouvelle route dans `public/gpx/index.json`.
 
+## Dépendances
+
+Ce projet utilise les versions suivantes :
+
+- Tailwind CSS : `^4.1.12`
+- daisyUI : `^5.0.50`
+
 ## Scène de test
 
 Le fichier `src/scenes/chicane.ts` propose une petite chicane pour tester le lissage de trajectoire. Il renvoie également un helper Three.js (`LineSegments`) pour visualiser la spline et ses tangentes.
