@@ -14,7 +14,7 @@ const N = 184 // nombre de cyclistes
 // Renderer
 const canvas = document.getElementById('app') as HTMLCanvasElement
 const loaderEl = document.getElementById('loader') as HTMLDivElement
-const loaderProgress = document.getElementById('loader-progress') as HTMLDivElement
+const loaderProgress = document.getElementById('loader-progress') as HTMLProgressElement
 const homeBtn = document.getElementById('home-btn') as HTMLButtonElement
 const startBtn = document.getElementById('start-btn') as HTMLButtonElement
 const pauseBtn = document.getElementById('pause-btn') as HTMLButtonElement
@@ -365,10 +365,10 @@ if (versionEl) {
 initRouteSelector('route-list', async (_path3D, _points, url) => {
     loaderEl.classList.add('flex')
     loaderEl.classList.toggle('hidden', false)
-    loaderProgress.style.width = '0%'
+    loaderProgress.value = 0
     canvas.classList.toggle('hidden', true)
     const { path3D, points } = await loadGPX(url, (p) => {
-      loaderProgress.style.width = `${p}%`
+      loaderProgress.value = p
     })
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
