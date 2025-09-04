@@ -11,9 +11,9 @@
   </style>
   <script>
     (() => {
-      if (localStorage.getItem('theme') === 'dark') {
-        document.documentElement.classList.add('dark')
-      }
+      const theme = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light'
+      document.documentElement.setAttribute('data-theme', theme)
+      document.documentElement.classList.toggle('dark', theme === 'dark')
     })()
   </script>
   <script type="module" crossorigin src="/assets/index-D_iJGrLY.js"></script>
