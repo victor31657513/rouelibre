@@ -35,5 +35,16 @@ describe('initialization', () => {
     expect(camera.position.z).toBeCloseTo(z)
     expect(cameraPrev.equals(camera.position)).toBe(true)
   })
+
+  it('places subsequent rows behind the start line', () => {
+    const path = [
+      { x: 0, y: 0, z: 0 },
+      { x: 10, y: 0, z: 0 }
+    ]
+    const positions = initPeloton(path, N)
+    const firstRowX = positions[0]
+    const secondRowX = positions[9 * 3 + 0]
+    expect(secondRowX).toBeLessThan(firstRowX)
+  })
 })
 
