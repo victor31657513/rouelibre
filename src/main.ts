@@ -14,7 +14,7 @@ const N = 184 // nombre de cyclistes
 // Renderer
 const canvas = document.getElementById('app') as HTMLCanvasElement
 const loaderEl = document.getElementById('loader') as HTMLDivElement
-const loaderProgress = document.getElementById('loader-progress') as HTMLDivElement
+const loaderProgress = document.getElementById('loader-progress') as HTMLProgressElement
 const homeBtn = document.getElementById('home-btn') as HTMLButtonElement
 const startBtn = document.getElementById('start-btn') as HTMLButtonElement
 const pauseBtn = document.getElementById('pause-btn') as HTMLButtonElement
@@ -54,12 +54,16 @@ resetBtn.addEventListener('click', () => {
   stopAnimation()
   if (currentPath && pathData) {
     const pelotonPos = initPeloton(currentPath, N)
+    const yaw0 = Math.atan2(
+      currentPath[1].x - currentPath[0].x,
+      currentPath[1].z - currentPath[0].z
+    )
     positions = new Float32Array(N * 4)
     for (let i = 0; i < N; i++) {
       positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
       positions[i * 4 + 1] = pelotonPos[i * 3 + 1]
       positions[i * 4 + 2] = pelotonPos[i * 3 + 2]
-      positions[i * 4 + 3] = 0
+      positions[i * 4 + 3] = yaw0
     }
     const pathCopy = pathData.slice()
     worker.postMessage(
@@ -72,7 +76,7 @@ resetBtn.addEventListener('click', () => {
       const y = positions[base + 1]
       const z = positions[base + 2]
       tmp.position.set(x, y, z)
-      tmp.rotation.set(0, 0, 0)
+      tmp.rotation.set(0, yaw0 - Math.PI / 2, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
       riderObjs[i].position.copy(tmp.position)
@@ -305,6 +309,8 @@ const ROAD_WIDTH = 8
 const DASH_LENGTH = 2
 const GAP_LENGTH = 10
 const LINE_WIDTH = 0.15
+const START_LINE_OFFSET = 1
+const START_LINE_WIDTH = 0.3
 
 
 async function loadGPX(url: string, onProgress: (p: number) => void): Promise<{ path3D: Vec3[]; points: GPXPoint[] }> {
@@ -350,12 +356,16 @@ function rebuildRoute() {
   if (!currentPath) return
   removeIfPresent('routeMesh')
   removeIfPresent('centerMarkings')
+  removeIfPresent('startLine')
   const road = buildRoadMesh(currentPath, ROAD_WIDTH)
   road.name = 'routeMesh'
   scene.add(road)
   const markings = buildCenterDashes(currentPath, LINE_WIDTH, DASH_LENGTH, GAP_LENGTH)
   markings.name = 'centerMarkings'
   scene.add(markings)
+  const start = buildStartLine(currentPath, ROAD_WIDTH, START_LINE_OFFSET)
+  start.name = 'startLine'
+  scene.add(start)
 }
 
 const versionEl = document.getElementById('version') as HTMLDivElement | null
@@ -365,10 +375,10 @@ if (versionEl) {
 initRouteSelector('route-list', async (_path3D, _points, url) => {
     loaderEl.classList.add('flex')
     loaderEl.classList.toggle('hidden', false)
-    loaderProgress.style.width = '0%'
+    loaderProgress.value = 0
     canvas.classList.toggle('hidden', true)
     const { path3D, points } = await loadGPX(url, (p) => {
-      loaderProgress.style.width = `${p}%`
+      loaderProgress.value = p
     })
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
@@ -379,12 +389,13 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
 
     // initialise le peloton sur la route sélectionnée
     const pelotonPos = initPeloton(smoothed, N)
+    const yaw0 = Math.atan2(smoothed[1].x - smoothed[0].x, smoothed[1].z - smoothed[0].z)
     positions = new Float32Array(N * 4)
     for (let i = 0; i < N; i++) {
       positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
       positions[i * 4 + 1] = pelotonPos[i * 3 + 1]
       positions[i * 4 + 2] = pelotonPos[i * 3 + 2]
-      positions[i * 4 + 3] = 0
+      positions[i * 4 + 3] = yaw0
     }
 
     const median = Math.floor(N / 2)
@@ -409,7 +420,7 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       const y = positions[base + 1]
       const z = positions[base + 2]
       tmp.position.set(x, y, z)
-      tmp.rotation.set(0, 0, 0)
+      tmp.rotation.set(0, yaw0 - Math.PI / 2, 0)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
       riderObjs[i].position.copy(tmp.position)
@@ -542,6 +553,20 @@ function buildCenterDashes(centerLine: Vec3[], lineWidth: number, dashLen: numbe
   geom.computeVertexNormals()
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff })
   return new THREE.Mesh(geom, mat)
+}
+
+function buildStartLine(centerLine: Vec3[], width: number, offset: number): THREE.Mesh {
+  if (centerLine.length < 2) return new THREE.Mesh()
+  const a = centerLine[0]
+  const b = centerLine[1]
+  const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize()
+  const center = new THREE.Vector3(a.x, a.y + 0.02, a.z).add(dir.clone().multiplyScalar(offset))
+  const geom = new THREE.BoxGeometry(width, 0.02, START_LINE_WIDTH)
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff })
+  const mesh = new THREE.Mesh(geom, mat)
+  mesh.position.copy(center)
+  mesh.rotation.y = Math.atan2(dir.x, dir.z)
+  return mesh
 }
 
 function removeIfPresent(name: string): void {

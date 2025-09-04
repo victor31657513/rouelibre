@@ -34,9 +34,12 @@
     class="menu bg-base-100 rounded-box text-sm font-sans shadow fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 max-w-md"
   ></ul>
 <div id="loader" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
-  <div id="loader-bar" class="w-4/5 max-w-[400px] h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-    <div id="loader-progress" class="h-full bg-blue-600"></div>
-  </div>
+  <progress
+    id="loader-progress"
+    class="progress progress-primary w-4/5 max-w-[400px]"
+    value="0"
+    max="100"
+  ></progress>
 </div>
 <div
   id="controls"

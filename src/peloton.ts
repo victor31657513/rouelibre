@@ -22,8 +22,9 @@ export function initPeloton(path: Vec3[], N: number): Float32Array {
   for (let i = 0; i < N; i++) {
     const row = Math.floor(i / 9)
     const col = i % 9 - 4 // centré
-    const x = p0.x + nx * row * 1.2 + rx * col * 1.0
-    const z = p0.z + nz * row * 1.2 + rz * col * 1.0
+    // les rangées sont placées en arrière de la ligne de départ
+    const x = p0.x - nx * row * 1.2 + rx * col * 1.0
+    const z = p0.z - nz * row * 1.2 + rz * col * 1.0
     positions[i * 3 + 0] = x
     positions[i * 3 + 1] = p0.y + 1
     positions[i * 3 + 2] = z
