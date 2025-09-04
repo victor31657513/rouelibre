@@ -48,6 +48,7 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
           const canvas = document.createElement('canvas')
           canvas.width = 120
           canvas.height = 40
+          canvas.className = 'rounded bg-base-300'
           btn.appendChild(canvas)
 
           const ctx = canvas.getContext('2d')
