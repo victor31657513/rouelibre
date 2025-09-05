@@ -8,8 +8,20 @@ import { initPeloton } from './peloton'
 import { resamplePath } from './systems/pathSmoothing'
 import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
+import { projectOntoRoad } from './systems/adhesion'
 
 const N = 184 // nombre de cyclistes
+const RNG_SEED = 1234
+const START_SPACING = 1.2
+const LANE_WIDTH = 1.0
+const CAM_DISTANCE = 10
+const CAM_HEIGHT = 6
+const ROAD_WIDTH = 8
+const DASH_LENGTH = 2
+const GAP_LENGTH = 10
+const LINE_WIDTH = 0.15
+const START_LINE_OFFSET = 1
+const START_LINE_WIDTH = 0.3
 
 // Renderer
 const canvas = document.getElementById('app') as HTMLCanvasElement
@@ -53,7 +65,12 @@ pauseBtn.addEventListener('click', () => {
 resetBtn.addEventListener('click', () => {
   stopAnimation()
   if (currentPath && pathData) {
-    const pelotonPos = initPeloton(currentPath, N)
+    const pelotonPos = initPeloton(currentPath, N, {
+      seed: RNG_SEED,
+      spacing: START_SPACING,
+      laneWidth: LANE_WIDTH,
+      roadWidth: ROAD_WIDTH,
+    })
     const yaw0 = Math.atan2(
       currentPath[1].x - currentPath[0].x,
       currentPath[1].z - currentPath[0].z
@@ -75,8 +92,11 @@ resetBtn.addEventListener('click', () => {
       const x = positions[base + 0]
       const y = positions[base + 1]
       const z = positions[base + 2]
-      tmp.position.set(x, y, z)
-      tmp.rotation.set(0, yaw0 - Math.PI / 2, 0)
+      const { position, quaternion } = roadMesh
+        ? projectOntoRoad(x, y, z, yaw0, roadMesh, raycaster)
+        : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
+      tmp.position.copy(position)
+      tmp.quaternion.copy(quaternion)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
       riderObjs[i].position.copy(tmp.position)
@@ -99,6 +119,7 @@ camera.lookAt(0, 0, 0)
 
 // Stabilized follow camera
 const followCam = new StabilizedFollowCamera(camera)
+followCam.setFollowOffset(new THREE.Vector3(0, CAM_HEIGHT, -CAM_DISTANCE))
 
 
 // Camera rotation with middle mouse
@@ -162,6 +183,7 @@ const groundMat = new THREE.MeshStandardMaterial({ color: 0x1f232b, roughness: 1
 const ground = new THREE.Mesh(groundGeo, groundMat)
 ground.rotation.x = -Math.PI / 2
 scene.add(ground)
+let roadMesh: THREE.Mesh | null = null
 
 // Instanced boxes (parallélépipèdes) pour les cyclistes
 const bodyGeo = new THREE.BoxGeometry(2, 2, 0.7)
@@ -207,11 +229,14 @@ worker.onmessage = (e: MessageEvent) => {
       const y = positions[base + 1]
       const z = positions[base + 2]
       const yaw = positions[base + 3]
-      tmp.position.set(x, y, z)
-      tmp.rotation.set(0, yaw - Math.PI / 2, 0)
+      const { position, quaternion } = roadMesh
+        ? projectOntoRoad(x, y, z, yaw, roadMesh, raycaster)
+        : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
+      tmp.position.copy(position)
+      tmp.quaternion.copy(quaternion)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
-      riderObjs[i].position.set(x, y, z)
+      riderObjs[i].position.copy(position)
     }
     riders.instanceMatrix.needsUpdate = true
   }
@@ -305,14 +330,6 @@ function stopAnimation() {
 }
 // GPX loading and road rendering
 
-const ROAD_WIDTH = 8
-const DASH_LENGTH = 2
-const GAP_LENGTH = 10
-const LINE_WIDTH = 0.15
-const START_LINE_OFFSET = 1
-const START_LINE_WIDTH = 0.3
-
-
 async function loadGPX(url: string, onProgress: (p: number) => void): Promise<{ path3D: Vec3[]; points: GPXPoint[] }> {
   const res = await fetch(url)
   const contentLength = Number(res.headers.get('Content-Length')) || 0
@@ -360,6 +377,7 @@ function rebuildRoute() {
   const road = buildRoadMesh(currentPath, ROAD_WIDTH)
   road.name = 'routeMesh'
   scene.add(road)
+  roadMesh = road
   const markings = buildCenterDashes(currentPath, LINE_WIDTH, DASH_LENGTH, GAP_LENGTH)
   markings.name = 'centerMarkings'
   scene.add(markings)
@@ -388,7 +406,12 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     rebuildRoute()
 
     // initialise le peloton sur la route sélectionnée
-    const pelotonPos = initPeloton(smoothed, N)
+    const pelotonPos = initPeloton(smoothed, N, {
+      seed: RNG_SEED,
+      spacing: START_SPACING,
+      laneWidth: LANE_WIDTH,
+      roadWidth: ROAD_WIDTH,
+    })
     const yaw0 = Math.atan2(smoothed[1].x - smoothed[0].x, smoothed[1].z - smoothed[0].z)
     positions = new Float32Array(N * 4)
     for (let i = 0; i < N; i++) {
@@ -419,8 +442,11 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       const x = positions[base + 0]
       const y = positions[base + 1]
       const z = positions[base + 2]
-      tmp.position.set(x, y, z)
-      tmp.rotation.set(0, yaw0 - Math.PI / 2, 0)
+      const { position, quaternion } = roadMesh
+        ? projectOntoRoad(x, y, z, yaw0, roadMesh, raycaster)
+        : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
+      tmp.position.copy(position)
+      tmp.quaternion.copy(quaternion)
       tmp.updateMatrix()
       riders.setMatrixAt(i, tmp.matrix)
       riderObjs[i].position.copy(tmp.position)
@@ -571,5 +597,8 @@ function buildStartLine(centerLine: Vec3[], width: number, offset: number): THRE
 
 function removeIfPresent(name: string): void {
   const o = scene.getObjectByName(name)
-  if (o) scene.remove(o)
+  if (o) {
+    if (name === 'routeMesh') roadMesh = null
+    scene.remove(o)
+  }
 }
