@@ -45,6 +45,7 @@ self.onmessage = async (e: MessageEvent) => {
 
     N = payload.N as number
     const initial = new Float32Array(payload.positions)
+    const yawOffsets = new Float32Array(payload.yaw)
     const raw = new Float32Array(payload.path)
     const waypoints: Vector3[] = []
     for (let i = 0; i < raw.length; i += 3) {
@@ -86,7 +87,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const pos = center.clone().add(right.multiplyScalar(offset))
       rb.setTranslation({ x: pos.x, y: pos.y + 1, z: pos.z }, true)
-      const yaw = Math.atan2(tangent.x, tangent.z)
+      const yaw = Math.atan2(tangent.x, tangent.z) + yawOffsets[i]
       state[i * 4 + 0] = pos.x
       state[i * 4 + 1] = pos.y + 1
       state[i * 4 + 2] = pos.z
