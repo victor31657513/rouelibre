@@ -23,6 +23,15 @@ const LINE_WIDTH = 0.15
 const START_LINE_OFFSET = 1
 const START_LINE_WIDTH = 0.3
 
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6d2b79f5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 // Renderer
 const canvas = document.getElementById('app') as HTMLCanvasElement
 const loaderEl = document.getElementById('loader') as HTMLDivElement
@@ -76,24 +85,40 @@ resetBtn.addEventListener('click', () => {
       currentPath[1].z - currentPath[0].z
     )
     positions = new Float32Array(N * 4)
+    const yawOffsets = new Float32Array(N)
+    const yawRng = mulberry32(RNG_SEED + 1)
     for (let i = 0; i < N; i++) {
-      positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
-      positions[i * 4 + 1] = pelotonPos[i * 3 + 1]
-      positions[i * 4 + 2] = pelotonPos[i * 3 + 2]
-      positions[i * 4 + 3] = yaw0
+      const base = i * 4
+      const sign = yawRng() < 0.5 ? -1 : 1
+      const magnitude = 2 + yawRng() * 2 // 2-4°
+      const yawOffset = sign * magnitude * (Math.PI / 180)
+      yawOffsets[i] = yawOffset
+      positions[base + 0] = pelotonPos[i * 3 + 0]
+      positions[base + 1] = pelotonPos[i * 3 + 1]
+      positions[base + 2] = pelotonPos[i * 3 + 2]
+      positions[base + 3] = yaw0 + yawOffset
     }
     const pathCopy = pathData.slice()
     worker.postMessage(
-      { type: 'init', payload: { N, positions: pelotonPos.buffer, path: pathCopy.buffer } },
-      [pelotonPos.buffer, pathCopy.buffer]
+      {
+        type: 'init',
+        payload: {
+          N,
+          positions: pelotonPos.buffer,
+          yaw: yawOffsets.buffer,
+          path: pathCopy.buffer,
+        },
+      },
+      [pelotonPos.buffer, yawOffsets.buffer, pathCopy.buffer],
     )
     for (let i = 0; i < N; i++) {
       const base = i * 4
       const x = positions[base + 0]
       const y = positions[base + 1]
       const z = positions[base + 2]
+      const yaw = positions[base + 3]
       const { position, quaternion } = roadMesh
-        ? projectOntoRoad(x, y, z, yaw0, roadMesh, raycaster)
+        ? projectOntoRoad(x, y, z, yaw, roadMesh, raycaster)
         : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
       tmp.position.copy(position)
       tmp.quaternion.copy(quaternion)
@@ -406,25 +431,32 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     rebuildRoute()
 
     // initialise le peloton sur la route sélectionnée
-    const pelotonPos = initPeloton(smoothed, N, {
-      seed: RNG_SEED,
-      spacing: START_SPACING,
-      laneWidth: LANE_WIDTH,
-      roadWidth: ROAD_WIDTH,
-    })
-    const yaw0 = Math.atan2(smoothed[1].x - smoothed[0].x, smoothed[1].z - smoothed[0].z)
-    positions = new Float32Array(N * 4)
-    for (let i = 0; i < N; i++) {
-      positions[i * 4 + 0] = pelotonPos[i * 3 + 0]
-      positions[i * 4 + 1] = pelotonPos[i * 3 + 1]
-      positions[i * 4 + 2] = pelotonPos[i * 3 + 2]
-      positions[i * 4 + 3] = yaw0
-    }
+  const pelotonPos = initPeloton(smoothed, N, {
+    seed: RNG_SEED,
+    spacing: START_SPACING,
+    laneWidth: LANE_WIDTH,
+    roadWidth: ROAD_WIDTH,
+  })
+  const yaw0 = Math.atan2(smoothed[1].x - smoothed[0].x, smoothed[1].z - smoothed[0].z)
+  const yawOffsets = new Float32Array(N)
+  const yawRng = mulberry32(RNG_SEED + 1)
+  positions = new Float32Array(N * 4)
+  for (let i = 0; i < N; i++) {
+    const base = i * 4
+    const sign = yawRng() < 0.5 ? -1 : 1
+    const magnitude = 2 + yawRng() * 2
+    const yawOffset = sign * magnitude * (Math.PI / 180)
+    yawOffsets[i] = yawOffset
+    positions[base + 0] = pelotonPos[i * 3 + 0]
+    positions[base + 1] = pelotonPos[i * 3 + 1]
+    positions[base + 2] = pelotonPos[i * 3 + 2]
+    positions[base + 3] = yaw0 + yawOffset
+  }
 
     const median = Math.floor(N / 2)
     setSelectedIndex(median, N)
 
-    const pathArray = new Float32Array(simplified.length * 3)
+  const pathArray = new Float32Array(simplified.length * 3)
     for (let i = 0; i < simplified.length; i++) {
       const p = simplified[i]
       pathArray[i * 3 + 0] = p.x
@@ -432,25 +464,29 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       pathArray[i * 3 + 2] = p.z
     }
 
-    pathData = pathArray.slice()
-    worker.postMessage(
-      { type: 'init', payload: { N, positions: pelotonPos.buffer, path: pathArray.buffer } },
-      [pelotonPos.buffer, pathArray.buffer]
-    )
-    for (let i = 0; i < N; i++) {
-      const base = i * 4
-      const x = positions[base + 0]
-      const y = positions[base + 1]
-      const z = positions[base + 2]
-      const { position, quaternion } = roadMesh
-        ? projectOntoRoad(x, y, z, yaw0, roadMesh, raycaster)
-        : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
-      tmp.position.copy(position)
-      tmp.quaternion.copy(quaternion)
-      tmp.updateMatrix()
-      riders.setMatrixAt(i, tmp.matrix)
-      riderObjs[i].position.copy(tmp.position)
-    }
+  pathData = pathArray.slice()
+  worker.postMessage(
+    {
+      type: 'init',
+      payload: { N, positions: pelotonPos.buffer, yaw: yawOffsets.buffer, path: pathArray.buffer },
+    },
+    [pelotonPos.buffer, yawOffsets.buffer, pathArray.buffer],
+  )
+  for (let i = 0; i < N; i++) {
+    const base = i * 4
+    const x = positions[base + 0]
+    const y = positions[base + 1]
+    const z = positions[base + 2]
+    const yaw = positions[base + 3]
+    const { position, quaternion } = roadMesh
+      ? projectOntoRoad(x, y, z, yaw, roadMesh, raycaster)
+      : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
+    tmp.position.copy(position)
+    tmp.quaternion.copy(quaternion)
+    tmp.updateMatrix()
+    riders.setMatrixAt(i, tmp.matrix)
+    riderObjs[i].position.copy(tmp.position)
+  }
     riders.instanceMatrix.needsUpdate = true
     focusSelected()
     renderer.render(scene, camera)

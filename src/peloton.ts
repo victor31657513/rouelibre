@@ -24,7 +24,7 @@ function mulberry32(a: number) {
 export function initPeloton(
   path: Vec3[],
   N: number,
-  options: PelotonOptions = {}
+  options: PelotonOptions = {},
 ): Float32Array {
   const positions = new Float32Array(N * 3)
   if (path.length < 2) return positions
@@ -36,8 +36,10 @@ export function initPeloton(
     roadWidth = 8.0,
     jitter = 0.3,
   } = options
+
   const rng = mulberry32(seed)
 
+  // coordonnées du segment initial (s: longitudinal, t: latéral)
   const p0 = path[0]
   const p1 = path[1]
   const dx = p1.x - p0.x
@@ -45,26 +47,60 @@ export function initPeloton(
   const len = Math.hypot(dx, dz) || 1
   const nx = dx / len
   const nz = dz / len
-  // vecteur à droite de la route
-  const rx = -nz
+  const rx = -nz // vecteur à droite de la route
   const rz = nx
 
   const halfRoad = roadWidth / 2 - laneWidth / 2
 
+  // aire de génération en (s,t)
+  const nCols = Math.max(1, Math.floor(roadWidth / laneWidth))
+  const nRows = Math.ceil(N / nCols)
+  const maxS = nRows * spacing
+  let radius = spacing * 0.5
+  const samples: { s: number; t: number }[] = []
+  let attempts = 0
+
+  while (samples.length < N) {
+    attempts++
+    // base sampling rectangle
+    let s = -rng() * maxS
+    let t = (rng() * 2 - 1) * halfRoad
+
+    // jitter contrôlé
+    s += (rng() - 0.5) * jitter * spacing
+    t += (rng() - 0.5) * jitter * laneWidth
+    // clamp dans les bornes de la route
+    s = Math.min(0, s)
+    t = Math.max(-halfRoad, Math.min(halfRoad, t))
+
+    // Poisson disk : vérifie la distance minimale
+    let ok = true
+    for (const p of samples) {
+      if (Math.hypot(p.s - s, p.t - t) < radius) {
+        ok = false
+        break
+      }
+    }
+    if (ok) {
+      samples.push({ s, t })
+    }
+
+    // détend le rayon si l'on stagne
+    if (attempts > N * 10 && samples.length < N) {
+      attempts = 0
+      radius *= 0.95
+    }
+  }
+
+  // convertit (s,t) -> (x,z)
   for (let i = 0; i < N; i++) {
-    const row = Math.floor(i / 9)
-    const col = i % 9 - 4 // centré
-    const jitterForward = (rng() - 0.5) * jitter * spacing
-    const jitterSide = (rng() - 0.5) * jitter * laneWidth
-    let forward = row * spacing + jitterForward
-    if (row === 0) forward = Math.max(0, jitterForward)
-    let lateral = col * laneWidth + jitterSide
-    lateral = Math.max(-halfRoad, Math.min(halfRoad, lateral))
-    const x = p0.x - nx * forward + rx * lateral
-    const z = p0.z - nz * forward + rz * lateral
+    const { s, t } = samples[i]
+    const x = p0.x + nx * s + rx * t
+    const z = p0.z + nz * s + rz * t
     positions[i * 3 + 0] = x
     positions[i * 3 + 1] = p0.y + 1
     positions[i * 3 + 2] = z
   }
   return positions
 }
+
