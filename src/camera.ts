@@ -1,15 +1,26 @@
 import * as THREE from 'three'
 
+/**
+ * Updates the main chase camera to follow the median rider.
+ * The camera is positioned behind the rider along the road tangent
+ * and smoothly approaches its target using a spring–damper filter.
+ * Optional collision detection prevents the camera from clipping
+ * through obstacles.
+ */
 export function updateCameraView(
   camera: THREE.PerspectiveCamera,
-  cameraPrev: THREE.Vector3,
+  cameraVelocity: THREE.Vector3,
   pivot: THREE.Vector3,
   positions: Float32Array,
-  index: number,
   followDistance: number,
   cameraHeight: number,
-  damping: number
+  damping: number,
+  lookAhead: number,
+  dt: number,
+  obstacles: THREE.Object3D[] = []
 ): void {
+  const count = positions.length / 4
+  const index = Math.floor(count / 2)
   const base = index * 4
   const x = positions[base]
   const y = positions[base + 1]
@@ -18,20 +29,46 @@ export function updateCameraView(
 
   pivot.set(x, y, z)
 
-  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
-  const targetPos = new THREE.Vector3(
-    x - forward.x * followDistance,
-    y + cameraHeight,
-    z - forward.z * followDistance
-  )
+  const tangent = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+  const targetPos = new THREE.Vector3(x, y, z)
+  const desiredPos = targetPos
+    .clone()
+    .addScaledVector(tangent, -followDistance)
+    .add(new THREE.Vector3(0, cameraHeight, 0))
 
-  cameraPrev.lerp(targetPos, damping)
-  camera.position.copy(cameraPrev)
+  // spring-damper smoothing (critically damped)
+  const xVec = camera.position.clone().sub(desiredPos)
+  const exp = Math.exp(-damping * dt)
+  const temp = cameraVelocity.clone().addScaledVector(xVec, damping).multiplyScalar(dt)
+  const newPos = desiredPos
+    .clone()
+    .add(xVec.add(temp).multiplyScalar(exp))
+  const newVel = cameraVelocity
+    .addScaledVector(xVec, damping)
+    .addScaledVector(temp, -damping)
+    .multiplyScalar(exp)
 
-  const lookAtTarget = new THREE.Vector3(
-    x + forward.x * followDistance,
-    y + cameraHeight,
-    z + forward.z * followDistance
-  )
+  // collision detection: raycast towards camera
+  if (obstacles.length > 0) {
+    const rayDir = newPos.clone().sub(targetPos)
+    const dist = rayDir.length()
+    if (dist > 1e-4) {
+      rayDir.normalize()
+      const raycaster = new THREE.Raycaster(targetPos, rayDir, 0, dist)
+      const hits = raycaster.intersectObjects(obstacles, true)
+      if (hits.length > 0) {
+        newPos.copy(hits[0].point).addScaledVector(rayDir, -0.3)
+        newVel.set(0, 0, 0)
+      }
+    }
+  }
+
+  camera.position.copy(newPos)
+  cameraVelocity.copy(newVel)
+
+  const lookAtTarget = targetPos
+    .clone()
+    .addScaledVector(tangent, lookAhead)
+    .add(new THREE.Vector3(0, cameraHeight, 0))
   camera.lookAt(lookAtTarget)
 }
