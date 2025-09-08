@@ -4,7 +4,7 @@ import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing
 
 let world: RAPIER.World
 let N = 0
-// buffer envoyé au thread principal : [x, y, z, yaw]*N
+// buffer envoyé au thread principal : [s, t, h, yaw]*N
 let state: Float32Array
 let bodies: RAPIER.RigidBody[] = []
 let speeds: Float32Array
@@ -88,9 +88,9 @@ self.onmessage = async (e: MessageEvent) => {
       const pos = center.clone().add(right.multiplyScalar(offset))
       rb.setTranslation({ x: pos.x, y: pos.y + 1, z: pos.z }, true)
       const yaw = Math.atan2(tangent.x, tangent.z) + yawOffsets[i]
-      state[i * 4 + 0] = pos.x
-      state[i * 4 + 1] = pos.y + 1
-      state[i * 4 + 2] = pos.z
+      state[i * 4 + 0] = s
+      state[i * 4 + 1] = offset
+      state[i * 4 + 2] = 1
       state[i * 4 + 3] = yaw
       speeds[i] = 7.0 + rng() * 1.0
       yawRates[i] = 0
@@ -141,9 +141,9 @@ self.onmessage = async (e: MessageEvent) => {
       rb.setAngvel({ x: 0, y: yawRates[i], z: 0 }, true)
 
       const base4 = i * 4
-      state[base4 + 0] = pos.x
-      state[base4 + 1] = center.y + 1
-      state[base4 + 2] = pos.z
+      state[base4 + 0] = s
+      state[base4 + 1] = offset
+      state[base4 + 2] = 1
       state[base4 + 3] = yaw
     }
 
