@@ -5,6 +5,7 @@ import './style.css'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
+import { inRoad } from './road'
 import { resamplePath, PathSpline } from './systems/pathSmoothing'
 import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
@@ -16,6 +17,7 @@ const LANE_WIDTH = 1.0
 const CAM_DISTANCE = 10
 const CAM_HEIGHT = 6
 const ROAD_WIDTH = 8
+const ROAD_MARGIN = 0.05
 const DASH_LENGTH = 2
 const GAP_LENGTH = 10
 const LINE_WIDTH = 0.15
@@ -73,7 +75,7 @@ pauseBtn.addEventListener('click', () => {
 
 resetBtn.addEventListener('click', () => {
   stopAnimation()
-  if (currentPath && pathData && spline) {
+  if (currentPath && pathData && spline && roadReady) {
     const pelotonPos = initPeloton(currentPath, N, {
       seed: RNG_SEED,
       spacing: START_SPACING,
@@ -207,6 +209,7 @@ const ground = new THREE.Mesh(groundGeo, groundMat)
 ground.rotation.x = -Math.PI / 2
 scene.add(ground)
 let roadMesh: THREE.Mesh | null = null
+let roadReady = false
 
 // Instanced boxes (parallélépipèdes) pour les cyclistes
 const bodyGeo = new THREE.BoxGeometry(2, 2, 0.7)
@@ -257,9 +260,16 @@ function applyPositions() {
   for (let i = 0; i < N; i++) {
     const base = i * 4
     const s = positions[base + 0]
-    const t = positions[base + 1]
+    let t = positions[base + 1]
     const h = positions[base + 2]
     const yaw = positions[base + 3]
+    const maxT = ROAD_WIDTH / 2 - LANE_WIDTH / 2 - ROAD_MARGIN
+    const clampedT = THREE.MathUtils.clamp(t, -maxT, maxT)
+    if (!inRoad(s, t, ROAD_WIDTH, LANE_WIDTH, ROAD_MARGIN)) {
+      console.warn(`rider ${i} out of road: t=${t.toFixed(2)}`)
+    }
+    t = THREE.MathUtils.lerp(t, clampedT, 0.1)
+    positions[base + 1] = t
     const sample = spline.sampleByDistance(s)
     const tangent = sample.tangent
     const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
@@ -415,9 +425,11 @@ export function showRouteList() {
 
 function rebuildRoute() {
   if (!currentPath) return
+  roadReady = false
   removeIfPresent('routeMesh')
   removeIfPresent('centerMarkings')
   removeIfPresent('startLine')
+  removeIfPresent('roadBounds')
   const road = buildRoadMesh(currentPath, ROAD_WIDTH)
   road.name = 'routeMesh'
   scene.add(road)
@@ -428,6 +440,10 @@ function rebuildRoute() {
   const start = buildStartLine(currentPath, ROAD_WIDTH, START_LINE_OFFSET)
   start.name = 'startLine'
   scene.add(start)
+  const bounds = buildRoadBounds(currentPath, ROAD_WIDTH)
+  bounds.name = 'roadBounds'
+  scene.add(bounds)
+  roadReady = true
   applyPositions()
 }
 
@@ -450,6 +466,7 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     currentPath = smoothed
     spline = new PathSpline(simplified)
     rebuildRoute()
+    if (!roadReady) return
 
     // initialise le peloton sur la route sélectionnée
     const pelotonPos = initPeloton(smoothed, N, {
@@ -653,10 +670,47 @@ function buildStartLine(centerLine: Vec3[], width: number, offset: number): THRE
   return mesh
 }
 
+function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSegments {
+  const positions: number[] = []
+  const half = width / 2
+  const up = new THREE.Vector3(0, 1, 0)
+  for (let i = 0; i < centerLine.length - 1; i++) {
+    const a = centerLine[i]
+    const b = centerLine[i + 1]
+    const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize()
+    const right = new THREE.Vector3().crossVectors(dir, up).normalize()
+    const left0 = a.clone().addScaledVector(right, -half)
+    const right0 = a.clone().addScaledVector(right, half)
+    const left1 = b.clone().addScaledVector(right, -half)
+    const right1 = b.clone().addScaledVector(right, half)
+    positions.push(
+      left0.x,
+      left0.y + 0.05,
+      left0.z,
+      left1.x,
+      left1.y + 0.05,
+      left1.z,
+      right0.x,
+      right0.y + 0.05,
+      right0.z,
+      right1.x,
+      right1.y + 0.05,
+      right1.z,
+    )
+  }
+  const geom = new THREE.BufferGeometry()
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  const mat = new THREE.LineBasicMaterial({ color: 0xff0000 })
+  return new THREE.LineSegments(geom, mat)
+}
+
 function removeIfPresent(name: string): void {
   const o = scene.getObjectByName(name)
   if (o) {
-    if (name === 'routeMesh') roadMesh = null
+    if (name === 'routeMesh') {
+      roadMesh = null
+      roadReady = false
+    }
     scene.remove(o)
   }
 }
