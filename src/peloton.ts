@@ -1,4 +1,5 @@
 import type { Vec3 } from './gpx'
+import { inRoad } from './road'
 
 export interface PelotonOptions {
   seed?: number
@@ -64,14 +65,15 @@ export function initPeloton(
     attempts++
     // base sampling rectangle
     let s = -rng() * maxS
-    let t = (rng() * 2 - 1) * halfRoad
-
-    // jitter contrôlé
     s += (rng() - 0.5) * jitter * spacing
-    t += (rng() - 0.5) * jitter * laneWidth
-    // clamp dans les bornes de la route
     s = Math.min(0, s)
-    t = Math.max(-halfRoad, Math.min(halfRoad, t))
+
+    // rejitter t tant qu'on est hors route
+    let t = 0
+    do {
+      t = (rng() * 2 - 1) * halfRoad
+      t += (rng() - 0.5) * jitter * laneWidth
+    } while (!inRoad(s, t, roadWidth, laneWidth))
 
     // Poisson disk : vérifie la distance minimale
     let ok = true
