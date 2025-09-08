@@ -1,6 +1,6 @@
 {
   "name": "rouelibre",
-  "version": "0.1.59",
+  "version": "0.1.60",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.13.1",
     "daisyui": "^5.0.50",
-    "three": "^0.168.0"
+    "three": "^0.168.0",
+    "three-mesh-bvh": "^0.9.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",

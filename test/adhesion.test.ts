@@ -16,4 +16,15 @@ describe('adhesion', () => {
     const normal = new THREE.Vector3(0, 0, 1).applyMatrix3(normalMatrix).normalize()
     expect(up.angleTo(normal)).toBeLessThan(THREE.MathUtils.degToRad(2))
   })
+
+  it('places rider within 1cm of target altitude', () => {
+    const geom = new THREE.PlaneGeometry(10, 10)
+    const mesh = new THREE.Mesh(geom)
+    mesh.rotateX(-Math.PI / 2)
+    mesh.updateMatrixWorld()
+    const raycaster = new THREE.Raycaster()
+    const footClearance = 1
+    const { position } = projectOntoRoad(0, 5, 0, 0, mesh, raycaster, footClearance)
+    expect(Math.abs(position.y - footClearance)).toBeLessThan(0.01)
+  })
 })
