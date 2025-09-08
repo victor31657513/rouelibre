@@ -5,10 +5,9 @@ import './style.css'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
-import { resamplePath } from './systems/pathSmoothing'
+import { resamplePath, PathSpline } from './systems/pathSmoothing'
 import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
-import { projectOntoRoad } from './systems/adhesion'
 
 const N = 184 // nombre de cyclistes
 const RNG_SEED = 1234
@@ -42,6 +41,7 @@ const pauseBtn = document.getElementById('pause-btn') as HTMLButtonElement
 const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement
 let currentPath: Vec3[] | null = null
 let pathData: Float32Array | null = null
+let spline: PathSpline | null = null
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -73,7 +73,7 @@ pauseBtn.addEventListener('click', () => {
 
 resetBtn.addEventListener('click', () => {
   stopAnimation()
-  if (currentPath && pathData) {
+  if (currentPath && pathData && spline) {
     const pelotonPos = initPeloton(currentPath, N, {
       seed: RNG_SEED,
       spacing: START_SPACING,
@@ -82,7 +82,7 @@ resetBtn.addEventListener('click', () => {
     })
     const yaw0 = Math.atan2(
       currentPath[1].x - currentPath[0].x,
-      currentPath[1].z - currentPath[0].z
+      currentPath[1].z - currentPath[0].z,
     )
     positions = new Float32Array(N * 4)
     const yawOffsets = new Float32Array(N)
@@ -93,11 +93,25 @@ resetBtn.addEventListener('click', () => {
       const magnitude = 2 + yawRng() * 2 // 2-4°
       const yawOffset = sign * magnitude * (Math.PI / 180)
       yawOffsets[i] = yawOffset
-      positions[base + 0] = pelotonPos[i * 3 + 0]
-      positions[base + 1] = pelotonPos[i * 3 + 1]
-      positions[base + 2] = pelotonPos[i * 3 + 2]
+
+      const row = Math.floor(i / 9)
+      let s = row * START_SPACING
+      if (spline.totalLength > 0) s = s % spline.totalLength
+      const sample = spline.sampleByDistance(s)
+      const tangent = sample.tangent
+      const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
+      const center = sample.position
+      const x = pelotonPos[i * 3 + 0]
+      const y = pelotonPos[i * 3 + 1]
+      const z = pelotonPos[i * 3 + 2]
+      const t = (x - center.x) * right.x + (z - center.z) * right.z
+      const h = y - center.y
+      positions[base + 0] = s
+      positions[base + 1] = t
+      positions[base + 2] = h
       positions[base + 3] = yaw0 + yawOffset
     }
+    applyPositions()
     const pathCopy = pathData.slice()
     worker.postMessage(
       {
@@ -111,22 +125,6 @@ resetBtn.addEventListener('click', () => {
       },
       [pelotonPos.buffer, yawOffsets.buffer, pathCopy.buffer],
     )
-    for (let i = 0; i < N; i++) {
-      const base = i * 4
-      const x = positions[base + 0]
-      const y = positions[base + 1]
-      const z = positions[base + 2]
-      const yaw = positions[base + 3]
-      const { position, quaternion } = roadMesh
-        ? projectOntoRoad(x, y, z, yaw, roadMesh, raycaster)
-        : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
-      tmp.position.copy(position)
-      tmp.quaternion.copy(quaternion)
-      tmp.updateMatrix()
-      riders.setMatrixAt(i, tmp.matrix)
-      riderObjs[i].position.copy(tmp.position)
-    }
-    riders.instanceMatrix.needsUpdate = true
     focusSelected()
     renderer.render(scene, camera)
   }
@@ -247,24 +245,45 @@ worker.onmessage = (e: MessageEvent) => {
   const { type, data } = e.data || {}
   if (type === 'state') {
     positions = new Float32Array(data)
-    // applique positions -> matrices
-    for (let i = 0; i < N; i++) {
-      const base = i * 4
-      const x = positions[base + 0]
-      const y = positions[base + 1]
-      const z = positions[base + 2]
-      const yaw = positions[base + 3]
-      const { position, quaternion } = roadMesh
-        ? projectOntoRoad(x, y, z, yaw, roadMesh, raycaster)
-        : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
-      tmp.position.copy(position)
-      tmp.quaternion.copy(quaternion)
-      tmp.updateMatrix()
-      riders.setMatrixAt(i, tmp.matrix)
-      riderObjs[i].position.copy(position)
-    }
-    riders.instanceMatrix.needsUpdate = true
+    applyPositions()
   }
+}
+
+function applyPositions() {
+  if (!spline) return
+  const qRoad = roadMesh
+    ? roadMesh.getWorldQuaternion(new THREE.Quaternion())
+    : new THREE.Quaternion()
+  for (let i = 0; i < N; i++) {
+    const base = i * 4
+    const s = positions[base + 0]
+    const t = positions[base + 1]
+    const h = positions[base + 2]
+    const yaw = positions[base + 3]
+    const sample = spline.sampleByDistance(s)
+    const tangent = sample.tangent
+    const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
+    const up = new THREE.Vector3(0, 1, 0)
+    const localPos = sample.position
+      .clone()
+      .add(right.multiplyScalar(t))
+      .add(up.multiplyScalar(h))
+    const worldPos = roadMesh
+      ? roadMesh.localToWorld(localPos.clone())
+      : localPos
+    const localQuat = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, yaw, 0),
+    )
+    const worldQuat = roadMesh
+      ? qRoad.clone().multiply(localQuat)
+      : localQuat
+    tmp.position.copy(worldPos)
+    tmp.quaternion.copy(worldQuat)
+    tmp.updateMatrix()
+    riders.setMatrixAt(i, tmp.matrix)
+    riderObjs[i].position.copy(worldPos)
+  }
+  riders.instanceMatrix.needsUpdate = true
 }
 
 // Resize
@@ -409,6 +428,7 @@ function rebuildRoute() {
   const start = buildStartLine(currentPath, ROAD_WIDTH, START_LINE_OFFSET)
   start.name = 'startLine'
   scene.add(start)
+  applyPositions()
 }
 
 const versionEl = document.getElementById('version') as HTMLDivElement | null
@@ -428,35 +448,52 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     const smoothed = resamplePath(simplified, 1.0)
     const { totalGain, totalLoss } = elevationStats(points)
     currentPath = smoothed
+    spline = new PathSpline(simplified)
     rebuildRoute()
 
     // initialise le peloton sur la route sélectionnée
-  const pelotonPos = initPeloton(smoothed, N, {
-    seed: RNG_SEED,
-    spacing: START_SPACING,
-    laneWidth: LANE_WIDTH,
-    roadWidth: ROAD_WIDTH,
-  })
-  const yaw0 = Math.atan2(smoothed[1].x - smoothed[0].x, smoothed[1].z - smoothed[0].z)
-  const yawOffsets = new Float32Array(N)
-  const yawRng = mulberry32(RNG_SEED + 1)
-  positions = new Float32Array(N * 4)
-  for (let i = 0; i < N; i++) {
-    const base = i * 4
-    const sign = yawRng() < 0.5 ? -1 : 1
-    const magnitude = 2 + yawRng() * 2
-    const yawOffset = sign * magnitude * (Math.PI / 180)
-    yawOffsets[i] = yawOffset
-    positions[base + 0] = pelotonPos[i * 3 + 0]
-    positions[base + 1] = pelotonPos[i * 3 + 1]
-    positions[base + 2] = pelotonPos[i * 3 + 2]
-    positions[base + 3] = yaw0 + yawOffset
-  }
+    const pelotonPos = initPeloton(smoothed, N, {
+      seed: RNG_SEED,
+      spacing: START_SPACING,
+      laneWidth: LANE_WIDTH,
+      roadWidth: ROAD_WIDTH,
+    })
+    const yaw0 = Math.atan2(
+      smoothed[1].x - smoothed[0].x,
+      smoothed[1].z - smoothed[0].z,
+    )
+    const yawOffsets = new Float32Array(N)
+    const yawRng = mulberry32(RNG_SEED + 1)
+    positions = new Float32Array(N * 4)
+    for (let i = 0; i < N; i++) {
+      const base = i * 4
+      const sign = yawRng() < 0.5 ? -1 : 1
+      const magnitude = 2 + yawRng() * 2
+      const yawOffset = sign * magnitude * (Math.PI / 180)
+      yawOffsets[i] = yawOffset
+
+      const row = Math.floor(i / 9)
+      let s = row * START_SPACING
+      if (spline.totalLength > 0) s = s % spline.totalLength
+      const sample = spline.sampleByDistance(s)
+      const tangent = sample.tangent
+      const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
+      const center = sample.position
+      const x = pelotonPos[i * 3 + 0]
+      const y = pelotonPos[i * 3 + 1]
+      const z = pelotonPos[i * 3 + 2]
+      const t = (x - center.x) * right.x + (z - center.z) * right.z
+      const h = y - center.y
+      positions[base + 0] = s
+      positions[base + 1] = t
+      positions[base + 2] = h
+      positions[base + 3] = yaw0 + yawOffset
+    }
 
     const median = Math.floor(N / 2)
     setSelectedIndex(median, N)
 
-  const pathArray = new Float32Array(simplified.length * 3)
+    const pathArray = new Float32Array(simplified.length * 3)
     for (let i = 0; i < simplified.length; i++) {
       const p = simplified[i]
       pathArray[i * 3 + 0] = p.x
@@ -464,30 +501,15 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       pathArray[i * 3 + 2] = p.z
     }
 
-  pathData = pathArray.slice()
-  worker.postMessage(
-    {
-      type: 'init',
-      payload: { N, positions: pelotonPos.buffer, yaw: yawOffsets.buffer, path: pathArray.buffer },
-    },
-    [pelotonPos.buffer, yawOffsets.buffer, pathArray.buffer],
-  )
-  for (let i = 0; i < N; i++) {
-    const base = i * 4
-    const x = positions[base + 0]
-    const y = positions[base + 1]
-    const z = positions[base + 2]
-    const yaw = positions[base + 3]
-    const { position, quaternion } = roadMesh
-      ? projectOntoRoad(x, y, z, yaw, roadMesh, raycaster)
-      : { position: new THREE.Vector3(x, y, z), quaternion: tmp.quaternion }
-    tmp.position.copy(position)
-    tmp.quaternion.copy(quaternion)
-    tmp.updateMatrix()
-    riders.setMatrixAt(i, tmp.matrix)
-    riderObjs[i].position.copy(tmp.position)
-  }
-    riders.instanceMatrix.needsUpdate = true
+    pathData = pathArray.slice()
+    worker.postMessage(
+      {
+        type: 'init',
+        payload: { N, positions: pelotonPos.buffer, yaw: yawOffsets.buffer, path: pathArray.buffer },
+      },
+      [pelotonPos.buffer, yawOffsets.buffer, pathArray.buffer],
+    )
+    applyPositions()
     focusSelected()
     renderer.render(scene, camera)
 
