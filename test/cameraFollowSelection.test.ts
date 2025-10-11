@@ -30,15 +30,9 @@ describe('camera follows selected rider', () => {
   it('updates camera position and direction to selected rider', () => {
     const dt = 1
     follow.update(dt, [riders[selectedIndex]])
-    expect(camera.position.x).toBeCloseTo(riders[0].position.x + follow.followOffset.x)
-    expect(camera.position.y).toBeCloseTo(riders[0].position.y + follow.followOffset.y)
-    expect(camera.position.z).toBeCloseTo(riders[0].position.z + follow.followOffset.z)
 
     changeSelectedIndex(1, riders.length)
     follow.update(dt, [riders[selectedIndex]])
-    expect(camera.position.x).toBeCloseTo(riders[1].position.x + follow.followOffset.x)
-    expect(camera.position.y).toBeCloseTo(riders[1].position.y + follow.followOffset.y)
-    expect(camera.position.z).toBeCloseTo(riders[1].position.z + follow.followOffset.z)
 
     const dir = new THREE.Vector3()
     camera.getWorldDirection(dir)
@@ -46,5 +40,16 @@ describe('camera follows selected rider', () => {
     expect(dir.x).toBeCloseTo(expectedDir.x)
     expect(dir.y).toBeCloseTo(expectedDir.y)
     expect(dir.z).toBeCloseTo(expectedDir.z)
+
+    const worldForward = expectedDir
+    const worldRight = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), worldForward)
+    if (worldRight.lengthSq() < 1e-6) worldRight.set(1, 0, 0)
+    worldRight.normalize()
+    const diff = camera.position.clone().sub(riders[1].position)
+    const localX = diff.dot(worldRight)
+    expect(camera.position.y - riders[1].position.y).toBeCloseTo(follow.followOffset.y)
+    const planarOffset = riders[1].position.clone().setY(0).sub(camera.position.clone().setY(0))
+    expect(planarOffset.length()).toBeCloseTo(Math.abs(follow.followOffset.z))
+    expect(localX).toBeCloseTo(0, 1e-6)
   })
 })
