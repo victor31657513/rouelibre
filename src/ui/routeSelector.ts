@@ -63,15 +63,48 @@ export async function initRouteSelector(containerId: string, onSelect: RouteSele
               const minY = Math.min(...path3D.map((p) => p.y))
               const maxY = Math.max(...path3D.map((p) => p.y))
               const range = maxY - minY || 1
-              ctx.strokeStyle = '#fff'
+
+              const points2D = path3D.map((point, i) => ({
+                x: (distances[i] / total) * canvas.width,
+                y:
+                  canvas.height - ((point.y - minY) / range) * canvas.height,
+              }))
+
+              ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+              const gradient = ctx.createLinearGradient(
+                0,
+                0,
+                0,
+                canvas.height
+              )
+              gradient.addColorStop(0, 'rgba(255, 255, 255, 0.6)')
+              gradient.addColorStop(1, 'rgba(255, 255, 255, 0.1)')
+
               ctx.beginPath()
-              for (let i = 0; i < path3D.length; i++) {
-                const x = (distances[i] / total) * canvas.width
-                const y =
-                  canvas.height - ((path3D[i].y - minY) / range) * canvas.height
-                if (i === 0) ctx.moveTo(x, y)
-                else ctx.lineTo(x, y)
-              }
+              ctx.moveTo(points2D[0].x, canvas.height)
+              points2D.forEach((point) => {
+                ctx.lineTo(point.x, point.y)
+              })
+              ctx.lineTo(points2D[points2D.length - 1].x, canvas.height)
+              ctx.closePath()
+              ctx.fillStyle = gradient
+              ctx.fill()
+
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+              ctx.lineWidth = 2
+              ctx.beginPath()
+              points2D.forEach((point, index) => {
+                if (index === 0) ctx.moveTo(point.x, point.y)
+                else ctx.lineTo(point.x, point.y)
+              })
+              ctx.stroke()
+
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+              ctx.lineWidth = 1
+              ctx.beginPath()
+              ctx.moveTo(0, canvas.height - 1)
+              ctx.lineTo(canvas.width, canvas.height - 1)
               ctx.stroke()
             }
           })
