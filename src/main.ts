@@ -257,12 +257,15 @@ function applyPositions() {
   const qRoad = roadMesh
     ? roadMesh.getWorldQuaternion(new THREE.Quaternion())
     : new THREE.Quaternion()
+  const geometryAlign = new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0),
+    -Math.PI / 2,
+  )
   for (let i = 0; i < N; i++) {
     const base = i * 4
     const s = positions[base + 0]
     let t = positions[base + 1]
     const h = positions[base + 2]
-    const yaw = positions[base + 3]
     const maxT = ROAD_WIDTH / 2 - LANE_WIDTH / 2 - ROAD_MARGIN
     const clampedT = THREE.MathUtils.clamp(t, -maxT, maxT)
     if (!inRoad(s, t, ROAD_WIDTH, LANE_WIDTH, ROAD_MARGIN)) {
@@ -274,6 +277,16 @@ function applyPositions() {
     const tangent = sample.tangent
     const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
     const up = new THREE.Vector3(0, 1, 0)
+    const tangentXZ = tangent.clone().setY(0)
+    if (tangentXZ.lengthSq() < 1e-6) {
+      tangentXZ.set(0, 0, 1)
+    }
+    tangentXZ.normalize()
+    const forwardQuat = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      tangentXZ,
+    )
+    forwardQuat.multiply(geometryAlign)
     const localPos = sample.position
       .clone()
       .add(right.multiplyScalar(t))
@@ -281,12 +294,9 @@ function applyPositions() {
     const worldPos = roadMesh
       ? roadMesh.localToWorld(localPos.clone())
       : localPos
-    const localQuat = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(0, yaw, 0),
-    )
     const worldQuat = roadMesh
-      ? qRoad.clone().multiply(localQuat)
-      : localQuat
+      ? qRoad.clone().multiply(forwardQuat)
+      : forwardQuat
     tmp.position.copy(worldPos)
     tmp.quaternion.copy(worldQuat)
     tmp.updateMatrix()
