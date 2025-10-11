@@ -40,11 +40,9 @@ const homeBtn = document.getElementById('home-btn') as HTMLButtonElement
 const startBtn = document.getElementById('start-btn') as HTMLButtonElement
 const pauseBtn = document.getElementById('pause-btn') as HTMLButtonElement
 const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement
-const cameraLockBtn = document.getElementById('camera-lock-btn') as HTMLButtonElement
 let currentPath: Vec3[] | null = null
 let pathData: Float32Array | null = null
 let spline: PathSpline | null = null
-let cameraLocked = false
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -58,8 +56,6 @@ homeBtn.addEventListener('click', () => {
   startBtn.disabled = true
   pauseBtn.disabled = true
   resetBtn.disabled = true
-  cameraLockBtn.disabled = true
-  setCameraLocked(false)
 })
 
 startBtn.addEventListener('click', () => {
@@ -67,7 +63,6 @@ startBtn.addEventListener('click', () => {
   startBtn.disabled = true
   startBtn.textContent = 'Start'
   pauseBtn.disabled = false
-  cameraLockBtn.disabled = false
 })
 
 pauseBtn.addEventListener('click', () => {
@@ -141,12 +136,6 @@ resetBtn.addEventListener('click', () => {
   startBtn.disabled = false
   startBtn.textContent = 'Start'
   pauseBtn.disabled = true
-  cameraLockBtn.disabled = false
-})
-
-cameraLockBtn.addEventListener('click', () => {
-  if (cameraLockBtn.disabled) return
-  toggleCameraLocked()
 })
 
 // Scene & Camera
@@ -161,29 +150,6 @@ const followCam = new StabilizedFollowCamera(camera)
 followCam.setFollowOffset(new THREE.Vector3(0, CAM_HEIGHT, -CAM_DISTANCE))
 
 const followCamInternal = followCam as unknown as { _smoothedQuat: THREE.Quaternion }
-
-function updateCameraLockUI() {
-  if (!cameraLockBtn) return
-  cameraLockBtn.textContent = cameraLocked ? 'Unlock camera (L)' : 'Lock camera (L)'
-  cameraLockBtn.setAttribute('aria-pressed', cameraLocked ? 'true' : 'false')
-  cameraLockBtn.title = cameraLocked
-    ? 'Unlock the follow camera (L)'
-    : 'Lock the follow camera (L)'
-  cameraLockBtn.classList.toggle('btn-accent', cameraLocked)
-  cameraLockBtn.classList.toggle('btn-secondary', !cameraLocked)
-}
-
-function setCameraLocked(locked: boolean) {
-  cameraLocked = locked
-  updateCameraLockUI()
-  followCamInternal._smoothedQuat.copy(camera.quaternion)
-}
-
-function toggleCameraLocked() {
-  setCameraLocked(!cameraLocked)
-}
-
-updateCameraLockUI()
 
 
 // Camera rotation with middle mouse
@@ -216,7 +182,7 @@ canvas.addEventListener('mouseleave', () => {
 })
 
 canvas.addEventListener('mousemove', (e: MouseEvent) => {
-  if (rotating && !cameraLocked) {
+  if (rotating) {
     yawOffset += e.movementX * ROT_SENSITIVITY
   }
 })
@@ -356,11 +322,6 @@ addEventListener('resize', () => {
 function updateCamera(dt: number) {
   const prevQuat = camera.quaternion.clone()
   followCam.update(dt, [riderObjs[selectedIndex]])
-  if (cameraLocked) {
-    camera.quaternion.copy(prevQuat)
-    followCamInternal._smoothedQuat.copy(camera.quaternion)
-    return
-  }
   if (rotating) camera.quaternion.copy(prevQuat)
   const offsetQuat = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(0, yawOffset, 0, 'YXZ')
@@ -370,12 +331,12 @@ function updateCamera(dt: number) {
 }
 
 function focusSelected() {
-  const prevQuat = camera.quaternion.clone()
   followCam.snapTo([riderObjs[selectedIndex]])
-  if (cameraLocked) {
-    camera.quaternion.copy(prevQuat)
-    followCamInternal._smoothedQuat.copy(camera.quaternion)
-  }
+  const offsetQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(0, yawOffset, 0, 'YXZ')
+  )
+  camera.quaternion.multiply(offsetQuat)
+  followCamInternal._smoothedQuat.copy(camera.quaternion)
 }
 
 function tick() {
@@ -406,13 +367,6 @@ canvas.addEventListener('click', (e) => {
 })
 
 document.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() === 'l') {
-    if (!cameraLockBtn.disabled) {
-      e.preventDefault()
-      toggleCameraLocked()
-    }
-    return
-  }
   let delta = 0
   switch (e.key) {
     case 'ArrowLeft':
@@ -612,8 +566,6 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     startBtn.textContent = 'Start'
     pauseBtn.disabled = true
     resetBtn.disabled = false
-    cameraLockBtn.disabled = false
-    setCameraLocked(false)
   })
 
 
