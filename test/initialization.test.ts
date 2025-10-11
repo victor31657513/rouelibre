@@ -36,7 +36,7 @@ describe('initialization', () => {
     expect(cameraPrev.equals(camera.position)).toBe(true)
   })
 
-  it('keeps all riders at or behind the start line', () => {
+  it('places all riders on or ahead of the start line', () => {
     const path = [
       { x: 0, y: 0, z: 0 },
       { x: 10, y: 0, z: 0 }
@@ -44,7 +44,7 @@ describe('initialization', () => {
     const positions = initPeloton(path, N)
     for (let i = 0; i < N; i++) {
       const x = positions[i * 3 + 0]
-      expect(x).toBeLessThanOrEqual(path[0].x)
+      expect(x).toBeGreaterThanOrEqual(path[0].x)
     }
   })
 })
