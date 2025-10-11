@@ -1,5 +1,5 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
-import { Vector3 } from 'three'
+import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing'
 
 let world: RAPIER.World
@@ -11,6 +11,11 @@ let speeds: Float32Array
 let progress: Float32Array
 let offsets: Float32Array
 let yawRates: Float32Array
+
+let laneWidth = 1
+let roadWidth = 8
+let margin = 0
+let maxOffset = Infinity
 
 // trajectoire lissée
 let spline: PathSpline
@@ -47,6 +52,10 @@ self.onmessage = async (e: MessageEvent) => {
     const initial = new Float32Array(payload.positions)
     const yawOffsets = new Float32Array(payload.yaw)
     const raw = new Float32Array(payload.path)
+    laneWidth = payload.laneWidth ?? laneWidth
+    roadWidth = payload.roadWidth ?? roadWidth
+    margin = payload.margin ?? margin
+    maxOffset = Math.max(0, roadWidth / 2 - laneWidth / 2 - margin)
     const waypoints: Vector3[] = []
     for (let i = 0; i < raw.length; i += 3) {
       waypoints.push(new Vector3(raw[i], raw[i + 1], raw[i + 2]))
@@ -83,13 +92,14 @@ self.onmessage = async (e: MessageEvent) => {
       const ix = initial[i * 3 + 0]
       const iz = initial[i * 3 + 2]
       const offset = (ix - center.x) * right.x + (iz - center.z) * right.z
-      offsets[i] = offset
+      const clampedOffset = MathUtils.clamp(offset, -maxOffset, maxOffset)
+      offsets[i] = clampedOffset
 
-      const pos = center.clone().add(right.multiplyScalar(offset))
+      const pos = center.clone().add(right.multiplyScalar(clampedOffset))
       rb.setTranslation({ x: pos.x, y: pos.y + 1, z: pos.z }, true)
       const yaw = Math.atan2(tangent.x, tangent.z) + yawOffsets[i]
       state[i * 4 + 0] = s
-      state[i * 4 + 1] = offset
+      state[i * 4 + 1] = clampedOffset
       state[i * 4 + 2] = 1
       state[i * 4 + 3] = yaw
       speeds[i] = 7.0 + rng() * 1.0
@@ -125,7 +135,8 @@ self.onmessage = async (e: MessageEvent) => {
       const center = sample.position
       const tangent = sample.tangent
       const right = new Vector3(-tangent.z, 0, tangent.x).normalize()
-      const offset = offsets[i]
+      const offset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
+      offsets[i] = offset
       const pos = center.clone().add(right.clone().multiplyScalar(offset))
 
       const look = spline.sampleByDistance(ahead)

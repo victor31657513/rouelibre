@@ -5,7 +5,6 @@ import './style.css'
 import { parseGPX, projectToLocal, type GPXPoint, type Vec3 } from './gpx'
 import { initRouteSelector } from './ui/routeSelector'
 import { initPeloton } from './peloton'
-import { inRoad } from './road'
 import { resamplePath, PathSpline } from './systems/pathSmoothing'
 import { selectedIndex, setSelectedIndex, changeSelectedIndex } from './selection'
 import { StabilizedFollowCamera } from './camera/StabilizedFollowCamera'
@@ -123,6 +122,9 @@ resetBtn.addEventListener('click', () => {
           positions: pelotonPos.buffer,
           yaw: yawOffsets.buffer,
           path: pathCopy.buffer,
+          laneWidth: LANE_WIDTH,
+          roadWidth: ROAD_WIDTH,
+          margin: ROAD_MARGIN,
         },
       },
       [pelotonPos.buffer, yawOffsets.buffer, pathCopy.buffer],
@@ -268,11 +270,10 @@ function applyPositions() {
     const h = positions[base + 2]
     const maxT = ROAD_WIDTH / 2 - LANE_WIDTH / 2 - ROAD_MARGIN
     const clampedT = THREE.MathUtils.clamp(t, -maxT, maxT)
-    if (!inRoad(s, t, ROAD_WIDTH, LANE_WIDTH, ROAD_MARGIN)) {
-      console.warn(`rider ${i} out of road: t=${t.toFixed(2)}`)
+    if (clampedT !== t) {
+      positions[base + 1] = clampedT
     }
-    t = THREE.MathUtils.lerp(t, clampedT, 0.1)
-    positions[base + 1] = t
+    t = clampedT
     const sample = spline.sampleByDistance(s)
     const tangent = sample.tangent
     const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
@@ -532,7 +533,15 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     worker.postMessage(
       {
         type: 'init',
-        payload: { N, positions: pelotonPos.buffer, yaw: yawOffsets.buffer, path: pathArray.buffer },
+        payload: {
+          N,
+          positions: pelotonPos.buffer,
+          yaw: yawOffsets.buffer,
+          path: pathArray.buffer,
+          laneWidth: LANE_WIDTH,
+          roadWidth: ROAD_WIDTH,
+          margin: ROAD_MARGIN,
+        },
       },
       [pelotonPos.buffer, yawOffsets.buffer, pathArray.buffer],
     )
