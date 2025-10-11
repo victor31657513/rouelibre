@@ -151,6 +151,50 @@ followCam.setFollowOffset(new THREE.Vector3(0, CAM_HEIGHT, -CAM_DISTANCE))
 
 const followCamInternal = followCam as unknown as { _smoothedQuat: THREE.Quaternion }
 
+let initialCameraPose: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null = null
+
+function setInitialCameraPose(path: Vec3[]): void {
+  initialCameraPose = null
+  if (path.length < 2) return
+
+  const start = new THREE.Vector3(path[0].x, path[0].y, path[0].z)
+  let tangent: THREE.Vector3 | null = null
+  for (let i = 1; i < path.length; i++) {
+    const candidate = new THREE.Vector3(path[i].x, path[i].y, path[i].z).sub(start)
+    if (candidate.lengthSq() > 1e-6) {
+      tangent = candidate.normalize()
+      break
+    }
+  }
+
+  if (!tangent) return
+
+  const up = new THREE.Vector3(0, 1, 0)
+  const desiredPosition = start.clone().addScaledVector(up, CAM_HEIGHT).addScaledVector(tangent, -CAM_DISTANCE)
+
+  camera.up.set(0, 1, 0)
+  camera.position.copy(desiredPosition)
+  const target = start.clone().add(tangent)
+  camera.lookAt(target)
+
+  initialCameraPose = {
+    position: camera.position.clone(),
+    quaternion: camera.quaternion.clone(),
+  }
+
+  yawOffset = 0
+  followCamInternal._smoothedQuat.copy(camera.quaternion)
+}
+
+function restoreInitialCameraPose(): void {
+  if (!initialCameraPose) return
+  yawOffset = 0
+  camera.up.set(0, 1, 0)
+  camera.position.copy(initialCameraPose.position)
+  camera.quaternion.copy(initialCameraPose.quaternion)
+  followCamInternal._smoothedQuat.copy(camera.quaternion)
+}
+
 
 // Camera rotation with middle mouse
 const ROT_SENSITIVITY = 0.005
@@ -169,8 +213,12 @@ addEventListener('mouseup', (e: MouseEvent) => {
   if (e.button === 1) {
     const now = performance.now()
     if (now - lastMiddleTime < 300) {
-      yawOffset = 0
-      focusSelected()
+      if (initialCameraPose) {
+        restoreInitialCameraPose()
+      } else {
+        yawOffset = 0
+        focusSelected()
+      }
     }
     lastMiddleTime = now
   }
@@ -480,6 +528,7 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
     hideRouteList()
     const simplified = simplifyPath(path3D, 1.0)
     const smoothed = resamplePath(simplified, 1.0)
+    setInitialCameraPose(smoothed)
     const { totalGain, totalLoss } = elevationStats(points)
     currentPath = smoothed
     spline = new PathSpline(simplified)
@@ -554,7 +603,6 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       [pelotonPos.buffer, yawOffsets.buffer, pathArray.buffer],
     )
     applyPositions()
-    focusSelected()
     renderer.render(scene, camera)
 
     console.log(`D+ ${Math.round(totalGain)} m · D- ${Math.round(totalLoss)} m`)
