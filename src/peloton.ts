@@ -1,26 +1,17 @@
+import * as THREE from 'three'
 import type { Vec3 } from './gpx'
-import { inRoad } from './road'
 
 export interface PelotonOptions {
   seed?: number
   spacing?: number
   laneWidth?: number
   roadWidth?: number
-  jitter?: number
-}
-
-function mulberry32(a: number) {
-  return function () {
-    let t = (a += 0x6d2b79f5)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
+  margin?: number
 }
 
 /**
- * Initialise les positions des cyclistes sur le début du parcours sélectionné
- * via un échantillonnage pseudo-aléatoire jitteré.
+ * Initialise les positions des cyclistes en suivant la ligne médiane de la route
+ * et en appliquant un décalage latéral borné à l'intérieur de la chaussée.
  */
 export function initPeloton(
   path: Vec3[],
@@ -28,81 +19,65 @@ export function initPeloton(
   options: PelotonOptions = {},
 ): Float32Array {
   const positions = new Float32Array(N * 3)
-  if (path.length < 2) return positions
+  if (path.length === 0 || N === 0) {
+    return positions
+  }
 
   const {
-    seed = 1234,
     spacing = 1.2,
     laneWidth = 1.0,
     roadWidth = 8.0,
-    jitter = 0.3,
+    margin = 0.05,
   } = options
 
-  const rng = mulberry32(seed)
+  const waypoints = path.map((point) => {
+    if (point instanceof THREE.Vector3) {
+      return point.clone()
+    }
+    return new THREE.Vector3(point.x, point.y, point.z)
+  })
 
-  // coordonnées du segment initial (s: longitudinal, t: latéral)
-  const p0 = path[0]
-  const p1 = path[1]
-  const dx = p1.x - p0.x
-  const dz = p1.z - p0.z
-  const len = Math.hypot(dx, dz) || 1
-  const nx = dx / len
-  const nz = dz / len
-  const rx = -nz // vecteur à droite de la route
-  const rz = nx
+  const curve = new THREE.CatmullRomCurve3(waypoints, false)
+  const totalLength = curve.getLength() || 1
 
-  const halfRoad = roadWidth / 2 - laneWidth / 2
-
-  // aire de génération en (s,t)
   const nCols = Math.max(1, Math.floor(roadWidth / laneWidth))
-  const nRows = Math.ceil(N / nCols)
-  const maxS = nRows * spacing
-  let radius = spacing * 0.5
-  const samples: { s: number; t: number }[] = []
-  let attempts = 0
+  const maxOffset = Math.max(0, roadWidth / 2 - margin)
 
-  while (samples.length < N) {
-    attempts++
-    // base sampling rectangle
-    let s = -rng() * maxS
-    s += (rng() - 0.5) * jitter * spacing
-    s = Math.min(0, s)
+  let previousDirection = new THREE.Vector3(1, 0, 0)
 
-    // rejitter t tant qu'on est hors route
-    let t = 0
-    do {
-      t = (rng() * 2 - 1) * halfRoad
-      t += (rng() - 0.5) * jitter * laneWidth
-    } while (!inRoad(s, t, roadWidth, laneWidth))
-
-    // Poisson disk : vérifie la distance minimale
-    let ok = true
-    for (const p of samples) {
-      if (Math.hypot(p.s - s, p.t - t) < radius) {
-        ok = false
-        break
-      }
-    }
-    if (ok) {
-      samples.push({ s, t })
-    }
-
-    // détend le rayon si l'on stagne
-    if (attempts > N * 10 && samples.length < N) {
-      attempts = 0
-      radius *= 0.95
-    }
-  }
-
-  // convertit (s,t) -> (x,z)
   for (let i = 0; i < N; i++) {
-    const { s, t } = samples[i]
-    const x = p0.x + nx * s + rx * t
-    const z = p0.z + nz * s + rz * t
-    positions[i * 3 + 0] = x
-    positions[i * 3 + 1] = p0.y + 1
-    positions[i * 3 + 2] = z
+    const row = Math.floor(i / nCols)
+    const col = i % nCols
+    const longitudinal = row * spacing
+    const maxDistance = totalLength
+    const distance = Math.min(longitudinal, maxDistance)
+    const u = distance / totalLength
+    const center = curve.getPointAt(u)
+    const tangent = curve.getTangentAt(u).normalize()
+
+    const tangentXZ = new THREE.Vector3(tangent.x, 0, tangent.z)
+    if (tangentXZ.lengthSq() < 1e-6) {
+      tangentXZ.copy(previousDirection)
+    } else {
+      tangentXZ.normalize()
+      previousDirection.copy(tangentXZ)
+    }
+    const normal = new THREE.Vector3(-tangentXZ.z, 0, tangentXZ.x)
+    if (normal.lengthSq() > 0) {
+      normal.normalize()
+    }
+
+    const centeredCol = col - (nCols - 1) / 2
+    const baseOffset = centeredCol * laneWidth
+    const offset = Math.max(-maxOffset, Math.min(maxOffset, baseOffset))
+
+    const finalPosition = center.clone().addScaledVector(normal, offset)
+
+    positions[i * 3 + 0] = finalPosition.x
+    positions[i * 3 + 1] = finalPosition.y + 1
+    positions[i * 3 + 2] = finalPosition.z
   }
+
   return positions
 }
 
