@@ -29,6 +29,33 @@ export class StabilizedFollowCamera {
 
   private _smoothedQuat = new THREE.Quaternion()
   private _prevRiderPositions: THREE.Vector3[] = []
+  private _worldUp = new THREE.Vector3(0, 1, 0)
+  private _basisForward = new THREE.Vector3()
+  private _basisRight = new THREE.Vector3()
+  private _offset = new THREE.Vector3()
+
+  private _computeWorldOffset(forward: THREE.Vector3): THREE.Vector3 {
+    this._basisForward.set(forward.x, 0, forward.z)
+    if (this._basisForward.lengthSq() < 1e-6) {
+      this._basisForward.copy(forward)
+    }
+    if (this._basisForward.lengthSq() < 1e-6) {
+      this._basisForward.set(0, 0, 1)
+    }
+    this._basisForward.normalize()
+
+    if (Math.abs(this._basisForward.y) > 0.999) {
+      this._basisRight.set(1, 0, 0)
+    } else {
+      this._basisRight.crossVectors(this._worldUp, this._basisForward).normalize()
+    }
+
+    this._offset.set(0, 0, 0)
+    this._offset.addScaledVector(this._basisRight, this.followOffset.x)
+    this._offset.addScaledVector(this._worldUp, this.followOffset.y)
+    this._offset.addScaledVector(this._basisForward, this.followOffset.z)
+    return this._offset
+  }
 
   constructor(camera: THREE.PerspectiveCamera, params: FollowCameraParams = {}) {
     this.camera = camera
@@ -77,21 +104,27 @@ export class StabilizedFollowCamera {
     const predictedTarget = center.addScaledVector(avgVel, this.lookAheadTime)
 
     // position spring (critically damped approximation)
-    const desiredPos = predictedTarget.clone().add(this.followOffset)
+    const forwardHint = predictedTarget.clone().sub(this.camera.position)
+    const desiredPos = predictedTarget.clone().add(this._computeWorldOffset(forwardHint))
     const t = 1 - Math.exp(-this.posDamping * dt)
     this.camera.position.lerp(desiredPos, t)
 
     // orientation
-    const followDir = predictedTarget.clone().sub(this.camera.position).normalize()
+    const followDir = predictedTarget.clone().sub(this.camera.position)
+    if (followDir.lengthSq() < 1e-6) {
+      this._smoothedQuat.copy(this.camera.quaternion)
+      return
+    }
+    followDir.normalize()
     const bypassDir = avgVel.clone().setY(0)
     if (bypassDir.lengthSq() > 1e-6) bypassDir.normalize()
     else bypassDir.copy(followDir)
     const desiredForward = followDir.clone().lerp(bypassDir, this.chicaneBypassWeight).normalize()
 
     const forward = this.camera.getWorldDirection(new THREE.Vector3())
-    const up = new THREE.Vector3(0, 1, 0)
+    const up = this._worldUp
 
-    const angle = THREE.MathUtils.radToDeg(followDir.angleTo(forward))
+    const angle = THREE.MathUtils.radToDeg(desiredForward.angleTo(forward))
     if (angle < this.deadzoneDeg) {
       this._smoothedQuat.copy(this.camera.quaternion)
       return
@@ -140,10 +173,16 @@ export class StabilizedFollowCamera {
     avgVel.divideScalar(riders.length)
     const center = box.getCenter(new THREE.Vector3())
     const predictedTarget = center.addScaledVector(avgVel, this.lookAheadTime)
-    const desiredPos = predictedTarget.clone().add(this.followOffset)
+    const forwardHint = predictedTarget.clone().sub(this.camera.position)
+    const desiredPos = predictedTarget.clone().add(this._computeWorldOffset(forwardHint))
     this.camera.position.copy(desiredPos)
 
-    const followDir = predictedTarget.clone().sub(this.camera.position).normalize()
+    const followDir = predictedTarget.clone().sub(this.camera.position)
+    if (followDir.lengthSq() < 1e-6) {
+      followDir.set(0, 0, 1)
+    } else {
+      followDir.normalize()
+    }
     const bypassDir = avgVel.clone().setY(0)
     if (bypassDir.lengthSq() > 1e-6) bypassDir.normalize()
     else bypassDir.copy(followDir)
@@ -151,7 +190,7 @@ export class StabilizedFollowCamera {
       .clone()
       .lerp(bypassDir, this.chicaneBypassWeight)
       .normalize()
-    const up = new THREE.Vector3(0, 1, 0)
+    const up = this._worldUp
     this.camera.quaternion.setFromRotationMatrix(
       new THREE.Matrix4().lookAt(
         this.camera.position,
