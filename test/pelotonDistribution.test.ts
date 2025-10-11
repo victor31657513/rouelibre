@@ -17,18 +17,23 @@ describe('peloton distribution', () => {
     const maxOffset = roadWidth / 2 - 0.05
     const offsets: number[] = []
 
+    let previousX = Infinity
     for (let i = 0; i < N; i++) {
       const x = positions[i * 3 + 0]
       const z = positions[i * 3 + 2]
+      expect(x).toBeLessThanOrEqual(previousX + 1e-5)
+      previousX = x
       offsets.push(z)
       expect(Math.abs(z)).toBeLessThanOrEqual(maxOffset + 1e-5)
 
-      const row = Math.floor(i / nCols)
-      const col = i % nCols
-      if (row > 0) {
-        const prevIndex = (row - 1) * nCols + col
-        const prevX = positions[prevIndex * 3 + 0]
-        expect(x - prevX).toBeCloseTo(spacing, 1e-3)
+      const leaderIndex = N - 1 - i
+      const row = Math.floor(leaderIndex / nCols)
+      const col = leaderIndex % nCols
+      const aheadLeaderIndex = (row + 1) * nCols + col
+      if (aheadLeaderIndex < N) {
+        const frontIndex = N - 1 - aheadLeaderIndex
+        const frontX = positions[frontIndex * 3 + 0]
+        expect(frontX - x).toBeCloseTo(spacing, 1e-3)
       }
     }
 

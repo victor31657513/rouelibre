@@ -80,7 +80,8 @@ self.onmessage = async (e: MessageEvent) => {
       rb.setAngularDamping(2.0)
       bodies[i] = rb
 
-      const row = Math.floor(i / 9)
+      const leaderIndex = N - 1 - i
+      const row = Math.floor(leaderIndex / 9)
       let s = row * 1.2
       if (totalLength > 0) s = s % totalLength
       progress[i] = s

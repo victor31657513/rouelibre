@@ -42,9 +42,12 @@ describe('initialization', () => {
       { x: 10, y: 0, z: 0 }
     ]
     const positions = initPeloton(path, N)
+    let previousX = Infinity
     for (let i = 0; i < N; i++) {
       const x = positions[i * 3 + 0]
       expect(x).toBeGreaterThanOrEqual(path[0].x)
+      expect(x).toBeLessThanOrEqual(previousX + 1e-5)
+      previousX = x
     }
   })
 })

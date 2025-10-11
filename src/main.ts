@@ -95,7 +95,8 @@ resetBtn.addEventListener('click', () => {
       const yawOffset = sign * magnitude * (Math.PI / 180)
       yawOffsets[i] = yawOffset
 
-      const row = Math.floor(i / 9)
+      const leaderIndex = N - 1 - i
+      const row = Math.floor(leaderIndex / 9)
       let s = row * START_SPACING
       if (spline.totalLength > 0) s = s % spline.totalLength
       const sample = spline.sampleByDistance(s)
@@ -226,8 +227,9 @@ const riderObjs: THREE.Object3D[] = Array.from({ length: N }, () => new THREE.Ob
 // Matrices initiales (rangées en peloton 9 de front)
 const tmp = new THREE.Object3D()
 for (let i = 0; i < N; i++) {
-  const row = Math.floor(i / 9)
-  const col = i % 9
+  const leaderIndex = N - 1 - i
+  const row = Math.floor(leaderIndex / 9)
+  const col = leaderIndex % 9
   tmp.position.set(-20 + row * 1.2, 1, -4 + col * 1.0)
   tmp.rotation.set(0, -Math.PI / 2, 0)
   tmp.updateMatrix()
@@ -500,7 +502,8 @@ initRouteSelector('route-list', async (_path3D, _points, url) => {
       const yawOffset = sign * magnitude * (Math.PI / 180)
       yawOffsets[i] = yawOffset
 
-      const row = Math.floor(i / 9)
+      const leaderIndex = N - 1 - i
+      const row = Math.floor(leaderIndex / 9)
       let s = row * START_SPACING
       if (spline.totalLength > 0) s = s % spline.totalLength
       const sample = spline.sampleByDistance(s)
