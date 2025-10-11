@@ -46,8 +46,9 @@ export function initPeloton(
   let previousDirection = new THREE.Vector3(1, 0, 0)
 
   for (let i = 0; i < N; i++) {
-    const row = Math.floor(i / nCols)
-    const col = i % nCols
+    const leaderIndex = N - 1 - i
+    const row = Math.floor(leaderIndex / nCols)
+    const col = leaderIndex % nCols
     const longitudinal = row * spacing
     const maxDistance = totalLength
     const distance = Math.min(longitudinal, maxDistance)
