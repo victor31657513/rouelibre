@@ -114,6 +114,7 @@ resetBtn.addEventListener('click', () => {
       positions[base + 3] = yaw0 + yawOffset
     }
     applyPositions()
+    restoreInitialCameraPose()
     const pathCopy = pathData.slice()
     worker.postMessage(
       {
