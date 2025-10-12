@@ -3,6 +3,7 @@
 Simulation WebGL d'un peloton cycliste suivant des traces GPX.
 
 > La logique de simulation privilégie des règles globales et minimalistes pour rester facilement extensible et limiter les correctifs ponctuels.
+> Chaque coureur gère sa vitesse à partir de sa propre trajectoire, sans pénalité automatique en virage : seules la tenue de route, les marges de sécurité et l'adaptation individuelle des trajectoires peuvent influer sur le rythme.
 
 ## Démarrage rapide
 

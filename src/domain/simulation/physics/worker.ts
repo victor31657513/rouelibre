@@ -10,13 +10,11 @@ import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
-  computeCorneringSpeedLimit,
   estimateSafeTargetSpeed,
 } from './speedControl'
 import {
   computeDesiredOffsetProfile,
   computeNeighborBounds,
-  computeCurvatureEnvelope,
   steerOffsetTowardTarget,
 } from './riderPathing'
 
@@ -180,31 +178,7 @@ self.onmessage = async (e: MessageEvent) => {
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
 
-      const curvatureEnvelope = computeCurvatureEnvelope(
-        spline,
-        progress[i],
-        totalLength,
-        lookAheadDistance,
-        minRadius
-      )
-
-      const curvatureIntensity = MathUtils.clamp(curvatureEnvelope.intensity, 0, 1)
-      const baseMaxTargetSpeed = Math.max(0, maxTargetSpeed)
-
-      let curvatureLimitedMax = baseMaxTargetSpeed
-      if (curvatureEnvelope.maxAbsCurvature > 1e-4) {
-        const radius = 1 / curvatureEnvelope.maxAbsCurvature
-        const curvatureSpeedLimit = computeCorneringSpeedLimit(radius, curvatureIntensity, {
-          minRadius,
-          straightLateralAcceleration: 7.2,
-          cornerLateralAcceleration: 5.8,
-        })
-        if (Number.isFinite(curvatureSpeedLimit) && curvatureSpeedLimit > 0) {
-          curvatureLimitedMax = Math.min(curvatureLimitedMax, curvatureSpeedLimit)
-        }
-      }
-
-      const effectiveMaxTargetSpeed = Math.max(0, curvatureLimitedMax)
+      const effectiveMaxTargetSpeed = Math.max(0, maxTargetSpeed)
       const effectiveMinTargetSpeed = Math.min(
         effectiveMaxTargetSpeed,
         Math.max(minTargetSpeed, effectiveMaxTargetSpeed - 1.5)
