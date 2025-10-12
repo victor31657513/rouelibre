@@ -254,6 +254,9 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
     return Math.max(minSpeed, Math.max(0, maxTargetSpeed))
   }
 
+  const lookAheadRelaxation = 0.85
+  const evaluationLookAhead = Math.max(safeLookAhead * lookAheadRelaxation, 1e-3)
+
   const clampedMinBound = Math.max(-maxOffset, neighborMin)
   const clampedMaxBound = Math.min(maxOffset, neighborMax)
   if (clampedMinBound > clampedMaxBound) {
@@ -269,9 +272,9 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
     }
 
     const safeSpeed = Math.max(0, speed)
-    const distancePerStep = Math.max(safeSpeed * safeDt, safeLookAhead / 8)
-    const stepCount = Math.max(1, Math.ceil(safeLookAhead / Math.max(distancePerStep, eps)))
-    const stepDistance = safeLookAhead / stepCount
+    const distancePerStep = Math.max(safeSpeed * safeDt, evaluationLookAhead / 8)
+    const stepCount = Math.max(1, Math.ceil(evaluationLookAhead / Math.max(distancePerStep, eps)))
+    const stepDistance = evaluationLookAhead / stepCount
     const stepTime = stepDistance / Math.max(safeSpeed, eps)
     let offset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
 
