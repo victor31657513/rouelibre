@@ -10,6 +10,7 @@ import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
+  computeCorneringSpeedLimit,
   estimateSafeTargetSpeed,
 } from './speedControl'
 import {
@@ -188,10 +189,10 @@ self.onmessage = async (e: MessageEvent) => {
       )
 
       const curvatureIntensity = MathUtils.clamp(curvatureEnvelope.intensity, 0, 1)
-      const straightMaxBoost = 1.05
-      const cornerMaxScale = 0.55
-      const straightMinScale = 0.95
-      const cornerMinScale = 0.45
+      const straightMaxBoost = 1.08
+      const cornerMaxScale = 0.75
+      const straightMinScale = 0.97
+      const cornerMinScale = 0.6
       const curvatureMaxFactor = MathUtils.lerp(straightMaxBoost, cornerMaxScale, curvatureIntensity)
       const curvatureMinFactor = MathUtils.lerp(straightMinScale, cornerMinScale, curvatureIntensity)
 
@@ -204,9 +205,12 @@ self.onmessage = async (e: MessageEvent) => {
 
       if (curvatureEnvelope.maxAbsCurvature > 1e-4) {
         const radius = 1 / curvatureEnvelope.maxAbsCurvature
-        const gripFactor = MathUtils.lerp(1.9, 1.4, curvatureIntensity)
-        const curvatureSpeedLimit = Math.sqrt(Math.max(radius, 1)) * gripFactor
-        if (Number.isFinite(curvatureSpeedLimit)) {
+        const curvatureSpeedLimit = computeCorneringSpeedLimit(radius, curvatureIntensity, {
+          minRadius,
+          straightLateralAcceleration: 8.5,
+          cornerLateralAcceleration: 5.5,
+        })
+        if (Number.isFinite(curvatureSpeedLimit) && curvatureSpeedLimit > 0) {
           effectiveMaxTargetSpeed = Math.min(effectiveMaxTargetSpeed, curvatureSpeedLimit)
         }
       }

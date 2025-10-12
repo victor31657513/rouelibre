@@ -42,6 +42,53 @@ export interface SegmentLengthSpeedOptions {
   maxLengthRatioForMinSpeed?: number
 }
 
+export interface CorneringSpeedOptions {
+  /** Minimum turning radius allowed when evaluating the cornering limit. */
+  minRadius?: number
+  /**
+   * Maximum lateral acceleration tolerated when the track is essentially
+   * straight. Higher values allow riders to keep higher top speeds on gentle
+   * bends.
+   */
+  straightLateralAcceleration?: number
+  /**
+   * Maximum lateral acceleration tolerated in the tightest admissible corner.
+   * Lower values avoid unrealistically high speeds on hairpins.
+   */
+  cornerLateralAcceleration?: number
+}
+
+export function computeCorneringSpeedLimit(
+  radius: number,
+  curvatureIntensity: number,
+  options: CorneringSpeedOptions = {}
+): number {
+  const {
+    minRadius = 1,
+    straightLateralAcceleration = 8,
+    cornerLateralAcceleration = 5.5,
+  } = options
+
+  if (!Number.isFinite(radius) || radius <= 0) {
+    return Math.max(0, Math.sqrt(Math.max(minRadius, 1) * straightLateralAcceleration))
+  }
+
+  const safeRadius = Math.max(minRadius, radius)
+  const clampedIntensity = MathUtils.clamp(curvatureIntensity, 0, 1)
+  const lateralAccelerationLimit = MathUtils.lerp(
+    straightLateralAcceleration,
+    cornerLateralAcceleration,
+    clampedIntensity
+  )
+  const safeAcceleration = Math.max(0, lateralAccelerationLimit)
+  if (!Number.isFinite(safeAcceleration) || safeAcceleration <= 0) {
+    return 0
+  }
+
+  const limit = Math.sqrt(safeRadius * safeAcceleration)
+  return Number.isFinite(limit) ? limit : 0
+}
+
 export function computeLengthRatioRange(
   maxOffset: number,
   minRadius: number,
