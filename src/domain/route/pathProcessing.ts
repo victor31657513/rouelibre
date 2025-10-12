@@ -11,6 +11,93 @@
  */
 import type { Vec3 } from './gpx'
 
+export interface ProgressivePathOptions {
+  /** Minimum distance (in meters) required to keep a point ahead of the previous kept point. */
+  minForwardDistance?: number
+  /**
+   * Maximum cosine allowed between two consecutive segments before considering the middle point
+   * a backtracking artefact.
+   */
+  maxBacktrackCosine?: number
+  /**
+   * Upper bound on the length of the segments considered for backtracking removal. Longer
+   * segments are preserved even if they bend sharply since they likely represent true corners.
+   */
+  maxShortTurnLength?: number
+}
+
+const DEFAULT_PROGRESSIVE_OPTIONS: Required<ProgressivePathOptions> = {
+  minForwardDistance: 0.35,
+  maxBacktrackCosine: -0.15,
+  maxShortTurnLength: 2.5,
+}
+
+function getProgressiveOptions(options: ProgressivePathOptions = {}): Required<ProgressivePathOptions> {
+  return {
+    minForwardDistance: options.minForwardDistance ?? DEFAULT_PROGRESSIVE_OPTIONS.minForwardDistance,
+    maxBacktrackCosine: options.maxBacktrackCosine ?? DEFAULT_PROGRESSIVE_OPTIONS.maxBacktrackCosine,
+    maxShortTurnLength: options.maxShortTurnLength ?? DEFAULT_PROGRESSIVE_OPTIONS.maxShortTurnLength,
+  }
+}
+
+/**
+ * Filters GPX samples that fail to provide forward progression along the path.
+ *
+ * The function removes duplicate points and short zig-zag artefacts caused by GPS jitter, helping
+ * downstream consumers keep a consistent notion of progression.
+ */
+export function ensureProgressivePath(path: Vec3[], options?: ProgressivePathOptions): Vec3[] {
+  if (path.length === 0) return []
+
+  const { minForwardDistance, maxBacktrackCosine, maxShortTurnLength } = getProgressiveOptions(options)
+
+  const progressive: Vec3[] = [path[0].clone()]
+
+  for (let i = 1; i < path.length; i++) {
+    const sourcePoint = path[i]
+    const candidate = sourcePoint.clone()
+    const isLast = i === path.length - 1
+    const lastKept = progressive[progressive.length - 1]
+    const distance = candidate.distanceTo(lastKept)
+
+    if (!isLast && distance < minForwardDistance) {
+      continue
+    }
+
+    if (progressive.length >= 2) {
+      const prev = progressive[progressive.length - 2]
+      const prevSegment = lastKept.clone().sub(prev)
+      const nextSegment = candidate.clone().sub(lastKept)
+      const prevLength = prevSegment.length()
+      const nextLength = nextSegment.length()
+
+      if (prevLength > 1e-6 && nextLength > 1e-6) {
+        const prevDir = prevSegment.multiplyScalar(1 / prevLength)
+        const nextDir = nextSegment.multiplyScalar(1 / nextLength)
+        const cosine = prevDir.dot(nextDir)
+
+        if (
+          cosine < maxBacktrackCosine &&
+          Math.min(prevLength, nextLength) < maxShortTurnLength
+        ) {
+          if (prevLength <= nextLength) {
+            progressive[progressive.length - 1] = candidate
+          }
+          continue
+        }
+      }
+    }
+
+    progressive.push(candidate)
+  }
+
+  if (progressive.length === 1 && path.length > 1) {
+    progressive.push(path[path.length - 1].clone())
+  }
+
+  return progressive
+}
+
 /**
  * Computes the cumulative positive and negative elevation gain along a GPX
  * profile.

@@ -16,7 +16,7 @@ import { PelotonSceneUpdater } from '../domain/simulation/PelotonSceneUpdater'
 import { SimulationClient } from '../domain/simulation/SimulationClient'
 import { initPeloton } from '../domain/simulation/peloton'
 import { PathSpline, resamplePath } from '../domain/route/pathSpline'
-import { elevationStats, simplifyPath } from '../domain/route/pathProcessing'
+import { elevationStats, ensureProgressivePath, simplifyPath } from '../domain/route/pathProcessing'
 import { buildCenterDashes, buildRoadBounds, buildRoadMesh, buildStartLine } from '../domain/route/roadGeometry'
 import { loadGPX } from '../domain/route/routeLoader'
 import type { GPXPoint, Vec3 } from '../domain/route/gpx'
@@ -362,7 +362,8 @@ export class AppController {
 
     this.hideRouteList()
 
-    const simplified = simplifyPath(path3D, 1.0)
+    const progressive = ensureProgressivePath(path3D)
+    const simplified = simplifyPath(progressive, 1.0)
     const smoothed = resamplePath(simplified, 1.0)
     this.cameraRig.setInitialPose(smoothed, APP_CONFIG.camHeight, APP_CONFIG.camDistance)
 
