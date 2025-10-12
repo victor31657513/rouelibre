@@ -241,19 +241,28 @@ self.onmessage = async (e: MessageEvent) => {
             lengthRatioRange.min,
             lengthRatioRange.max,
           )
-          const desired = targetSpeed / clampedRatio
-          compensatedTarget = Math.min(
-            targetSpeed,
-            MathUtils.clamp(desired, effectiveMinTargetSpeed, effectiveMaxTargetSpeed),
+          const desired = targetSpeed * clampedRatio
+          compensatedTarget = MathUtils.clamp(
+            desired,
+            effectiveMinTargetSpeed,
+            effectiveMaxTargetSpeed,
           )
         } else {
-          compensatedTarget = Math.min(targetSpeed, effectiveMaxTargetSpeed)
+          compensatedTarget = MathUtils.clamp(
+            targetSpeed,
+            effectiveMinTargetSpeed,
+            effectiveMaxTargetSpeed,
+          )
         }
       } else {
-        compensatedTarget = Math.min(targetSpeed, effectiveMaxTargetSpeed)
+        compensatedTarget = MathUtils.clamp(
+          targetSpeed,
+          effectiveMinTargetSpeed,
+          effectiveMaxTargetSpeed,
+        )
       }
 
-      // (A) Consigne limitée par la compensation de longueur : aucune pénalité spécifique au virage
+      // (A) Consigne ajustée par la compensation de longueur : aucune pénalité spécifique au virage
       const baseTarget = compensatedTarget
 
       // (B) Rate limit sur la consigne (borne les crans de montée/descente)
