@@ -1,6 +1,7 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing'
+import { adjustSpeedTowardsTarget, computeTargetSpeed } from './speedControl'
 
 let world: RAPIER.World
 let N = 0
@@ -26,7 +27,10 @@ let lookAhead = 5
 let maxYawRate = 120
 let maxYawAccel = 480
 let minRadius = 12
-let speedScale = 0.8
+let maxTargetSpeed = 9
+let minTargetSpeed = 5
+let maxAcceleration = 3
+let maxDeceleration = 5
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 
@@ -121,16 +125,30 @@ self.onmessage = async (e: MessageEvent) => {
 
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
-      let s = progress[i] + speeds[i] * dt
-      if (totalLength > 0) s = s % totalLength
+      const previousSpeed = speeds[i]
+
+      let curvature = 0
+      if (totalLength > 0) {
+        const curvatureDistance = progress[i] + lookAhead
+        const normalized = MathUtils.euclideanModulo(curvatureDistance, totalLength) / totalLength
+        curvature = spline.estimateCurvature(normalized)
+      }
+
+      const targetSpeed = computeTargetSpeed(curvature, maxTargetSpeed, minTargetSpeed, 1 / minRadius)
+      const newSpeed = adjustSpeedTowardsTarget(
+        previousSpeed,
+        targetSpeed,
+        dt,
+        maxAcceleration,
+        maxDeceleration
+      )
+      speeds[i] = newSpeed
+
+      let s = progress[i] + ((previousSpeed + newSpeed) / 2) * dt
+      if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
       progress[i] = s
 
-      let ahead = s + lookAhead
-      const curvature = spline.estimateCurvature(ahead / totalLength)
-      if (curvature > 1 / minRadius) {
-        ahead += lookAhead
-        speeds[i] *= speedScale
-      }
+      const ahead = s + lookAhead
 
       const sample = spline.sampleByDistance(s)
       const center = sample.position
@@ -173,6 +191,9 @@ self.onmessage = async (e: MessageEvent) => {
     maxYawRate = payload.maxYawRate ?? maxYawRate
     maxYawAccel = payload.maxYawAccel ?? maxYawAccel
     minRadius = payload.minRadius ?? minRadius
-    speedScale = payload.speedScale ?? speedScale
+    maxTargetSpeed = payload.maxTargetSpeed ?? maxTargetSpeed
+    minTargetSpeed = payload.minTargetSpeed ?? minTargetSpeed
+    maxAcceleration = payload.maxAcceleration ?? maxAcceleration
+    maxDeceleration = payload.maxDeceleration ?? maxDeceleration
   }
 }

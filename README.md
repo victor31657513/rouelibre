@@ -22,7 +22,10 @@ L'update du peloton expose plusieurs paramètres afin d'affiner le comportement�
 - `maxYawRate` (deg/s)
 - `maxYawAccel` (deg/s²)
 - `minRadius` (m)
-- `speedScale`
+- `maxTargetSpeed` (m/s)
+- `minTargetSpeed` (m/s)
+- `maxAcceleration` (m/s²)
+- `maxDeceleration` (m/s²)
 
 Ces valeurs peuvent être modifiées à chaud en envoyant un message `params` au worker :
 
