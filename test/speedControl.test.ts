@@ -110,14 +110,14 @@ describe('speed control helpers', () => {
     expect(insideTravel).toBeGreaterThan(outsideTravel)
   })
 
-  it('relaxes lateral goals when the corridor leaves comfortable margins', () => {
+  it('pursues desired offsets when ample lateral margin is available', () => {
     const relaxed = computeRelaxedOffsetTarget(0, 1.4, -2, 2, 3.5)
-    expect(relaxed).toBeCloseTo(0, 5)
+    expect(relaxed).toBeCloseTo(1.4, 5)
   })
 
-  it('keeps aggressive lateral goals when margins collapse', () => {
+  it('sticks to the current offset when the corridor collapses', () => {
     const relaxed = computeRelaxedOffsetTarget(0.25, -0.4, -0.2, 0.3, 3.5)
-    expect(relaxed).toBeCloseTo(-0.2, 5)
+    expect(relaxed).toBeCloseTo(0.25, 5)
   })
 
   it('keeps compensation neutral around unit ratios', () => {

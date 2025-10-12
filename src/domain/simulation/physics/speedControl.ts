@@ -101,7 +101,7 @@ export function computeRelaxedOffsetTarget(
     1,
   )
 
-  return MathUtils.lerp(safeDesired, safeCurrent, relaxedRatio)
+  return MathUtils.lerp(safeCurrent, safeDesired, relaxedRatio)
 }
 
 export function computeTargetSpeedCompensation(
