@@ -206,54 +206,75 @@ export function computeDesiredOffsetProfile(
 ): number {
   const { lookAhead, maxOffset, totalLength, minRadius } = options
   if (!spline || totalLength <= 0 || maxOffset <= 0) return 0
-  const curvatureNow = computeSignedCurvature(spline, distance, totalLength)
-  const halfLook = Math.max(lookAhead * 0.5, 1)
-  const curvatureAhead = computeSignedCurvature(spline, distance + halfLook, totalLength)
-  const curvatureFar = computeSignedCurvature(spline, distance + lookAhead, totalLength)
-  const curvatureBehind = computeSignedCurvature(spline, distance - halfLook, totalLength)
-
-  let direction = Math.sign(curvatureNow)
-  if (direction === 0) direction = Math.sign(curvatureAhead)
-  if (direction === 0) direction = Math.sign(curvatureFar)
-  if (direction === 0) direction = Math.sign(curvatureBehind)
-  if (direction === 0) return 0
-
   const curvatureThreshold = minRadius > 0 ? 1 / minRadius : 0.02
-  const aheadAbs = Math.abs(curvatureAhead)
-  const farAbs = Math.abs(curvatureFar)
-  const behindAbs = Math.abs(curvatureBehind)
-  const curvatureAbs = Math.abs(curvatureNow)
-  const maxCurvature = Math.max(curvatureAbs, aheadAbs, farAbs, behindAbs)
-  if (maxCurvature < curvatureThreshold * 0.15) {
+  const halfLook = Math.max(lookAhead * 0.5, 1)
+  const sampleOffsets = [-halfLook, -halfLook * 0.4, 0, halfLook * 0.25, halfLook, lookAhead]
+
+  let signedSum = 0
+  let aheadAbs = 0
+  let behindAbs = 0
+  let forwardSigned = 0
+  let maxAbsCurvature = 0
+
+  for (const offset of sampleOffsets) {
+    const sampleDistance = distance + offset
+    const curvature = computeSignedCurvature(spline, sampleDistance, totalLength)
+    if (!Number.isFinite(curvature)) {
+      continue
+    }
+
+    const weight = 1 - Math.min(Math.abs(offset) / Math.max(lookAhead, 1), 1)
+    const clampedWeight = Math.max(weight, 0.1)
+    signedSum += curvature * clampedWeight
+
+    const absCurvature = Math.abs(curvature)
+    maxAbsCurvature = Math.max(maxAbsCurvature, absCurvature)
+    if (offset >= 0) {
+      aheadAbs += absCurvature * clampedWeight
+      forwardSigned += curvature * clampedWeight
+    } else {
+      behindAbs += absCurvature * clampedWeight
+    }
+  }
+
+  if (maxAbsCurvature < curvatureThreshold * 0.15) {
+    return 0
+  }
+
+  let orientation = 0
+  const forwardStrength = Math.abs(forwardSigned)
+  if (forwardStrength > maxAbsCurvature * 0.1) {
+    orientation = Math.sign(forwardSigned)
+  }
+  if (orientation === 0) {
+    const combinedStrength = Math.abs(signedSum)
+    if (combinedStrength > maxAbsCurvature * 0.1) {
+      orientation = Math.sign(signedSum)
+    }
+  }
+  if (orientation === 0) {
     return 0
   }
 
   const normalizedCurvature = MathUtils.clamp(
-    maxCurvature / Math.max(curvatureThreshold, 1e-6),
+    maxAbsCurvature / Math.max(curvatureThreshold, 1e-6),
     0,
-    1
+    1,
   )
-  const intensity = Math.pow(normalizedCurvature, 0.4)
-  if (intensity <= 0) {
+  const intensity = Math.pow(normalizedCurvature, 0.35)
+  if (intensity <= 1e-3) {
     return 0
   }
 
-  const outside = direction * maxOffset * 0.75
-  const inside = -direction * maxOffset * 0.85
+  const totalEnvelope = aheadAbs + behindAbs
+  const progression =
+    totalEnvelope > 1e-6 ? MathUtils.clamp(aheadAbs / totalEnvelope, 0, 1) : 0.5
+  const apexWeight = MathUtils.smoothstep(progression, 0.35, 0.75)
+  const outsideWeight = 1 - apexWeight
 
-  const safeMax = Math.max(maxCurvature, 1e-6)
-  const normalizedAhead = MathUtils.clamp(Math.max(aheadAbs, farAbs) / safeMax, 0, 1)
-  const normalizedBehind = MathUtils.clamp(behindAbs / safeMax, 0, 1)
-  const normalizedCurrent = MathUtils.clamp(curvatureAbs / safeMax, 0, 1)
-
-  const curvatureFactor = MathUtils.smoothstep(normalizedCurrent, 0.2, 1)
-  const balance = MathUtils.clamp(0.5 + 0.5 * (normalizedAhead - normalizedBehind), 0, 1)
-  const apexFactor = MathUtils.clamp(1 - Math.abs(balance - 0.5) * 2, 0, 1)
-
-  const insideWeight = curvatureFactor * apexFactor
-  const outsideWeight = Math.max(0, 1 - insideWeight)
-
-  const blended = outside * outsideWeight + inside * insideWeight
+  const outsideTarget = orientation * maxOffset * 0.55
+  const insideTarget = -orientation * maxOffset
+  const blended = outsideTarget * outsideWeight + insideTarget * apexWeight
 
   return MathUtils.clamp(blended * intensity, -maxOffset, maxOffset)
 }
