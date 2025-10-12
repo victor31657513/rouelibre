@@ -7,7 +7,7 @@
  */
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../../route/pathSpline'
-import { computeSignedCurvature, steerOffsetTowardTarget } from './riderPathing'
+import { steerOffsetTowardTarget } from './riderPathing'
 
 export interface SlopeAdjustmentOptions {
   /**
@@ -318,15 +318,7 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
       scratchRight.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
       scratchPosition.copy(sample.position).addScaledVector(scratchRight, offset)
 
-      const curvature = computeSignedCurvature(
-        spline,
-        sampleDistance,
-        totalLength,
-        Math.max(stepDistance, 0.25)
-      )
-      const arcLengthRatio = computeOffsetArcLengthRatio(curvature, offset)
-      const stepTravel = stepDistance * arcLengthRatio
-      const stepTime = stepTravel / Math.max(safeSpeed, eps)
+      const stepTime = stepDistance / Math.max(safeSpeed, eps)
 
       offset = steerOffsetTowardTarget(
         offset,

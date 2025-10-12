@@ -18,7 +18,6 @@ import {
   computeSignedCurvature,
   steerOffsetTowardTarget,
 } from './riderPathing'
-import { computeOffsetArcLengthRatio } from './speedControl'
 
 let world: RAPIER.World
 let N = 0
@@ -267,19 +266,7 @@ self.onmessage = async (e: MessageEvent) => {
       )
       offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
 
-      let travel = ((previousSpeed + newSpeed) / 2) * dt
-      if (Math.abs(updatedOffset) > 1e-4 && totalLength > 0) {
-        const curvature = computeSignedCurvature(
-          spline,
-          progress[i],
-          totalLength,
-          Math.max(lookAhead * 0.25, 0.5)
-        )
-        const arcRatio = computeOffsetArcLengthRatio(curvature, updatedOffset)
-        if (Number.isFinite(arcRatio) && arcRatio > 1e-3) {
-          travel /= arcRatio
-        }
-      }
+      const travel = ((previousSpeed + newSpeed) / 2) * dt
       let s = progress[i] + travel
       if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
       progress[i] = s
