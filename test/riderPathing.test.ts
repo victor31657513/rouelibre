@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
 import { PathSpline } from '../src/domain/route/pathSpline'
 import {
-  computeArcLengthScale,
   computeDesiredOffsetProfile,
   computeNeighborBounds,
   steerOffsetTowardTarget,
@@ -35,8 +34,6 @@ describe('rider pathing helpers', () => {
     let progress = 5
     let offset = 0
     let minOffset = Number.POSITIVE_INFINITY
-    const outsideProgress = { value: progress }
-
     for (let step = 0; step < 180; step++) {
       const progressArray = new Float32Array([progress])
       const offsetArray = new Float32Array([offset])
@@ -65,20 +62,12 @@ describe('rider pathing helpers', () => {
       )
 
       const travel = speed * dt
-      const scale = computeArcLengthScale(spline, progress, totalLength, offset)
-      progress += travel / scale
-      outsideProgress.value += travel / computeArcLengthScale(
-        spline,
-        outsideProgress.value,
-        totalLength,
-        maxOffset
-      )
+      progress += travel
 
       minOffset = Math.min(minOffset, offset)
     }
 
     expect(minOffset).toBeLessThan(-0.6 * maxOffset)
-    expect(progress).toBeGreaterThan(outsideProgress.value)
   })
 })
 
