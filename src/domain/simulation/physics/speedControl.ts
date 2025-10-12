@@ -49,6 +49,59 @@ export interface SegmentLengthSpeedOptions extends LengthCompensationTuning {
   maxLengthRatioForMinSpeed?: number
 }
 
+export interface RelaxedOffsetTargetOptions {
+  /** Optional override for the margin that still counts as comfortable. */
+  relaxationMargin?: number
+}
+
+export function computeRelaxedOffsetTarget(
+  currentOffset: number,
+  desiredOffset: number,
+  minBound: number,
+  maxBound: number,
+  maxOffset: number,
+  options: RelaxedOffsetTargetOptions = {},
+): number {
+  const boundedMaxOffset = Number.isFinite(maxOffset) ? Math.abs(maxOffset) : Infinity
+  const rawMin = Math.min(minBound, maxBound)
+  const rawMax = Math.max(minBound, maxBound)
+  const clampedMin = Math.max(-boundedMaxOffset, rawMin)
+  const clampedMax = Math.min(boundedMaxOffset, rawMax)
+
+  if (!(Number.isFinite(clampedMin) && Number.isFinite(clampedMax))) {
+    return desiredOffset
+  }
+
+  const safeMin = Math.min(clampedMin, clampedMax)
+  const safeMax = Math.max(clampedMin, clampedMax)
+  const safeCurrent = MathUtils.clamp(currentOffset, safeMin, safeMax)
+  const safeDesired = MathUtils.clamp(desiredOffset, safeMin, safeMax)
+  const corridorWidth = safeMax - safeMin
+
+  if (!Number.isFinite(corridorWidth) || corridorWidth <= 1e-6) {
+    return safeDesired
+  }
+
+  const leftMargin = safeCurrent - safeMin
+  const rightMargin = safeMax - safeCurrent
+  const minMargin = Math.max(0, Math.min(leftMargin, rightMargin))
+
+  const fallbackComfort = Math.min(corridorWidth * 0.5, Math.max(0.3, Math.min(0.9, boundedMaxOffset * 0.45)))
+  const comfortMargin = Math.max(0, options.relaxationMargin ?? fallbackComfort)
+
+  if (!Number.isFinite(comfortMargin) || comfortMargin <= 1e-6) {
+    return safeDesired
+  }
+
+  const relaxedRatio = MathUtils.clamp(
+    MathUtils.smoothstep(minMargin, comfortMargin * 0.3, comfortMargin),
+    0,
+    1,
+  )
+
+  return MathUtils.lerp(safeDesired, safeCurrent, relaxedRatio)
+}
+
 export function computeTargetSpeedCompensation(
   ratio: number,
   options: LengthCompensationTuning = {}
@@ -399,6 +452,8 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
   const clampedMinBound = Math.max(-maxOffset, neighborMin)
   const clampedMaxBound = Math.min(maxOffset, neighborMax)
   const clampedOffset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
+  const computeStepTarget = (offset: number) =>
+    computeRelaxedOffsetTarget(offset, desiredOffset, clampedMinBound, clampedMaxBound, maxOffset)
 
   if (diagnostics) {
     diagnostics.limitingSpeed = maxSpeed
@@ -501,9 +556,10 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
         0,
       )
       const timeRemaining = remainingDistance / Math.max(safeSpeed, eps)
+      const targetOffset = computeStepTarget(offset)
       const reachableDesired = constrainOffsetWithinRate(
         offset,
-        desiredOffset,
+        targetOffset,
         clampedMinBound,
         clampedMaxBound,
         maxOffsetRate,

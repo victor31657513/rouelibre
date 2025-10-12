@@ -12,6 +12,7 @@ import {
   adjustTargetSpeedForSlope,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
+  computeRelaxedOffsetTarget,
   computeTargetSpeedCompensation,
   estimateSafeTargetSpeed,
 } from './speedControl'
@@ -201,12 +202,20 @@ self.onmessage = async (e: MessageEvent) => {
         minRadius,
       })
 
+      const relaxedDesired = computeRelaxedOffsetTarget(
+        currentOffset,
+        desiredProfile,
+        minBound,
+        maxBound,
+        maxOffset,
+      )
+
       const planningSpeed = Math.max(0.1, effectiveMaxTargetSpeed)
       const availableTime =
         lookAheadDistance > 0 ? lookAheadDistance / planningSpeed : 0
-      const reachableDesired = constrainOffsetWithinRate(
+      const targetOffset = constrainOffsetWithinRate(
         currentOffset,
-        desiredProfile,
+        relaxedDesired,
         minBound,
         maxBound,
         maxOffsetRate,
@@ -218,7 +227,7 @@ self.onmessage = async (e: MessageEvent) => {
         totalLength,
         currentDistance: progress[i],
         currentOffset,
-        desiredOffset: reachableDesired,
+        desiredOffset: targetOffset,
         neighborMin: minBound,
         neighborMax: maxBound,
         lookAheadDistance,
@@ -321,7 +330,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const updatedOffset = steerOffsetTowardTarget(
         currentOffset,
-        reachableDesired,
+        targetOffset,
         minBound,
         maxBound,
         dt,
