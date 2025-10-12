@@ -7,6 +7,7 @@ Ce dépôt utilise TypeScript et Vite.
 - Exécuter `npm run lint` et `npm test` après toute modification de code source.
 - Si la modification concerne uniquement la documentation ou les commentaires, ces vérifications peuvent être ignorées.
 - Incrémenter le champ `version` de `package.json` lors de toute modification de code source.
+- Préserver une logique de simulation minimaliste : aucun ralentissement par défaut lié aux courbes, les vitesses doivent découler uniquement de la trajectoire propre de chaque coureur et des contraintes locales (tenue de route, marges de sécurité), et les adaptations doivent rester généralisables.
 
 ## Architecture à respecter
 
