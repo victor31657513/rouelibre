@@ -45,7 +45,7 @@ let minRadius = 12
 let maxTargetSpeed = 9
 let minTargetSpeed = 5
 // Limits the allowed delta between straight line and corner target speeds.
-const curveSpeedMargin = 0.4
+const curveSpeedMargin = 0.15
 let maxAcceleration = 3
 let maxDeceleration = 5
 const maxOffsetRate = 2.5
