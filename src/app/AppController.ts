@@ -91,6 +91,8 @@ export class AppController {
     this.dom.startBtn.disabled = true
     this.dom.pauseBtn.disabled = true
     this.dom.resetBtn.disabled = true
+    this.dom.canvas.classList.add('hidden')
+    this.showRouteList()
     await initRouteSelector('route-list', async (path, points, url) => {
       await this.loadRoute(url, { path3D: path, points })
     })
