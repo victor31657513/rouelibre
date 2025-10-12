@@ -15,6 +15,7 @@ import {
 import {
   computeDesiredOffsetProfile,
   computeNeighborBounds,
+  computeCurvatureEnvelope,
   steerOffsetTowardTarget,
 } from './riderPathing'
 
@@ -178,6 +179,33 @@ self.onmessage = async (e: MessageEvent) => {
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
 
+      const curvatureEnvelope = computeCurvatureEnvelope(
+        spline,
+        progress[i],
+        totalLength,
+        lookAheadDistance,
+        minRadius
+      )
+
+      const curvatureIntensity = MathUtils.clamp(curvatureEnvelope.intensity, 0, 1)
+      const curvatureMaxFactor = MathUtils.lerp(0.78, 1.05, curvatureIntensity)
+      const curvatureMinFactor = MathUtils.lerp(1, 1.2, curvatureIntensity)
+
+      let effectiveMinTargetSpeed = Math.max(
+        minTargetSpeed,
+        minTargetSpeed * curvatureMinFactor
+      )
+      let effectiveMaxTargetSpeed = Math.max(
+        effectiveMinTargetSpeed + 0.25,
+        maxTargetSpeed * curvatureMaxFactor
+      )
+
+      if (effectiveMaxTargetSpeed - effectiveMinTargetSpeed < 0.5) {
+        const midpoint = (effectiveMaxTargetSpeed + effectiveMinTargetSpeed) / 2
+        effectiveMinTargetSpeed = Math.max(minTargetSpeed, midpoint - 0.25)
+        effectiveMaxTargetSpeed = midpoint + 0.25
+      }
+
       const targetSpeed = estimateSafeTargetSpeed({
         spline,
         totalLength,
@@ -189,8 +217,8 @@ self.onmessage = async (e: MessageEvent) => {
         lookAheadDistance,
         maxOffset,
         maxOffsetRate,
-        maxTargetSpeed,
-        minTargetSpeed,
+        maxTargetSpeed: effectiveMaxTargetSpeed,
+        minTargetSpeed: effectiveMinTargetSpeed,
         dt,
       })
 
@@ -208,8 +236,8 @@ self.onmessage = async (e: MessageEvent) => {
         maxSlope: 0.25,
         maxUphillPenalty: 2,
         maxDownhillBoost: 1,
-        minSpeed: Math.max(0, minTargetSpeed - 1),
-        maxSpeed: maxTargetSpeed + 1,
+        minSpeed: Math.max(0, effectiveMinTargetSpeed - 1),
+        maxSpeed: effectiveMaxTargetSpeed + 1,
       })
 
       const newSpeed = adjustSpeedTowardsTarget(
