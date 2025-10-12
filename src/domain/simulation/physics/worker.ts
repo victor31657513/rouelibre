@@ -38,6 +38,14 @@ let yawRates: Float32Array
 let commandedTargetSpeeds: Float32Array
 let lateralDecisions: OffsetCandidateResult[] = []
 let noiseGenerators: Array<() => number> = []
+let riderMasses: Float32Array
+let riderCdA: Float32Array
+let riderMaxPower: Float32Array
+let riderPreferredSpeeds: Float32Array
+let riderReactionTimes: Float32Array
+let riderNoiseSigma: Float32Array
+let riderPowerWeights: Float32Array
+let riderGapWeights: Float32Array
 
 let laneWidth = 1
 let roadWidth = 8
@@ -79,11 +87,23 @@ const SOCIAL_TAU = 0.6
 const GAP_MIN_LONG = 1.1
 const HEADWAY_TIME = 0.4
 const LONGITUDINAL_REPULSION_GAIN = 3.0
-const COMMAND_NOISE_STDDEV = 0.25
+const COMMAND_NOISE_STDDEV = 0.1
 const OFFSET_CANDIDATE_STEP = 0.65
 const WALL_COMFORT_MARGIN = 0.75
 const LATERAL_GAP_INFLUENCE = 0.35
 const LATERAL_FORCE_DRAG = 0.45
+
+const DEFAULT_POWER_WEIGHT = 0.55
+const DEFAULT_GAP_WEIGHT = 0.3
+
+type RiderRoleProfile = { powerWeight: number; gapWeight: number }
+
+const ROLE_PROFILES: RiderRoleProfile[] = [
+  { powerWeight: 0.6, gapWeight: 0.25 }, // sprinteur protecteur, cherche l'aspi
+  { powerWeight: 0.52, gapWeight: 0.33 }, // rouleur qui garde la file fluide
+  { powerWeight: 0.48, gapWeight: 0.36 }, // grimpeur attentif aux espacements
+  { powerWeight: 0.56, gapWeight: 0.3 }, // capitaine équilibré
+]
 
 const DIAGNOSTIC_INTERVAL = 1.0
 const referenceRiderIndex = 0
@@ -168,6 +188,26 @@ function mulberry32(a: number) {
   }
 }
 
+function sampleNormal(generator: () => number, mean: number, stdDev: number): number {
+  const u1 = Math.max(generator(), 1e-7)
+  const u2 = Math.max(generator(), 1e-7)
+  const mag = Math.sqrt(-2 * Math.log(u1))
+  const z0 = mag * Math.cos(2 * Math.PI * u2)
+  const value = mean + z0 * stdDev
+  return Number.isFinite(value) ? value : mean
+}
+
+function sampleClampedNormal(
+  generator: () => number,
+  mean: number,
+  stdDev: number,
+  min: number,
+  max: number,
+): number {
+  const value = sampleNormal(generator, mean, stdDev)
+  return MathUtils.clamp(value, min, max)
+}
+
 function computeSlope(current: Vector3, ahead: Vector3, distance: number): number {
   if (!isFinite(distance) || distance <= 0) {
     return 0
@@ -239,7 +279,20 @@ self.onmessage = async (e: MessageEvent) => {
     commandedTargetSpeeds = new Float32Array(N)
     lateralDecisions = new Array(N)
     noiseGenerators = new Array(N)
+    riderMasses = new Float32Array(N)
+    riderCdA = new Float32Array(N)
+    riderMaxPower = new Float32Array(N)
+    riderPreferredSpeeds = new Float32Array(N)
+    riderReactionTimes = new Float32Array(N)
+    riderNoiseSigma = new Float32Array(N)
+    riderPowerWeights = new Float32Array(N)
+    riderGapWeights = new Float32Array(N)
     const rng = mulberry32(123456)
+    const effectiveMaxInitSpeed = Math.max(0, maxTargetSpeed)
+    const effectiveMinInitSpeed = Math.max(
+      0,
+      Math.min(effectiveMaxInitSpeed, minTargetSpeed),
+    )
 
     for (let i = 0; i < N; i++) {
       const bd = RAPIER.RigidBodyDesc.kinematicPositionBased()
@@ -248,6 +301,38 @@ self.onmessage = async (e: MessageEvent) => {
       world.createCollider(cd, rb)
       rb.setAngularDamping(2.0)
       bodies[i] = rb
+
+      const mass = sampleClampedNormal(rng, systemMass, 5, 70, 96)
+      riderMasses[i] = mass
+      const baseCdAForRider = sampleClampedNormal(rng, baseCdA, 0.02, 0.25, 0.38)
+      riderCdA[i] = baseCdAForRider
+      const maxPowerForRider = sampleClampedNormal(
+        rng,
+        availablePower,
+        45,
+        260,
+        520,
+      )
+      riderMaxPower[i] = maxPowerForRider
+      const preferredSpeed = sampleClampedNormal(rng, 7.8, 0.5, 6, 9.6)
+      riderPreferredSpeeds[i] = preferredSpeed
+      const reaction = sampleClampedNormal(rng, 0.3, 0.1, 0.15, 0.6)
+      riderReactionTimes[i] = reaction
+      const noiseSigma = sampleClampedNormal(
+        rng,
+        COMMAND_NOISE_STDDEV,
+        0.02,
+        0.05,
+        0.16,
+      )
+      riderNoiseSigma[i] = noiseSigma
+      const roleIndex = Math.min(
+        ROLE_PROFILES.length - 1,
+        Math.floor(rng() * ROLE_PROFILES.length),
+      )
+      const role = ROLE_PROFILES[Math.max(0, roleIndex)]
+      riderPowerWeights[i] = role?.powerWeight ?? DEFAULT_POWER_WEIGHT
+      riderGapWeights[i] = role?.gapWeight ?? DEFAULT_GAP_WEIGHT
 
       const leaderIndex = N - 1 - i
       const row = Math.floor(leaderIndex / 9)
@@ -272,7 +357,11 @@ self.onmessage = async (e: MessageEvent) => {
       state[i * 4 + 1] = clampedOffset
       state[i * 4 + 2] = 1
       state[i * 4 + 3] = yaw
-      const initialSpeed = 7.0 + rng() * 1.0
+      const initialSpeed = MathUtils.clamp(
+        sampleNormal(rng, preferredSpeed, 0.4),
+        Math.max(effectiveMinInitSpeed, preferredSpeed - 1.5),
+        Math.min(effectiveMaxInitSpeed, preferredSpeed + 1.2),
+      )
       speeds[i] = initialSpeed
       commandedTargetSpeeds[i] = initialSpeed
       yawRates[i] = 0
@@ -323,6 +412,41 @@ self.onmessage = async (e: MessageEvent) => {
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
       const previousSpeed = speeds[i]
+      const mass = riderMasses?.[i] ?? systemMass
+      const baseCdAForRider = riderCdA?.[i] ?? baseCdA
+      const maxPowerForRider = riderMaxPower?.[i] ?? availablePower
+      const preferredSpeed = riderPreferredSpeeds?.[i] ??
+        MathUtils.clamp(
+          (effectiveMinTargetSpeed + effectiveMaxTargetSpeed) / 2,
+          effectiveMinTargetSpeed,
+          effectiveMaxTargetSpeed,
+        )
+      const reactionTime = Math.max(riderReactionTimes?.[i] ?? 0.3, 0.05)
+      const noiseSigma = riderNoiseSigma?.[i] ?? COMMAND_NOISE_STDDEV
+      const powerWeight = riderPowerWeights?.[i] ?? DEFAULT_POWER_WEIGHT
+      const gapWeight = riderGapWeights?.[i] ?? DEFAULT_GAP_WEIGHT
+      const wallWeight = Math.max(0.05, 1 - (powerWeight + gapWeight))
+      const gapResponsiveness = MathUtils.clamp(
+        gapWeight / DEFAULT_GAP_WEIGHT,
+        0.6,
+        1.4,
+      )
+      const repulsionGain = LONGITUDINAL_REPULSION_GAIN * MathUtils.clamp(
+        gapWeight / DEFAULT_GAP_WEIGHT,
+        0.7,
+        1.4,
+      )
+      let personalMin = Math.max(effectiveMinTargetSpeed, preferredSpeed - 1.5)
+      let personalMax = Math.min(effectiveMaxTargetSpeed, preferredSpeed + 1.5)
+      if (personalMin > personalMax) {
+        const neutral = MathUtils.clamp(
+          preferredSpeed,
+          effectiveMinTargetSpeed,
+          effectiveMaxTargetSpeed,
+        )
+        personalMin = neutral
+        personalMax = neutral
+      }
       const currentOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
 
       let lookAheadDistance = lookAhead
@@ -379,7 +503,7 @@ self.onmessage = async (e: MessageEvent) => {
       }
       S = MathUtils.clamp(S, 0, 1)
 
-      let CdAeff = baseCdA * S
+      let CdAeff = baseCdAForRider * S
       if (CdAeff < 0 && !warnedCdA) {
         console.warn('[physics] effective CdA fell below zero, clamping to zero')
         warnedCdA = true
@@ -387,13 +511,13 @@ self.onmessage = async (e: MessageEvent) => {
       CdAeff = Math.max(0, CdAeff)
 
       const { gapAhead } = computeLongitudinalGaps(i, progress, totalLength)
-      const gapThreshold = GAP_MIN_LONG + HEADWAY_TIME * previousSpeed
+      const gapThreshold = GAP_MIN_LONG + HEADWAY_TIME * gapResponsiveness * previousSpeed
 
-      const vPower = solveVelocityFromPower(availablePower, {
+      const vPower = solveVelocityFromPower(maxPowerForRider, {
         airDensity,
         cdA: CdAeff,
         crr: rollingResistanceCoeff,
-        mass: systemMass,
+        mass,
         slope,
         gravity: GRAVITY,
         drivetrainEfficiency,
@@ -408,8 +532,8 @@ self.onmessage = async (e: MessageEvent) => {
           : effectiveMaxTargetSpeed
       const targetSpeed = MathUtils.clamp(
         vTargetRaw,
-        effectiveMinTargetSpeed,
-        effectiveMaxTargetSpeed,
+        personalMin,
+        personalMax,
       )
 
       const planningSpeed = Math.max(0.1, effectiveMaxTargetSpeed)
@@ -470,8 +594,8 @@ self.onmessage = async (e: MessageEvent) => {
 
           const candidateSpeed = MathUtils.clamp(
             targetSpeed * compensation,
-            effectiveMinTargetSpeed,
-            effectiveMaxTargetSpeed,
+            personalMin,
+            personalMax,
           )
           const slopeAdjustedCandidate = adjustTargetSpeedForSlope(
             candidateSpeed,
@@ -480,21 +604,21 @@ self.onmessage = async (e: MessageEvent) => {
               maxSlope: 0.25,
               maxUphillPenalty: 2,
               maxDownhillBoost: 1,
-              minSpeed: Math.max(0, effectiveMinTargetSpeed - 0.5),
-              maxSpeed: effectiveMaxTargetSpeed + 0.5,
+              minSpeed: Math.max(0, personalMin - 0.5),
+              maxSpeed: personalMax + 0.5,
             },
           )
           const candidatePower = powerDemand(slopeAdjustedCandidate, {
             airDensity,
             cdA: CdAeff,
             crr: rollingResistanceCoeff,
-            mass: systemMass,
+            mass,
             slope,
             gravity: GRAVITY,
             drivetrainEfficiency,
           })
           const normalizedPower =
-            availablePower > 1e-3 ? candidatePower / availablePower : 0
+            maxPowerForRider > 1e-3 ? candidatePower / maxPowerForRider : 0
           candidatePowerRatios.push(Math.max(0, normalizedPower))
         }
 
@@ -507,7 +631,7 @@ self.onmessage = async (e: MessageEvent) => {
           maxOffset,
           gapAhead,
           gapThreshold,
-          weights: { power: 0.55, gap: 0.3, wall: 0.15 },
+          weights: { power: powerWeight, gap: gapWeight, wall: wallWeight },
           wallComfort: Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN),
           referenceStep: candidateStep,
           lateralGapInfluence: LATERAL_GAP_INFLUENCE,
@@ -536,37 +660,52 @@ self.onmessage = async (e: MessageEvent) => {
 
       const compensatedTarget = MathUtils.clamp(
         targetSpeed * compensationForBest,
-        effectiveMinTargetSpeed,
-        effectiveMaxTargetSpeed,
+        personalMin,
+        personalMax,
       )
 
       const noiseSource = noiseGenerators[i]
-      const randomUnit = noiseSource ? noiseSource() : Math.random()
-      const commandNoise = (randomUnit * 2 - 1) * COMMAND_NOISE_STDDEV
+      const commandNoise = sampleNormal(noiseSource ?? Math.random, 0, noiseSigma)
       const baseTarget = MathUtils.clamp(
         compensatedTarget + commandNoise,
-        effectiveMinTargetSpeed,
-        effectiveMaxTargetSpeed,
+        personalMin,
+        personalMax,
+      )
+      const preferenceBias = MathUtils.clamp(
+        preferredSpeed - baseTarget,
+        -0.6,
+        0.6,
+      )
+      const biasedTarget = MathUtils.clamp(
+        baseTarget + preferenceBias * 0.2,
+        personalMin,
+        personalMax,
       )
 
       // (B) Rate limit sur la consigne (borne les crans de montée/descente)
       const prevCmd = commandedTargetSpeeds[i]
       const maxRise = targetRiseRateLimit * dt
       const maxDrop = targetDropRateLimit * dt
-      let bounded = baseTarget
+      let bounded = biasedTarget
       if (bounded > prevCmd + maxRise) bounded = prevCmd + maxRise
       if (bounded < prevCmd - maxDrop) bounded = prevCmd - maxDrop
 
       // (C) Passe-bas 1er ordre sur la consigne
-      const alpha = 1 - Math.exp(-targetSpeedDamping * dt)
-      commandedTargetSpeeds[i] = prevCmd + (bounded - prevCmd) * alpha
+      const dampingAlpha = 1 - Math.exp(-targetSpeedDamping * dt)
+      const reactionAlpha = 1 - Math.exp(-dt / reactionTime)
+      const combinedAlpha = MathUtils.clamp(
+        1 - (1 - dampingAlpha) * (1 - reactionAlpha),
+        0,
+        1,
+      )
+      commandedTargetSpeeds[i] = prevCmd + (bounded - prevCmd) * combinedAlpha
 
       const slopeAdjustedTarget = adjustTargetSpeedForSlope(commandedTargetSpeeds[i], slope, {
         maxSlope: 0.25,
         maxUphillPenalty: 2,
         maxDownhillBoost: 1,
-        minSpeed: Math.max(0, effectiveMinTargetSpeed - 0.5),
-        maxSpeed: effectiveMaxTargetSpeed + 0.5,
+        minSpeed: Math.max(0, personalMin - 0.5),
+        maxSpeed: personalMax + 0.5,
       })
 
       const gapShortage = Math.max(0, gapThreshold - gapAhead)
@@ -574,11 +713,19 @@ self.onmessage = async (e: MessageEvent) => {
         gapThreshold > 1e-3 ? MathUtils.clamp(gapShortage / gapThreshold, 0, 1) : 0
       const longitudinalRepulsion =
         repulsionRatio > 0
-          ? -LONGITUDINAL_REPULSION_GAIN * repulsionRatio * repulsionRatio
+          ? -repulsionGain * repulsionRatio * repulsionRatio
           : 0
 
       const desiredAccel =
-        (slopeAdjustedTarget - previousSpeed) / Math.max(SOCIAL_TAU, 1e-3) -
+        (slopeAdjustedTarget - previousSpeed) /
+          Math.max(
+            SOCIAL_TAU * MathUtils.clamp(
+              DEFAULT_POWER_WEIGHT / Math.max(powerWeight, 1e-3),
+              0.7,
+              1.3,
+            ),
+            1e-3,
+          ) -
         LATERAL_FORCE_DRAG * Math.abs(offsetPlan.lateralForce)
       const accelInput = desiredAccel + longitudinalRepulsion
       const clampedAccel = MathUtils.clamp(
@@ -592,8 +739,8 @@ self.onmessage = async (e: MessageEvent) => {
       }
       newSpeed = MathUtils.clamp(
         newSpeed,
-        Math.max(0, effectiveMinTargetSpeed - 0.5),
-        effectiveMaxTargetSpeed + 0.5,
+        Math.max(0, personalMin - 0.5),
+        personalMax + 0.5,
       )
       speeds[i] = newSpeed
 
@@ -603,14 +750,14 @@ self.onmessage = async (e: MessageEvent) => {
           airDensity,
           cdA: CdAeff,
           crr: rollingResistanceCoeff,
-          mass: systemMass,
+          mass,
           slope,
           gravity: GRAVITY,
           drivetrainEfficiency,
         })
         snapshot = {
           speed: newSpeed,
-          targetRaw: baseTarget,
+          targetRaw: biasedTarget,
           targetFiltered: commandedTargetSpeeds[i],
           acceleration,
           kEnv,
