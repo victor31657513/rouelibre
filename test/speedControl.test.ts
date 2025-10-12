@@ -5,6 +5,7 @@ import {
   computeLengthRatioRange,
   computeOffsetSegmentLength,
   computeTargetSpeedFromSegmentLength,
+  estimateSafeTargetSpeed,
 } from '../src/physics/speedControl'
 import { PathSpline } from '../src/systems/pathSmoothing'
 import { Vector3 } from 'three'
@@ -108,5 +109,56 @@ describe('speed control helpers', () => {
     expect(centerSpeed).toBeGreaterThan(outsideSpeed)
     expect(insideSpeed).toBeLessThanOrEqual(options.maxSpeed)
     expect(outsideSpeed).toBeGreaterThanOrEqual(options.minSpeed)
+  })
+
+  it('keeps the maximum target speed when the projected path stays within bounds', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(10, 0, 0),
+    ])
+
+    const targetSpeed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 2,
+      currentOffset: 0,
+      desiredOffset: 0,
+      neighborMin: -0.5,
+      neighborMax: 0.5,
+      lookAheadDistance: 5,
+      maxOffset: 1,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.1,
+    })
+
+    expect(targetSpeed).toBe(9)
+  })
+
+  it('reduces the target speed when no safe lateral corridor is available', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(10, 0, 0),
+    ])
+
+    const targetSpeed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 2,
+      currentOffset: 0.2,
+      desiredOffset: 0,
+      neighborMin: 0.2,
+      neighborMax: 0.1,
+      lookAheadDistance: 5,
+      maxOffset: 1,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.1,
+    })
+
+    expect(targetSpeed).toBeLessThan(5)
+    expect(targetSpeed).toBeGreaterThanOrEqual(0)
   })
 })
