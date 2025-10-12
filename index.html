@@ -11,19 +11,17 @@
   </style>
   <script>
     (() => {
-      const theme = localStorage.getItem('theme')
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark')
-        document.documentElement.setAttribute('data-theme', 'dark')
-      } else {
-        document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.classList.remove('dark')
+      document.documentElement.setAttribute('data-theme', 'light')
+      if (localStorage.getItem('theme') === 'dark') {
+        localStorage.setItem('theme', 'light')
       }
     })()
   </script>
-  <script type="module" crossorigin src="/assets/index-Bz17aPDA.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-BUloCrox.css">
+  <script type="module" crossorigin src="/assets/index-SuV5NAwM.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CAt_JQD3.css">
 </head>
-<body class="m-0 overflow-hidden bg-neutral-900">
+<body class="m-0 overflow-hidden bg-base-100 text-base-content">
 <canvas id="app" class="block"></canvas>
 <button
   id="home-btn"
