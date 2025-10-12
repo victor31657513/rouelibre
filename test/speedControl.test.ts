@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
+  computeCorneringSpeedLimit,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
   computeTargetSpeedFromSegmentLength,
@@ -160,5 +161,16 @@ describe('speed control helpers', () => {
 
     expect(targetSpeed).toBeLessThan(5)
     expect(targetSpeed).toBeGreaterThanOrEqual(0)
+  })
+
+  it('keeps realistic cornering limits on medium radius bends', () => {
+    const gentleLimit = computeCorneringSpeedLimit(40, 0.2)
+    const mediumLimit = computeCorneringSpeedLimit(18, 0.6)
+    const tightLimit = computeCorneringSpeedLimit(8, 1)
+
+    expect(gentleLimit).toBeGreaterThan(mediumLimit)
+    expect(mediumLimit).toBeGreaterThan(tightLimit)
+    expect(mediumLimit).toBeGreaterThan(6.5)
+    expect(tightLimit).toBeGreaterThan(5)
   })
 })
