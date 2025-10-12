@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { initPeloton } from '../src/domain/peloton/formation'
-import { SelectionState } from '../src/app/state/selectionState'
+import { initPeloton } from '../src/peloton'
+import { selectedIndex, setSelectedIndex } from '../src/selection'
 
 const N = 184
 const cameraHeight = 1.7
@@ -15,8 +15,7 @@ describe('initialization', () => {
     const positions = initPeloton(path, N)
 
     const median = Math.floor(N / 2)
-    const selection = new SelectionState()
-    selection.set(median, N)
+    setSelectedIndex(median, N)
 
     const camera = new THREE.PerspectiveCamera(65, 1, 0.1, 1000)
     const cameraPrev = new THREE.Vector3()
@@ -30,7 +29,7 @@ describe('initialization', () => {
     camera.lookAt(x, y + cameraHeight, z)
     cameraPrev.copy(camera.position)
 
-    expect(selection.value).toBe(median)
+    expect(selectedIndex).toBe(median)
     expect(camera.position.x).toBeCloseTo(x)
     expect(camera.position.y).toBeCloseTo(y + cameraHeight)
     expect(camera.position.z).toBeCloseTo(z)

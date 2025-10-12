@@ -1,14 +1,6 @@
 import * as THREE from 'three'
-import type { RoutePoint } from '../route/gpx'
+import type { Vec3 } from './gpx'
 
-/**
- * @fileoverview Generates deterministic starting positions for the peloton.
- * Converts the route centreline into evenly spaced riders constrained by the
- * available road width.
- *
- * Extension: Inject team information by adding further attributes to the
- * returned buffer or by returning a structured object instead of a Float32Array.
- */
 export interface PelotonOptions {
   seed?: number
   spacing?: number
@@ -17,13 +9,17 @@ export interface PelotonOptions {
   margin?: number
 }
 
+/**
+ * Initialise les positions des cyclistes en suivant la ligne médiane de la route
+ * et en appliquant un décalage latéral borné à l'intérieur de la chaussée.
+ */
 export function initPeloton(
-  path: RoutePoint[],
-  count: number,
+  path: Vec3[],
+  N: number,
   options: PelotonOptions = {},
 ): Float32Array {
-  const positions = new Float32Array(count * 3)
-  if (path.length === 0 || count === 0) {
+  const positions = new Float32Array(N * 3)
+  if (path.length === 0 || N === 0) {
     return positions
   }
 
@@ -34,11 +30,12 @@ export function initPeloton(
     margin = 0.05,
   } = options
 
-  const waypoints = path.map((point) =>
-    point instanceof THREE.Vector3
-      ? point.clone()
-      : new THREE.Vector3(point.x, point.y, point.z),
-  )
+  const waypoints = path.map((point) => {
+    if (point instanceof THREE.Vector3) {
+      return point.clone()
+    }
+    return new THREE.Vector3(point.x, point.y, point.z)
+  })
 
   const curve = new THREE.CatmullRomCurve3(waypoints, false)
   const totalLength = curve.getLength() || 1
@@ -48,8 +45,8 @@ export function initPeloton(
 
   let previousDirection = new THREE.Vector3(1, 0, 0)
 
-  for (let i = 0; i < count; i++) {
-    const leaderIndex = count - 1 - i
+  for (let i = 0; i < N; i++) {
+    const leaderIndex = N - 1 - i
     const row = Math.floor(leaderIndex / nCols)
     const col = leaderIndex % nCols
     const longitudinal = row * spacing
@@ -84,3 +81,4 @@ export function initPeloton(
 
   return positions
 }
+

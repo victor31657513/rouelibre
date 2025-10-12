@@ -1,6 +1,6 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
-import { PathSpline, smoothLimitAngle, YawState } from '../domain/route/pathSpline'
+import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,

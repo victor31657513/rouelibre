@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as THREE from 'three'
 import { StabilizedFollowCamera } from '../src/camera/StabilizedFollowCamera'
-import { SelectionState } from '../src/app/state/selectionState'
+import { selectedIndex, setSelectedIndex, changeSelectedIndex } from '../src/selection'
 
 describe('camera follows selected rider', () => {
   let camera: THREE.PerspectiveCamera
   let follow: StabilizedFollowCamera
   let riders: THREE.Object3D[]
-  let selection: SelectionState
 
   beforeEach(() => {
     camera = new THREE.PerspectiveCamera()
@@ -24,16 +23,15 @@ describe('camera follows selected rider', () => {
     riders = [new THREE.Object3D(), new THREE.Object3D()]
     riders[0].position.set(0, 0, 0)
     riders[1].position.set(10, 0, 0)
-    selection = new SelectionState()
-    selection.set(0, riders.length)
+    setSelectedIndex(0, riders.length)
   })
 
   it('updates camera position and direction to selected rider', () => {
     const dt = 1
-    follow.update(dt, [riders[selection.value]])
+    follow.update(dt, [riders[selectedIndex]])
 
-    selection.move(1, riders.length)
-    follow.update(dt, [riders[selection.value]])
+    changeSelectedIndex(1, riders.length)
+    follow.update(dt, [riders[selectedIndex]])
 
     const dir = new THREE.Vector3()
     camera.getWorldDirection(dir)
