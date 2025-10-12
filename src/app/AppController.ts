@@ -75,6 +75,8 @@ export class AppController {
   private touchIsDragging = false
   private lastMiddleTime = 0
   private readonly mouse = new THREE.Vector2()
+  private lastTelemetryRefresh = Number.NEGATIVE_INFINITY
+  private readonly telemetryRefreshIntervalMs = 300
   private readonly speedFormatter = new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
@@ -593,7 +595,8 @@ export class AppController {
     if (speedKmh === null || !Number.isFinite(speedKmh)) {
       return '-- km/h'
     }
-    return `${this.speedFormatter.format(Math.max(0, speedKmh))} km/h`
+    const roundedSpeed = Math.round(Math.max(0, speedKmh) * 10) / 10
+    return `${this.speedFormatter.format(roundedSpeed)} km/h`
   }
 
   private formatDistance(distanceKm: number | null): string {
@@ -609,10 +612,20 @@ export class AppController {
       this.setDistanceDisplay(null, null)
       return
     }
-    this.updateTelemetry(null, this.positions)
+    this.updateTelemetry(null, this.positions, true)
   }
 
-  private updateTelemetry(previousState: Float32Array | null, currentState: Float32Array): void {
+  private updateTelemetry(
+    previousState: Float32Array | null,
+    currentState: Float32Array,
+    force = false,
+  ): void {
+    const now = performance.now()
+    if (!force && now - this.lastTelemetryRefresh < this.telemetryRefreshIntervalMs) {
+      return
+    }
+    this.lastTelemetryRefresh = now
+
     if (!this.spline) {
       this.setSpeedDisplay(null)
       this.setDistanceDisplay(null, null)
