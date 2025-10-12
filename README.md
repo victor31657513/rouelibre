@@ -33,10 +33,6 @@ worker.postMessage({
 ```
 
 
-## Test de l'interface
-
-Une page est disponible pour tester les composants DaisyUI : [http://localhost:5173/ui-test](http://localhost:5173/ui-test).
-
 ## Vérification du build
 
 Après avoir exécuté `npm run build`, vérifier que la classe `.btn` est bien incluse dans les CSS générés :
