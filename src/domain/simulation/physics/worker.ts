@@ -16,7 +16,6 @@ import {
   computeDesiredOffsetProfile,
   computeNeighborBounds,
   steerOffsetTowardTarget,
-  computeCurvatureEnvelope,
 } from './riderPathing'
 
 let world: RAPIER.World
@@ -51,8 +50,6 @@ const curveSpeedMargin = 0.6
 // Accélérations réalistes pour un peloton cycliste
 let maxAcceleration = 0.8
 let maxDeceleration = 1.6
-// Limite d'accélération latérale (m/s²) pour plafond vitesse en courbe
-let aLatMax = 1.8
 // Smoothing & rate limits sur la consigne de vitesse
 let targetSpeedDamping = 4.0
 let targetRiseRateLimit = 0.8 // m/s par seconde
@@ -216,17 +213,8 @@ self.onmessage = async (e: MessageEvent) => {
         dt,
       })
 
-      // (A) Plafond "courbure-aware" (v <= sqrt(a_lat_max / courbure_max))
-      const env = computeCurvatureEnvelope(
-        spline,
-        progress[i],
-        totalLength,
-        Math.max(lookAheadDistance, 1),
-        Math.max(1, minRadius)
-      )
-      const k = Math.max(env.maxAbsCurvature, 1e-6)
-      const cornerCeil = Math.sqrt(Math.max(0, aLatMax) / k)
-      const baseTarget = Math.min(targetSpeed, cornerCeil, effectiveMaxTargetSpeed)
+      // (A) Consigne sans plafond spécifique aux virages : seule la limite globale s'applique
+      const baseTarget = Math.min(targetSpeed, effectiveMaxTargetSpeed)
 
       // (B) Rate limit sur la consigne (borne les crans de montée/descente)
       const prevCmd = commandedTargetSpeeds[i]
@@ -328,7 +316,6 @@ self.onmessage = async (e: MessageEvent) => {
     minTargetSpeed = payload.minTargetSpeed ?? minTargetSpeed
     maxAcceleration = payload.maxAcceleration ?? maxAcceleration
     maxDeceleration = payload.maxDeceleration ?? maxDeceleration
-    aLatMax = payload.aLatMax ?? aLatMax
     targetSpeedDamping = payload.targetSpeedDamping ?? targetSpeedDamping
     targetRiseRateLimit = payload.targetRiseRateLimit ?? targetRiseRateLimit
     targetDropRateLimit = payload.targetDropRateLimit ?? targetDropRateLimit
