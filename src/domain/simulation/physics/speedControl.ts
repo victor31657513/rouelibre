@@ -258,7 +258,7 @@ export function computeOffsetArcLengthRatio(
     return MathUtils.clamp(1, clampedMin, clampedMax)
   }
 
-  const orientation = Math.sign(curvature)
+  const orientation = -Math.sign(curvature)
   const towardCenter = lateralOffset * orientation
   const effectiveRadius = baseRadius - towardCenter
   if (!Number.isFinite(effectiveRadius) || effectiveRadius <= 0) {
