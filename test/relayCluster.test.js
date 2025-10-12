@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { initPeloton } from '../src/peloton';
+import { initPeloton } from '../src/domain/peloton/formation';
 
 describe('relayCluster', () => {
   it('placeholder', () => {

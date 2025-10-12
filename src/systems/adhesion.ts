@@ -1,6 +1,13 @@
 import * as THREE from 'three'
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
 
+/**
+ * @fileoverview Projects riders onto the road mesh while respecting surface normals.
+ * Provides single and batch helpers for tests and future gameplay extensions.
+ *
+ * Extension: If surface materials differ per lane, enrich the return type with
+ * metadata gathered from the raycast hit before applying orientation corrections.
+ */
 ;(THREE.Mesh.prototype as any).raycast = acceleratedRaycast
 
 export function projectOntoRoad(
@@ -10,7 +17,7 @@ export function projectOntoRoad(
   yaw: number,
   road: THREE.Object3D,
   raycaster: THREE.Raycaster,
-  footClearance = 1
+  footClearance = 1,
 ): { position: THREE.Vector3; quaternion: THREE.Quaternion } {
   const origin = new THREE.Vector3(x, y + 100, z)
   raycaster.firstHitOnly = true
@@ -46,9 +53,7 @@ export function projectOntoRoad(
     return { position: pos, quaternion: quat }
   }
   const pos = new THREE.Vector3(x, y, z)
-  const quat = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(0, yaw - Math.PI / 2, 0)
-  )
+  const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw - Math.PI / 2, 0))
   return { position: pos, quaternion: quat }
 }
 
@@ -56,7 +61,7 @@ export function projectOntoRoadBatch(
   states: { x: number; y: number; z: number; yaw: number }[],
   road: THREE.Object3D,
   raycaster: THREE.Raycaster,
-  footClearance = 1
+  footClearance = 1,
 ): { positions: THREE.Vector3[]; quaternions: THREE.Quaternion[] } {
   const positions: THREE.Vector3[] = []
   const quaternions: THREE.Quaternion[] = []
@@ -68,7 +73,7 @@ export function projectOntoRoadBatch(
       s.yaw,
       road,
       raycaster,
-      footClearance
+      footClearance,
     )
     positions.push(position)
     quaternions.push(quaternion)

@@ -1,5 +1,21 @@
-import { CatmullRomCurve3, MathUtils, Vector3, LineBasicMaterial, BufferGeometry, Float32BufferAttribute, LineSegments } from 'three'
+import {
+  BufferGeometry,
+  CatmullRomCurve3,
+  Float32BufferAttribute,
+  LineBasicMaterial,
+  LineSegments,
+  MathUtils,
+  Vector3,
+} from 'three'
 
+/**
+ * @fileoverview Helpers to sample a Catmull-Rom spline built from route points.
+ * Provides resampling utilities shared between the renderer and the physics
+ * worker so both pipelines operate on the same representation.
+ *
+ * Extension: Add banking or superelevation information by augmenting the
+ * `sampleByDistance` return type without altering the existing API surface.
+ */
 export class PathSpline {
   curve: CatmullRomCurve3
   totalLength: number
@@ -44,7 +60,7 @@ export function smoothLimitAngle(
   state: YawState,
   maxRateDeg = 120,
   maxAccelDeg = 480,
-  dt: number
+  dt: number,
 ): number {
   const maxRate = MathUtils.degToRad(maxRateDeg)
   const maxAccel = MathUtils.degToRad(maxAccelDeg)
