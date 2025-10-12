@@ -30,6 +30,8 @@ export interface LengthCompensationTuning {
   insideCompensation?: number
   /** Amplification applied when the rider travels a longer arc than the reference. */
   outsideCompensation?: number
+  /** Optional ceiling applied to the outside boost factor. */
+  maxOutsideBoost?: number
 }
 
 export interface SegmentLengthSpeedOptions extends LengthCompensationTuning {
@@ -107,27 +109,28 @@ export function computeTargetSpeedCompensation(
   options: LengthCompensationTuning = {}
 ): number {
   const {
-    insideCompensation = 0.35,
-    outsideCompensation = 0.8,
+    insideCompensation = 0,
+    outsideCompensation = 1,
+    maxOutsideBoost = Infinity,
   } = options
 
   if (!Number.isFinite(ratio)) {
     return 1
   }
 
-  const clampedRatio = Math.max(0, ratio)
-  const deviation = clampedRatio - 1
-  if (Math.abs(deviation) < 1e-6) {
-    return 1
+  const clampedRatio = Math.max(1e-3, ratio)
+
+  if (clampedRatio >= 1) {
+    const targetBoost = Math.min(Math.max(1, clampedRatio), Math.max(1, maxOutsideBoost))
+    const lerpT = MathUtils.clamp(outsideCompensation, 0, 1)
+    const boosted = MathUtils.lerp(1, targetBoost, lerpT)
+    return Math.max(0, boosted)
   }
 
-  if (deviation > 0) {
-    const gain = Math.max(0, outsideCompensation)
-    return Math.max(0, 1 + deviation * gain)
-  }
-
-  const gain = Math.max(0, insideCompensation)
-  return Math.max(0, 1 + -deviation * gain)
+  const attenuationTarget = Math.max(0, Math.min(1, clampedRatio))
+  const lerpT = MathUtils.clamp(insideCompensation, 0, 1)
+  const compensated = MathUtils.lerp(1, attenuationTarget, lerpT)
+  return Math.max(0, compensated)
 }
 
 export function computeLengthRatioRange(
