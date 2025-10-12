@@ -51,23 +51,23 @@ describe('speed control helpers', () => {
 
     const midDistance = (startDistance + endDistance) / 2
     const curvature = computeSignedCurvature(spline, midDistance, spline.totalLength)
-    const insideOffset = (Math.sign(curvature) || 1) * 1.5
-    const outsideOffset = -insideOffset
-
-    const insideLength = computeOffsetSegmentLength(
+    const offsetMagnitude = 1.5
+    const lengthPositive = computeOffsetSegmentLength(
       spline,
       startDistance,
       endDistance,
-      insideOffset,
+      offsetMagnitude,
       20
     )
-    const outsideLength = computeOffsetSegmentLength(
+    const lengthNegative = computeOffsetSegmentLength(
       spline,
       startDistance,
       endDistance,
-      outsideOffset,
+      -offsetMagnitude,
       20
     )
+    const insideLength = Math.min(lengthPositive, lengthNegative)
+    const outsideLength = Math.max(lengthPositive, lengthNegative)
 
     expect(outsideLength).toBeGreaterThan(insideLength)
   })
@@ -86,10 +86,11 @@ describe('speed control helpers', () => {
 
   it('computes arc length ratios reflecting inside and outside lines', () => {
     const curvature = 1 / 25
-    const insideOffset = (Math.sign(curvature) || 1) * 2
-    const outsideOffset = -insideOffset
-    const insideRatio = computeOffsetArcLengthRatio(curvature, insideOffset)
-    const outsideRatio = computeOffsetArcLengthRatio(curvature, outsideOffset)
+    const offsetMagnitude = 2
+    const ratioPositive = computeOffsetArcLengthRatio(curvature, offsetMagnitude)
+    const ratioNegative = computeOffsetArcLengthRatio(curvature, -offsetMagnitude)
+    const insideRatio = Math.min(ratioPositive, ratioNegative)
+    const outsideRatio = Math.max(ratioPositive, ratioNegative)
 
     expect(insideRatio).toBeLessThan(1)
     expect(outsideRatio).toBeGreaterThan(1)
@@ -98,7 +99,10 @@ describe('speed control helpers', () => {
 
   it('projects world distance onto the centerline according to the arc ratio', () => {
     const curvature = 1 / 25
-    const insideOffset = (Math.sign(curvature) || 1) * 2
+    const offsetMagnitude = 2
+    const ratioPositive = computeOffsetArcLengthRatio(curvature, offsetMagnitude)
+    const ratioNegative = computeOffsetArcLengthRatio(curvature, -offsetMagnitude)
+    const insideOffset = ratioPositive < ratioNegative ? offsetMagnitude : -offsetMagnitude
     const outsideOffset = -insideOffset
     const worldDistance = 10
 
@@ -192,22 +196,23 @@ describe('speed control helpers', () => {
     }
 
     const curvature = computeSignedCurvature(spline, (startDistance + endDistance) / 2, spline.totalLength)
-    const insideOffset = (Math.sign(curvature) || 1) * 1.5
-    const outsideOffset = -insideOffset
-    const insideLength = computeOffsetSegmentLength(
+    const offsetMagnitude = 1.5
+    const lengthPositive = computeOffsetSegmentLength(
       spline,
       startDistance,
       endDistance,
-      insideOffset,
+      offsetMagnitude,
       24
     )
-    const outsideLength = computeOffsetSegmentLength(
+    const lengthNegative = computeOffsetSegmentLength(
       spline,
       startDistance,
       endDistance,
-      outsideOffset,
+      -offsetMagnitude,
       24
     )
+    const insideLength = Math.min(lengthPositive, lengthNegative)
+    const outsideLength = Math.max(lengthPositive, lengthNegative)
     const centerLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 0, 24)
 
     const insideSpeed = computeTargetSpeedFromSegmentLength(insideLength, travelDistance, options)
