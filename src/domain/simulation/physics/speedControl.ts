@@ -7,7 +7,7 @@
  */
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../../route/pathSpline'
-import { steerOffsetTowardTarget } from './riderPathing'
+import { computeSignedCurvature, steerOffsetTowardTarget } from './riderPathing'
 
 export interface SlopeAdjustmentOptions {
   /**
@@ -94,7 +94,7 @@ export function computeOffsetSegmentLength(
   for (let i = 0; i <= segmentCount; i++) {
     const distance = Math.min(clampedStart + stepSize * i, spline.totalLength)
     const sample = spline.sampleByDistance(distance)
-    right.set(sample.tangent.z, 0, -sample.tangent.x).normalize()
+    right.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
     const position = sample.position.clone().addScaledVector(right, safeOffset)
 
     if (previousPosition) {
@@ -137,6 +137,39 @@ export function computeTargetSpeedFromSegmentLength(
   const interpolated = MathUtils.lerp(maxSpeed, minSpeed, t)
 
   return MathUtils.clamp(interpolated, Math.min(minSpeed, maxSpeed), Math.max(minSpeed, maxSpeed))
+}
+
+export function computeOffsetArcLengthRatio(
+  curvature: number,
+  lateralOffset: number,
+  options: { minRatio?: number; maxRatio?: number } = {}
+): number {
+  const { minRatio = 0.2, maxRatio = 5 } = options
+  const clampedMin = Math.max(1e-3, Math.min(minRatio, maxRatio))
+  const clampedMax = Math.max(clampedMin, Math.max(minRatio, maxRatio))
+
+  if (!Number.isFinite(curvature) || Math.abs(curvature) < 1e-6) {
+    return MathUtils.clamp(1, clampedMin, clampedMax)
+  }
+
+  const baseRadius = 1 / Math.abs(curvature)
+  if (!Number.isFinite(baseRadius) || baseRadius <= 0) {
+    return MathUtils.clamp(1, clampedMin, clampedMax)
+  }
+
+  if (!Number.isFinite(lateralOffset) || lateralOffset === 0) {
+    return MathUtils.clamp(1, clampedMin, clampedMax)
+  }
+
+  const orientation = Math.sign(curvature)
+  const towardCenter = lateralOffset * orientation
+  const effectiveRadius = baseRadius - towardCenter
+  if (!Number.isFinite(effectiveRadius) || effectiveRadius <= 0) {
+    return clampedMin
+  }
+
+  const ratio = effectiveRadius / baseRadius
+  return MathUtils.clamp(ratio, clampedMin, clampedMax)
 }
 
 export function adjustSpeedTowardsTarget(
@@ -275,7 +308,6 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
     const distancePerStep = Math.max(safeSpeed * safeDt, evaluationLookAhead / 8)
     const stepCount = Math.max(1, Math.ceil(evaluationLookAhead / Math.max(distancePerStep, eps)))
     const stepDistance = evaluationLookAhead / stepCount
-    const stepTime = stepDistance / Math.max(safeSpeed, eps)
     let offset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
 
     for (let step = 1; step <= stepCount; step++) {
@@ -285,6 +317,16 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
       const sample = spline.sampleByDistance(sampleDistance)
       scratchRight.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
       scratchPosition.copy(sample.position).addScaledVector(scratchRight, offset)
+
+      const curvature = computeSignedCurvature(
+        spline,
+        sampleDistance,
+        totalLength,
+        Math.max(stepDistance, 0.25)
+      )
+      const arcLengthRatio = computeOffsetArcLengthRatio(curvature, offset)
+      const stepTravel = stepDistance * arcLengthRatio
+      const stepTime = stepTravel / Math.max(safeSpeed, eps)
 
       offset = steerOffsetTowardTarget(
         offset,
