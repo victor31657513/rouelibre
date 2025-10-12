@@ -114,6 +114,34 @@ describe('speed control helpers', () => {
     expect(insideTravel).toBeGreaterThan(outsideTravel)
   })
 
+  it('softens the projection to avoid exaggerated speed swings', () => {
+    const curvature = 1 / 12
+    const insideOffset = -3
+    const outsideOffset = 3
+    const worldDistance = 10
+
+    const rawInsideRatio = computeOffsetArcLengthRatio(curvature, insideOffset)
+    const rawOutsideRatio = computeOffsetArcLengthRatio(curvature, outsideOffset)
+    const rawInsideTravel = worldDistance / rawInsideRatio
+    const rawOutsideTravel = worldDistance / rawOutsideRatio
+
+    const insideTravel = projectWorldDistanceOntoCenterline(worldDistance, curvature, insideOffset, {
+      minRatio: 0.5,
+      maxRatio: 1.5,
+    })
+    const outsideTravel = projectWorldDistanceOntoCenterline(worldDistance, curvature, outsideOffset, {
+      minRatio: 0.5,
+      maxRatio: 1.5,
+    })
+
+    expect(insideTravel).toBeGreaterThan(worldDistance)
+    expect(outsideTravel).toBeLessThan(worldDistance)
+    expect(insideTravel).toBeGreaterThan(outsideTravel)
+    expect(Math.abs(insideTravel - worldDistance)).toBeLessThan(Math.abs(rawInsideTravel - worldDistance))
+    expect(Math.abs(worldDistance - outsideTravel)).toBeLessThan(Math.abs(worldDistance - rawOutsideTravel))
+    expect(insideTravel - outsideTravel).toBeLessThan(rawInsideTravel - rawOutsideTravel)
+  })
+
   it('pursues desired offsets when ample lateral margin is available', () => {
     const relaxed = computeRelaxedOffsetTarget(0, 1.4, -2, 2, 3.5)
     expect(relaxed).toBeCloseTo(1.4, 5)
