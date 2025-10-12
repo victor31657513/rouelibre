@@ -1,7 +1,11 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing'
-import { adjustSpeedTowardsTarget, computeTargetSpeed } from './speedControl'
+import {
+  adjustSpeedTowardsTarget,
+  adjustTargetSpeedForSlope,
+  computeTargetSpeed,
+} from './speedControl'
 
 let world: RAPIER.World
 let N = 0
@@ -41,6 +45,13 @@ function mulberry32(a: number) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
+}
+
+function computeSlope(current: Vector3, ahead: Vector3, distance: number): number {
+  if (!isFinite(distance) || distance <= 0) {
+    return 0
+  }
+  return (ahead.y - current.y) / distance
 }
 
 
@@ -135,9 +146,27 @@ self.onmessage = async (e: MessageEvent) => {
       }
 
       const targetSpeed = computeTargetSpeed(curvature, maxTargetSpeed, minTargetSpeed, 1 / minRadius)
+
+      let slope = 0
+      if (totalLength > 0 && lookAhead > 0) {
+        const currentDistance = progress[i]
+        const currentSample = spline.sampleByDistance(currentDistance)
+        const aheadDistance = Math.min(currentDistance + lookAhead, totalLength)
+        const aheadSample = spline.sampleByDistance(aheadDistance)
+        slope = computeSlope(currentSample.position, aheadSample.position, lookAhead)
+      }
+
+      const slopeAdjustedTarget = adjustTargetSpeedForSlope(targetSpeed, slope, {
+        maxSlope: 0.25,
+        maxUphillPenalty: 2,
+        maxDownhillBoost: 1,
+        minSpeed: Math.max(0, minTargetSpeed - 1),
+        maxSpeed: maxTargetSpeed + 1,
+      })
+
       const newSpeed = adjustSpeedTowardsTarget(
         previousSpeed,
-        targetSpeed,
+        slopeAdjustedTarget,
         dt,
         maxAcceleration,
         maxDeceleration
@@ -158,7 +187,7 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = offset
       const pos = center.clone().add(right.clone().multiplyScalar(offset))
 
-      const look = spline.sampleByDistance(ahead)
+      const look = spline.sampleByDistance(Math.min(ahead, totalLength))
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
       const currentYaw = state[i * 4 + 3]
       const yawState: YawState = { yawRate: yawRates[i] }

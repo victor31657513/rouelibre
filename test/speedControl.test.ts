@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { adjustSpeedTowardsTarget, computeTargetSpeed } from '../src/physics/speedControl'
+import {
+  adjustSpeedTowardsTarget,
+  adjustTargetSpeedForSlope,
+  computeTargetSpeed,
+} from '../src/physics/speedControl'
 
 describe('speed control helpers', () => {
   it('computes target speeds based on curvature thresholds', () => {
@@ -25,5 +29,24 @@ describe('speed control helpers', () => {
 
     const decelerated = adjustSpeedTowardsTarget(8, 4, dt, maxAcceleration, maxDeceleration)
     expect(decelerated).toBeCloseTo(8 - maxDeceleration * dt, 5)
+  })
+
+  it('adjusts target speed according to positive and negative slopes', () => {
+    const baseSpeed = 8
+    const options = {
+      maxSlope: 0.25,
+      maxUphillPenalty: 2,
+      maxDownhillBoost: 1,
+      minSpeed: 4,
+      maxSpeed: 10,
+    }
+
+    const uphillSpeed = adjustTargetSpeedForSlope(baseSpeed, 0.2, options)
+    const downhillSpeed = adjustTargetSpeedForSlope(baseSpeed, -0.2, options)
+
+    expect(uphillSpeed).toBeLessThan(baseSpeed)
+    expect(downhillSpeed).toBeGreaterThan(baseSpeed)
+    expect(uphillSpeed).toBeGreaterThanOrEqual(options.minSpeed)
+    expect(downhillSpeed).toBeLessThanOrEqual(options.maxSpeed)
   })
 })
