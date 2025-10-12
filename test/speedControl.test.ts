@@ -6,8 +6,8 @@ import {
   computeOffsetSegmentLength,
   computeTargetSpeedFromSegmentLength,
   estimateSafeTargetSpeed,
-} from '../src/physics/speedControl'
-import { PathSpline } from '../src/systems/pathSmoothing'
+} from '../src/domain/simulation/physics/speedControl'
+import { PathSpline } from '../src/domain/route/pathSpline'
 import { Vector3 } from 'three'
 
 describe('speed control helpers', () => {

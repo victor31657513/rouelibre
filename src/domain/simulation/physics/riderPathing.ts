@@ -1,5 +1,11 @@
+/**
+ * Path-following helpers used by the physics worker to manage rider offsets.
+ *
+ * Extension: Tweak behavioural constants or introduce new neighbour models by
+ * extending the exported utilities.
+ */
 import { MathUtils, Vector3 } from 'three'
-import { PathSpline } from '../systems/pathSmoothing'
+import { PathSpline } from '../../route/pathSpline'
 
 export interface NeighborBounds {
   min: Float32Array

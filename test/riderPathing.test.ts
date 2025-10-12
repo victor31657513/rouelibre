@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { PathSpline } from '../src/systems/pathSmoothing'
+import { PathSpline } from '../src/domain/route/pathSpline'
 import {
   computeArcLengthScale,
   computeDesiredOffsetProfile,
   computeNeighborBounds,
   steerOffsetTowardTarget,
-} from '../src/physics/riderPathing'
+} from '../src/domain/simulation/physics/riderPathing'
 
 function createCurvedSpline(): PathSpline {
   const radius = 40

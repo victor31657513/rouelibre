@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { initPeloton } from '../src/peloton'
-import { selectedIndex, setSelectedIndex } from '../src/selection'
+import { initPeloton } from '../src/domain/simulation/peloton'
+import { selectedIndex, setSelectedIndex } from '../src/domain/state/selection'
 
 const N = 184
 const cameraHeight = 1.7

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import * as THREE from 'three'
-import { StabilizedFollowCamera } from '../src/camera/StabilizedFollowCamera'
-import { selectedIndex, setSelectedIndex, changeSelectedIndex } from '../src/selection'
+import { StabilizedFollowCamera } from '../src/domain/camera/StabilizedFollowCamera'
+import { selectedIndex, setSelectedIndex, changeSelectedIndex } from '../src/domain/state/selection'
 
 describe('camera follows selected rider', () => {
   let camera: THREE.PerspectiveCamera

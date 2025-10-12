@@ -1,3 +1,9 @@
+/**
+ * Legacy utility for tests that simulates a simple chase camera behaviour.
+ *
+ * Extension: kept separate from the in-app {@link CameraRig} so unit tests can
+ * validate core maths without instantiating the full scene.
+ */
 import * as THREE from 'three'
 
 /**

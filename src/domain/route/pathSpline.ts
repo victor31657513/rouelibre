@@ -1,5 +1,12 @@
+/**
+ * Data structures and helpers built on top of Catmull-Rom splines.
+ *
+ * Extension: introduce alternative interpolation strategies by adding new
+ * classes (e.g. Bézier) with the same sampling API.
+ */
 import { CatmullRomCurve3, MathUtils, Vector3, LineBasicMaterial, BufferGeometry, Float32BufferAttribute, LineSegments } from 'three'
 
+/** Wrapper around {@link CatmullRomCurve3} exposing length-based sampling. */
 export class PathSpline {
   curve: CatmullRomCurve3
   totalLength: number
@@ -9,6 +16,7 @@ export class PathSpline {
     this.totalLength = this.curve.getLength()
   }
 
+  /** Samples the spline based on arc length rather than the curve parameter. */
   sampleByDistance(d: number): { position: Vector3; tangent: Vector3 } {
     const dist = Math.max(0, Math.min(d, this.totalLength))
     const u = dist / this.totalLength
@@ -18,6 +26,7 @@ export class PathSpline {
     return { position, tangent }
   }
 
+  /** Returns a coarse curvature estimate around the given parameter `t`. */
   estimateCurvature(t: number): number {
     const delta = 0.01
     const t1 = Math.max(0, t - delta)
@@ -38,6 +47,10 @@ export interface YawState {
   yawRate: number
 }
 
+/**
+ * Smoothly interpolates a yaw angle while respecting maximum rate and
+ * acceleration constraints.
+ */
 export function smoothLimitAngle(
   currentYaw: number,
   targetYaw: number,
@@ -63,6 +76,7 @@ export function smoothLimitAngle(
   return currentYaw + yawRate * dt
 }
 
+/** Builds a debug helper mesh visualising the spline. */
 export function createSplineHelper(spline: PathSpline, segments = 100): LineSegments {
   const points: number[] = []
   for (let i = 0; i < segments; i++) {
@@ -78,6 +92,7 @@ export function createSplineHelper(spline: PathSpline, segments = 100): LineSegm
   return new LineSegments(geom, mat)
 }
 
+/** Rebuilds a spline by sampling it every `step` meters. */
 export function resamplePath(waypoints: Vector3[], step: number): Vector3[] {
   const spline = new PathSpline(waypoints)
   const resampled: Vector3[] = []

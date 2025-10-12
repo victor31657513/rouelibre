@@ -1,3 +1,10 @@
+/**
+ * Low-level camera controller that smooths position/orientation updates around
+ * a group of tracked objects. Used internally by {@link CameraRig}.
+ *
+ * Extension: expose additional damping parameters here if the rig needs more
+ * control without duplicating smoothing logic.
+ */
 import * as THREE from 'three'
 
 export interface FollowCameraParams {

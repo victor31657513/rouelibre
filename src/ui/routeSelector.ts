@@ -1,8 +1,21 @@
-import { GPXPoint, Vec3, parseGPX, projectToLocal } from '../gpx'
+/**
+ * UI helper that renders the list of available GPX routes and notifies the
+ * application when the user selects one.
+ *
+ * Extension: add new metadata (distance, estimated time) by extending the list
+ * item renderer without changing the callback contract.
+ */
+import { GPXPoint, Vec3, parseGPX, projectToLocal } from '../domain/route/gpx'
 import { List } from './List'
 
 export type RouteSelectCallback = (path: Vec3[], points: GPXPoint[], url: string) => void
 
+/**
+ * Populates the specified container with a list of GPX files.
+ *
+ * @param containerId DOM id of the `<ul>` element receiving the entries.
+ * @param onSelect Callback triggered when an item is chosen.
+ */
 export async function initRouteSelector(containerId: string, onSelect: RouteSelectCallback) {
   const container = document.getElementById(containerId)
   if (!container) return

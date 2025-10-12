@@ -1,5 +1,12 @@
+/**
+ * Utilities that compute safe target speeds for riders based on curvature,
+ * slope and neighbour positions.
+ *
+ * Extension: expose additional heuristics (e.g. drafting) by composing new
+ * helpers here rather than inside the worker loop.
+ */
 import { MathUtils, Vector3 } from 'three'
-import { PathSpline } from '../systems/pathSmoothing'
+import { PathSpline } from '../../route/pathSpline'
 import { steerOffsetTowardTarget } from './riderPathing'
 
 export interface SlopeAdjustmentOptions {

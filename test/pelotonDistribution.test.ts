@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { initPeloton } from '../src/peloton'
+import { initPeloton } from '../src/domain/simulation/peloton'
 
 describe('peloton distribution', () => {
   it('keeps riders within the road and preserves longitudinal spacing', () => {

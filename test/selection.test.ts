@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { selectedIndex, setSelectedIndex, changeSelectedIndex } from '../src/selection'
+import { selectedIndex, setSelectedIndex, changeSelectedIndex } from '../src/domain/state/selection'
 
 const N = 184
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { smoothLimitAngle, YawState } from '../src/systems/pathSmoothing'
+import { smoothLimitAngle, YawState } from '../src/domain/route/pathSpline'
 
 describe('smoothLimitAngle', () => {
   it('AngleStep ≤ maxRate*dt', () => {

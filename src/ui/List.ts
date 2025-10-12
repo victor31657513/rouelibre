@@ -1,3 +1,9 @@
+/**
+ * Minimal wrapper around a DOM container to render collections of items.
+ *
+ * Extension: To support diffing/patching introduce keyed updates while keeping
+ * the API backward compatible.
+ */
 export interface ListProps<T> {
   /** Container element that will receive rendered list items */
   container: HTMLElement

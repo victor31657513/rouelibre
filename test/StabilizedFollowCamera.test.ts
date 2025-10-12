@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { StabilizedFollowCamera } from '../src/camera/StabilizedFollowCamera'
+import { StabilizedFollowCamera } from '../src/domain/camera/StabilizedFollowCamera'
 
 describe('StabilizedFollowCamera', () => {
   it('clamps yaw rate', () => {

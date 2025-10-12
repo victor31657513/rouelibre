@@ -1,6 +1,12 @@
+/**
+ * Web worker entry point driving the peloton physics simulation via Rapier.
+ *
+ * Extension: expose new message types to adjust parameters at runtime without
+ * blocking the main thread.
+ */
 import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
-import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing'
+import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
