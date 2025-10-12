@@ -10,6 +10,8 @@ import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
+  computeLengthRatioRange,
+  computeOffsetSegmentLength,
   estimateSafeTargetSpeed,
 } from './speedControl'
 import {
@@ -46,8 +48,6 @@ let maxYawAccel = 480
 let minRadius = 12
 let maxTargetSpeed = 9
 let minTargetSpeed = 5
-// Autoriser une vraie différence entre ligne droite et courbe (moins de yo-yo)
-const curveSpeedMargin = 0.6
 // Accélérations réalistes pour un peloton cycliste
 let maxAcceleration = 0.8
 let maxDeceleration = 1.6
@@ -170,6 +170,13 @@ self.onmessage = async (e: MessageEvent) => {
       lateralGap,
     })
 
+    const effectiveMaxTargetSpeed = Math.max(0, maxTargetSpeed)
+    const effectiveMinTargetSpeed = Math.max(
+      0,
+      Math.min(effectiveMaxTargetSpeed, minTargetSpeed),
+    )
+    const lengthRatioRange = computeLengthRatioRange(maxOffset, minRadius)
+
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
       const previousSpeed = speeds[i]
@@ -192,12 +199,6 @@ self.onmessage = async (e: MessageEvent) => {
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
 
-      const effectiveMaxTargetSpeed = Math.max(0, maxTargetSpeed)
-      const effectiveMinTargetSpeed = Math.min(
-        effectiveMaxTargetSpeed,
-        Math.max(minTargetSpeed, effectiveMaxTargetSpeed - curveSpeedMargin)
-      )
-
       const targetSpeed = estimateSafeTargetSpeed({
         spline,
         totalLength,
@@ -214,8 +215,46 @@ self.onmessage = async (e: MessageEvent) => {
         dt,
       })
 
-      // (A) Consigne sans plafond spécifique aux virages : seule la limite globale s'applique
-      const baseTarget = Math.min(targetSpeed, effectiveMaxTargetSpeed)
+      let compensatedTarget = targetSpeed
+      if (lookAheadDistance > 1e-3) {
+        const startDistance = progress[i]
+        const endDistance = Math.min(startDistance + lookAheadDistance, totalLength)
+        const referenceLength = computeOffsetSegmentLength(
+          spline,
+          startDistance,
+          endDistance,
+          0,
+          16,
+        )
+        const segmentLength = computeOffsetSegmentLength(
+          spline,
+          startDistance,
+          endDistance,
+          currentOffset,
+          16,
+        )
+
+        if (referenceLength > 1e-3 && segmentLength > 1e-3) {
+          const rawRatio = segmentLength / referenceLength
+          const clampedRatio = MathUtils.clamp(
+            rawRatio,
+            lengthRatioRange.min,
+            lengthRatioRange.max,
+          )
+          const desired = targetSpeed / clampedRatio
+          compensatedTarget = Math.min(
+            targetSpeed,
+            MathUtils.clamp(desired, effectiveMinTargetSpeed, effectiveMaxTargetSpeed),
+          )
+        } else {
+          compensatedTarget = Math.min(targetSpeed, effectiveMaxTargetSpeed)
+        }
+      } else {
+        compensatedTarget = Math.min(targetSpeed, effectiveMaxTargetSpeed)
+      }
+
+      // (A) Consigne limitée par la compensation de longueur : aucune pénalité spécifique au virage
+      const baseTarget = compensatedTarget
 
       // (B) Rate limit sur la consigne (borne les crans de montée/descente)
       const prevCmd = commandedTargetSpeeds[i]
