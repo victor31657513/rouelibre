@@ -22,3 +22,7 @@ Ce dépôt utilise TypeScript et Vite.
 - `npm test` : lance les tests unitaires.
 - `npm run lint` : vérifie le linting du code.
 
+## Principes de contribution
+
+- Favoriser des ajustements globaux et une logique minimaliste dans la simulation afin de préserver la scalabilité et d'éviter la prolifération d'exceptions ponctuelles.
+
