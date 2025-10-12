@@ -66,7 +66,10 @@ export function simplifyPath(path: Vec3[], epsilon: number): Vec3[] {
     const dx = x2 - x1
     const dz = z2 - z1
     if (dx === 0 && dz === 0) return Math.hypot(x0 - x1, z0 - z1)
-    const t = ((x0 - x1) * dx + (z0 - z1) * dz) / (dx * dx + dz * dz)
+    const denom = dx * dx + dz * dz
+    if (denom <= 0) return Math.hypot(x0 - x1, z0 - z1)
+    const rawT = ((x0 - x1) * dx + (z0 - z1) * dz) / denom
+    const t = Math.max(0, Math.min(1, rawT))
     const projx = x1 + t * dx
     const projz = z1 + t * dz
     return Math.hypot(x0 - projx, z0 - projz)
