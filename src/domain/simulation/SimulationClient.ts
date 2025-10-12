@@ -4,6 +4,8 @@
  * Extension: Expose additional methods (pause, parameter tuning) by relaying
  * messages with distinct `type` identifiers. Keep payloads serialisable.
  */
+import type { SimulationParameterOverrides } from './physics/workerParams'
+
 export interface SimulationInitConfig {
   riderCount: number
   positions: ArrayBuffer
@@ -12,6 +14,7 @@ export interface SimulationInitConfig {
   laneWidth: number
   roadWidth: number
   margin: number
+  params?: SimulationParameterOverrides
 }
 
 export type SimulationStateListener = (state: Float32Array) => void
@@ -44,6 +47,7 @@ export class SimulationClient {
           laneWidth: config.laneWidth,
           roadWidth: config.roadWidth,
           margin: config.margin,
+          params: config.params,
         },
       },
       [config.positions, config.yaw, config.path],
@@ -53,6 +57,11 @@ export class SimulationClient {
   /** Requests a simulation step with the provided delta time. */
   step(dt: number): void {
     this.worker.postMessage({ type: 'step', payload: { dt } })
+  }
+
+  /** Updates the worker tuning parameters without reinitialising buffers. */
+  updateParams(params: SimulationParameterOverrides): void {
+    this.worker.postMessage({ type: 'params', payload: params })
   }
 
   /** Terminates the worker to release resources (currently unused). */

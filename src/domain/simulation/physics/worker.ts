@@ -25,6 +25,10 @@ import {
 } from './riderPathing'
 import type { OffsetCandidateResult } from './riderPathing'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
+import {
+  DEFAULT_WORKER_PARAMS,
+  type SimulationParameterOverrides,
+} from './workerParams'
 
 let world: RAPIER.World
 let N = 0
@@ -46,6 +50,7 @@ let riderReactionTimes: Float32Array
 let riderNoiseSigma: Float32Array
 let riderPowerWeights: Float32Array
 let riderGapWeights: Float32Array
+let riderRoles: Int16Array
 
 let laneWidth = 1
 let roadWidth = 8
@@ -57,29 +62,29 @@ let spline: PathSpline
 let totalLength = 0
 
 // paramètres ajustables
-let lookAhead = 5
-let maxYawRate = 120
-let maxYawAccel = 480
-let minRadius = 12
-let maxTargetSpeed = 9
-let minTargetSpeed = 5
+let lookAhead = DEFAULT_WORKER_PARAMS.lookAhead
+let maxYawRate = DEFAULT_WORKER_PARAMS.maxYawRate
+let maxYawAccel = DEFAULT_WORKER_PARAMS.maxYawAccel
+let minRadius = DEFAULT_WORKER_PARAMS.minRadius
+let maxTargetSpeed = DEFAULT_WORKER_PARAMS.maxTargetSpeed
+let minTargetSpeed = DEFAULT_WORKER_PARAMS.minTargetSpeed
 // Accélérations réalistes pour un peloton cycliste
-let maxAcceleration = 0.8
-let maxDeceleration = 1.6
+let maxAcceleration = DEFAULT_WORKER_PARAMS.maxAcceleration
+let maxDeceleration = DEFAULT_WORKER_PARAMS.maxDeceleration
 // Smoothing & rate limits sur la consigne de vitesse
-let targetSpeedDamping = 4.0
-let targetRiseRateLimit = 0.8 // m/s par seconde
-let targetDropRateLimit = 1.0 // m/s par seconde
+let targetSpeedDamping = DEFAULT_WORKER_PARAMS.targetSpeedDamping
+let targetRiseRateLimit = DEFAULT_WORKER_PARAMS.targetRiseRateLimit // m/s par seconde
+let targetDropRateLimit = DEFAULT_WORKER_PARAMS.targetDropRateLimit // m/s par seconde
 const maxOffsetRate = 2.5
 
 const GRAVITY = 9.80665
-const DEFAULT_AIR_DENSITY = 1.2
-const BASE_CDA = 0.32
-const DEFAULT_CRR = 0.004
-const DEFAULT_DRIVETRAIN_EFFICIENCY = 0.97
-const DEFAULT_SYSTEM_MASS = 82
-const DEFAULT_POWER_AVAILABLE = 380
-const DEFAULT_LATERAL_ACCEL = 5.5
+const DEFAULT_AIR_DENSITY = DEFAULT_WORKER_PARAMS.rho
+const BASE_CDA = DEFAULT_WORKER_PARAMS.CdA0
+const DEFAULT_CRR = DEFAULT_WORKER_PARAMS.Crr
+const DEFAULT_DRIVETRAIN_EFFICIENCY = DEFAULT_WORKER_PARAMS.drivetrainEfficiency
+const DEFAULT_SYSTEM_MASS = DEFAULT_WORKER_PARAMS.systemMass
+const DEFAULT_POWER_AVAILABLE = DEFAULT_WORKER_PARAMS.powerAvailable
+const DEFAULT_LATERAL_ACCEL = DEFAULT_WORKER_PARAMS.aLatMax
 const MAX_DRAFTING_LOOKAHEAD = 12
 const MIN_DRAFTING_LOOKAHEAD = 2
 
@@ -93,8 +98,11 @@ const WALL_COMFORT_MARGIN = 0.75
 const LATERAL_GAP_INFLUENCE = 0.35
 const LATERAL_FORCE_DRAG = 0.45
 
-const DEFAULT_POWER_WEIGHT = 0.55
-const DEFAULT_GAP_WEIGHT = 0.3
+const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
+const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
+const FALLBACK_WALL_WEIGHT = DEFAULT_WORKER_PARAMS.wW
+
+type WeightTriple = { power: number; gap: number; wall: number }
 
 type RiderRoleProfile = { powerWeight: number; gapWeight: number }
 
@@ -126,6 +134,25 @@ let drivetrainEfficiency = DEFAULT_DRIVETRAIN_EFFICIENCY
 let systemMass = DEFAULT_SYSTEM_MASS
 let availablePower = DEFAULT_POWER_AVAILABLE
 let maxLateralAcceleration = DEFAULT_LATERAL_ACCEL
+let draftingMinFactor = DEFAULT_WORKER_PARAMS.beta
+let draftingMaxReduction = DEFAULT_WORKER_PARAMS.S_max
+let draftingCharacteristicDistance = DEFAULT_WORKER_PARAMS.lambdaDraft
+
+let baseWeightPowerRaw = FALLBACK_POWER_WEIGHT
+let baseWeightGapRaw = FALLBACK_GAP_WEIGHT
+let baseWeightWallRaw = FALLBACK_WALL_WEIGHT
+
+const FALLBACK_WEIGHT_TRIPLE: WeightTriple = {
+  power: FALLBACK_POWER_WEIGHT,
+  gap: FALLBACK_GAP_WEIGHT,
+  wall: FALLBACK_WALL_WEIGHT,
+}
+
+let normalizedBaseWeights = normalizeWeights(
+  baseWeightPowerRaw,
+  baseWeightGapRaw,
+  baseWeightWallRaw,
+)
 
 let warnedLateralAccel = false
 let warnedCdA = false
@@ -245,6 +272,168 @@ function computeDraftingContext(
   return { gapToLeader: leaders > 0 ? bestGap : Infinity, leadersAhead: leaders }
 }
 
+function normalizeWeights(
+  power: number,
+  gap: number,
+  wall: number,
+  fallback: WeightTriple = FALLBACK_WEIGHT_TRIPLE,
+): WeightTriple {
+  const safePower = Number.isFinite(power) ? Math.max(0, power) : 0
+  const safeGap = Number.isFinite(gap) ? Math.max(0, gap) : 0
+  const safeWall = Number.isFinite(wall) ? Math.max(0, wall) : 0
+  const sum = safePower + safeGap + safeWall
+  if (sum <= 1e-6) {
+    return { ...fallback }
+  }
+  return {
+    power: safePower / sum,
+    gap: safeGap / sum,
+    wall: safeWall / sum,
+  }
+}
+
+function updateBaseWeights(powerRaw: number, gapRaw: number, wallRaw: number): void {
+  const normalized = normalizeWeights(powerRaw, gapRaw, wallRaw)
+  baseWeightPowerRaw = normalized.power
+  baseWeightGapRaw = normalized.gap
+  baseWeightWallRaw = normalized.wall
+  normalizedBaseWeights = normalized
+}
+
+function computeRoleWeights(roleIndex: number): WeightTriple {
+  const base = normalizedBaseWeights
+  if (!Number.isFinite(roleIndex) || roleIndex < 0 || roleIndex >= ROLE_PROFILES.length) {
+    return { ...base }
+  }
+
+  const role = ROLE_PROFILES[roleIndex]
+  const referencePower = FALLBACK_POWER_WEIGHT > 1e-6 ? FALLBACK_POWER_WEIGHT : 1
+  const referenceGap = FALLBACK_GAP_WEIGHT > 1e-6 ? FALLBACK_GAP_WEIGHT : 1
+  const powerScale = MathUtils.clamp(role.powerWeight / referencePower, 0.3, 1.7)
+  const gapScale = MathUtils.clamp(role.gapWeight / referenceGap, 0.3, 1.7)
+  return normalizeWeights(base.power * powerScale, base.gap * gapScale, base.wall)
+}
+
+function recomputeRoleWeights(): void {
+  if (!riderRoles || !riderPowerWeights || !riderGapWeights) {
+    return
+  }
+  const count = Math.min(riderRoles.length, riderPowerWeights.length, riderGapWeights.length)
+  for (let i = 0; i < count; i++) {
+    const weights = computeRoleWeights(riderRoles[i])
+    riderPowerWeights[i] = weights.power
+    riderGapWeights[i] = weights.gap
+  }
+}
+
+function applyParameterOverrides(overrides?: SimulationParameterOverrides | null): void {
+  if (!overrides) return
+
+  if (overrides.lookAhead !== undefined && Number.isFinite(overrides.lookAhead)) {
+    lookAhead = Math.max(0.5, overrides.lookAhead)
+  }
+  if (overrides.maxYawRate !== undefined && Number.isFinite(overrides.maxYawRate)) {
+    maxYawRate = Math.max(30, Math.abs(overrides.maxYawRate))
+  }
+  if (overrides.maxYawAccel !== undefined && Number.isFinite(overrides.maxYawAccel)) {
+    maxYawAccel = Math.max(60, Math.abs(overrides.maxYawAccel))
+  }
+  if (overrides.minRadius !== undefined && Number.isFinite(overrides.minRadius)) {
+    minRadius = Math.max(1, Math.abs(overrides.minRadius))
+  }
+  if (overrides.maxTargetSpeed !== undefined && Number.isFinite(overrides.maxTargetSpeed)) {
+    maxTargetSpeed = Math.max(0, overrides.maxTargetSpeed)
+  }
+  if (overrides.minTargetSpeed !== undefined && Number.isFinite(overrides.minTargetSpeed)) {
+    minTargetSpeed = Math.max(0, overrides.minTargetSpeed)
+  }
+  if (overrides.maxAcceleration !== undefined && Number.isFinite(overrides.maxAcceleration)) {
+    maxAcceleration = Math.max(0, overrides.maxAcceleration)
+  }
+  if (overrides.maxDeceleration !== undefined && Number.isFinite(overrides.maxDeceleration)) {
+    maxDeceleration = Math.max(0, overrides.maxDeceleration)
+  }
+  if (overrides.targetSpeedDamping !== undefined && Number.isFinite(overrides.targetSpeedDamping)) {
+    targetSpeedDamping = Math.max(0, overrides.targetSpeedDamping)
+  }
+  if (
+    overrides.targetRiseRateLimit !== undefined &&
+    Number.isFinite(overrides.targetRiseRateLimit)
+  ) {
+    targetRiseRateLimit = Math.max(0, overrides.targetRiseRateLimit)
+  }
+  if (
+    overrides.targetDropRateLimit !== undefined &&
+    Number.isFinite(overrides.targetDropRateLimit)
+  ) {
+    targetDropRateLimit = Math.max(0, overrides.targetDropRateLimit)
+  }
+  if (overrides.aLatMax !== undefined && Number.isFinite(overrides.aLatMax)) {
+    maxLateralAcceleration = Math.max(0.1, overrides.aLatMax)
+  }
+  if (overrides.Crr !== undefined && Number.isFinite(overrides.Crr)) {
+    rollingResistanceCoeff = Math.max(0, overrides.Crr)
+  }
+  if (overrides.CdA0 !== undefined && Number.isFinite(overrides.CdA0)) {
+    baseCdA = Math.max(0.05, overrides.CdA0)
+  }
+  if (overrides.rho !== undefined && Number.isFinite(overrides.rho)) {
+    airDensity = Math.max(0.5, overrides.rho)
+  }
+  if (
+    overrides.drivetrainEfficiency !== undefined &&
+    Number.isFinite(overrides.drivetrainEfficiency)
+  ) {
+    drivetrainEfficiency = MathUtils.clamp(overrides.drivetrainEfficiency, 0.5, 1)
+  }
+  if (overrides.systemMass !== undefined && Number.isFinite(overrides.systemMass)) {
+    systemMass = Math.max(40, overrides.systemMass)
+  }
+  if (overrides.powerAvailable !== undefined && Number.isFinite(overrides.powerAvailable)) {
+    availablePower = Math.max(0, overrides.powerAvailable)
+  }
+  if (overrides.beta !== undefined && Number.isFinite(overrides.beta)) {
+    draftingMinFactor = MathUtils.clamp(overrides.beta, 0.1, 1)
+  }
+  if (overrides.S_max !== undefined && Number.isFinite(overrides.S_max)) {
+    draftingMaxReduction = MathUtils.clamp(overrides.S_max, 0, 0.9)
+  }
+  if (overrides.lambdaDraft !== undefined && Number.isFinite(overrides.lambdaDraft)) {
+    draftingCharacteristicDistance = Math.max(0.5, overrides.lambdaDraft)
+  }
+
+  let weightsChanged = false
+  let nextPower = baseWeightPowerRaw
+  let nextGap = baseWeightGapRaw
+  let nextWall = baseWeightWallRaw
+  let wallExplicit = false
+
+  if (overrides.wP !== undefined && Number.isFinite(overrides.wP)) {
+    nextPower = Math.max(0, overrides.wP)
+    weightsChanged = true
+  }
+  if (overrides.wG !== undefined && Number.isFinite(overrides.wG)) {
+    nextGap = Math.max(0, overrides.wG)
+    weightsChanged = true
+  }
+  if (overrides.wW !== undefined && Number.isFinite(overrides.wW)) {
+    nextWall = Math.max(0, overrides.wW)
+    wallExplicit = true
+    weightsChanged = true
+  }
+
+  if (weightsChanged) {
+    if (!wallExplicit) {
+      const remainder = 1 - (nextPower + nextGap)
+      if (remainder > 1e-6) {
+        nextWall = remainder
+      }
+    }
+    updateBaseWeights(nextPower, nextGap, nextWall)
+    recomputeRoleWeights()
+  }
+}
+
 
 self.onmessage = async (e: MessageEvent) => {
   const { type, payload }: { type: string; payload: any } = e.data || {}
@@ -258,6 +447,7 @@ self.onmessage = async (e: MessageEvent) => {
     const initial = new Float32Array(payload.positions)
     const yawOffsets = new Float32Array(payload.yaw)
     const raw = new Float32Array(payload.path)
+    applyParameterOverrides((payload.params ?? null) as SimulationParameterOverrides | null)
     laneWidth = payload.laneWidth ?? laneWidth
     roadWidth = payload.roadWidth ?? roadWidth
     margin = payload.margin ?? margin
@@ -287,6 +477,7 @@ self.onmessage = async (e: MessageEvent) => {
     riderNoiseSigma = new Float32Array(N)
     riderPowerWeights = new Float32Array(N)
     riderGapWeights = new Float32Array(N)
+    riderRoles = new Int16Array(N)
     const rng = mulberry32(123456)
     const effectiveMaxInitSpeed = Math.max(0, maxTargetSpeed)
     const effectiveMinInitSpeed = Math.max(
@@ -326,13 +517,15 @@ self.onmessage = async (e: MessageEvent) => {
         0.16,
       )
       riderNoiseSigma[i] = noiseSigma
-      const roleIndex = Math.min(
-        ROLE_PROFILES.length - 1,
-        Math.floor(rng() * ROLE_PROFILES.length),
-      )
-      const role = ROLE_PROFILES[Math.max(0, roleIndex)]
-      riderPowerWeights[i] = role?.powerWeight ?? DEFAULT_POWER_WEIGHT
-      riderGapWeights[i] = role?.gapWeight ?? DEFAULT_GAP_WEIGHT
+      let roleIndex = -1
+      if (ROLE_PROFILES.length > 0) {
+        const sampled = Math.floor(rng() * ROLE_PROFILES.length)
+        roleIndex = Math.min(ROLE_PROFILES.length - 1, Math.max(0, sampled))
+      }
+      riderRoles[i] = roleIndex
+      const roleWeights = computeRoleWeights(roleIndex)
+      riderPowerWeights[i] = roleWeights.power
+      riderGapWeights[i] = roleWeights.gap
 
       const leaderIndex = N - 1 - i
       const row = Math.floor(leaderIndex / 9)
@@ -423,16 +616,23 @@ self.onmessage = async (e: MessageEvent) => {
         )
       const reactionTime = Math.max(riderReactionTimes?.[i] ?? 0.3, 0.05)
       const noiseSigma = riderNoiseSigma?.[i] ?? COMMAND_NOISE_STDDEV
-      const powerWeight = riderPowerWeights?.[i] ?? DEFAULT_POWER_WEIGHT
-      const gapWeight = riderGapWeights?.[i] ?? DEFAULT_GAP_WEIGHT
-      const wallWeight = Math.max(0.05, 1 - (powerWeight + gapWeight))
+      const weightSet = normalizeWeights(
+        riderPowerWeights?.[i] ?? normalizedBaseWeights.power,
+        riderGapWeights?.[i] ?? normalizedBaseWeights.gap,
+        normalizedBaseWeights.wall,
+      )
+      const powerWeight = weightSet.power
+      const gapWeight = weightSet.gap
+      const wallWeight = Math.max(0.05, weightSet.wall)
+      const referenceGap = Math.max(normalizedBaseWeights.gap, 1e-3)
+      const referencePower = Math.max(normalizedBaseWeights.power, 1e-3)
       const gapResponsiveness = MathUtils.clamp(
-        gapWeight / DEFAULT_GAP_WEIGHT,
+        gapWeight / referenceGap,
         0.6,
         1.4,
       )
       const repulsionGain = LONGITUDINAL_REPULSION_GAIN * MathUtils.clamp(
-        gapWeight / DEFAULT_GAP_WEIGHT,
+        gapWeight / referenceGap,
         0.7,
         1.4,
       )
@@ -496,7 +696,11 @@ self.onmessage = async (e: MessageEvent) => {
         ? Math.min(Math.max(lookAheadDistance, MIN_DRAFTING_LOOKAHEAD), MAX_DRAFTING_LOOKAHEAD)
         : MAX_DRAFTING_LOOKAHEAD
       const draftingContext = computeDraftingContext(i, progress, totalLength, slipLookahead)
-      let S = draftingFactor(draftingContext.gapToLeader, draftingContext.leadersAhead)
+      let S = draftingFactor(draftingContext.gapToLeader, draftingContext.leadersAhead, {
+        minFactor: draftingMinFactor,
+        maxReduction: draftingMaxReduction,
+        characteristicDistance: draftingCharacteristicDistance,
+      })
       if ((S < 0 || S > 1) && !warnedDrafting) {
         console.warn('[physics] drafting factor out of bounds, clamping to [0, 1]')
         warnedDrafting = true
@@ -720,7 +924,7 @@ self.onmessage = async (e: MessageEvent) => {
         (slopeAdjustedTarget - previousSpeed) /
           Math.max(
             SOCIAL_TAU * MathUtils.clamp(
-              DEFAULT_POWER_WEIGHT / Math.max(powerWeight, 1e-3),
+              referencePower / Math.max(powerWeight, 1e-3),
               0.7,
               1.3,
             ),
@@ -850,16 +1054,6 @@ self.onmessage = async (e: MessageEvent) => {
   }
 
   if (type === 'params') {
-    lookAhead = payload.lookAhead ?? lookAhead
-    maxYawRate = payload.maxYawRate ?? maxYawRate
-    maxYawAccel = payload.maxYawAccel ?? maxYawAccel
-    minRadius = payload.minRadius ?? minRadius
-    maxTargetSpeed = payload.maxTargetSpeed ?? maxTargetSpeed
-    minTargetSpeed = payload.minTargetSpeed ?? minTargetSpeed
-    maxAcceleration = payload.maxAcceleration ?? maxAcceleration
-    maxDeceleration = payload.maxDeceleration ?? maxDeceleration
-    targetSpeedDamping = payload.targetSpeedDamping ?? targetSpeedDamping
-    targetRiseRateLimit = payload.targetRiseRateLimit ?? targetRiseRateLimit
-    targetDropRateLimit = payload.targetDropRateLimit ?? targetDropRateLimit
+    applyParameterOverrides(payload as SimulationParameterOverrides)
   }
 }
