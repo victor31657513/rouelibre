@@ -10,6 +10,7 @@ import {
   computeTargetSpeedCompensation,
   estimateSafeTargetSpeed,
   SafeSpeedDiagnostics,
+  projectWorldDistanceOntoCenterline,
 } from '../src/domain/simulation/physics/speedControl'
 import { computeSignedCurvature } from '../src/domain/simulation/physics/riderPathing'
 import { PathSpline } from '../src/domain/route/pathSpline'
@@ -93,6 +94,20 @@ describe('speed control helpers', () => {
     expect(insideRatio).toBeLessThan(1)
     expect(outsideRatio).toBeGreaterThan(1)
     expect(outsideRatio).toBeGreaterThan(insideRatio)
+  })
+
+  it('projects world distance onto the centerline according to the arc ratio', () => {
+    const curvature = 1 / 25
+    const insideOffset = (Math.sign(curvature) || 1) * 2
+    const outsideOffset = -insideOffset
+    const worldDistance = 10
+
+    const insideTravel = projectWorldDistanceOntoCenterline(worldDistance, curvature, insideOffset)
+    const outsideTravel = projectWorldDistanceOntoCenterline(worldDistance, curvature, outsideOffset)
+
+    expect(insideTravel).toBeGreaterThan(worldDistance)
+    expect(outsideTravel).toBeLessThan(worldDistance)
+    expect(insideTravel).toBeGreaterThan(outsideTravel)
   })
 
   it('relaxes lateral goals when the corridor leaves comfortable margins', () => {
@@ -390,4 +405,59 @@ describe('speed control helpers', () => {
     expect(diagnostics.minLeftMargin).toBeLessThanOrEqual(0)
     expect(diagnostics.minRightMargin).toBeLessThanOrEqual(0)
   })
+
+  it('keeps the maximum speed when a narrow but valid corridor exists', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(12, 0, 0),
+      new Vector3(18, 0, 4),
+      new Vector3(18, 0, 12),
+    ])
+
+    const speed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 4,
+      currentOffset: 0.05,
+      desiredOffset: 0.05,
+      neighborMin: -0.05,
+      neighborMax: 0.2,
+      lookAheadDistance: 6,
+      maxOffset: 3.5,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.12,
+    })
+
+    expect(speed).toBeCloseTo(9, 5)
+  })
+
+  it('clamps desired offsets outside the corridor without reducing speed', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(12, 0, 0),
+      new Vector3(18, 0, 4),
+      new Vector3(18, 0, 12),
+    ])
+
+    const speed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 4,
+      currentOffset: 0.05,
+      desiredOffset: 0.4,
+      neighborMin: -0.05,
+      neighborMax: 0.2,
+      lookAheadDistance: 6,
+      maxOffset: 3.5,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.12,
+    })
+
+    expect(speed).toBeCloseTo(9, 5)
+  })
+
 })
