@@ -26,4 +26,10 @@ export const CAMERA_BOUNDS = {
 
 export const CAMERA_CONTROL = {
   rotationSensitivity: 0.005,
+  touchDoubleTapMaxDelay: 300,
+  touchDoubleTapMaxDistance: 30,
+  touchSwipeMinDistance: 45,
+  touchSwipeMaxDuration: 350,
+  touchSwipeVerticalTolerance: 60,
+  swipeRotationStep: 0.35,
 }
