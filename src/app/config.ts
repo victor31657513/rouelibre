@@ -4,6 +4,8 @@
  * Extension: Turn values into user-configurable settings by reading from a
  * preferences store before exporting the final configuration object.
  */
+import { DEFAULT_WORKER_PARAMS } from '../domain/simulation/physics/workerParams'
+
 export const APP_CONFIG = {
   riderCount: 184,
   rngSeed: 1234,
@@ -17,6 +19,7 @@ export const APP_CONFIG = {
   startLineOffset: 1,
   camDistance: 10,
   camHeight: 6,
+  workerParams: { ...DEFAULT_WORKER_PARAMS },
 }
 
 export const CAMERA_BOUNDS = {

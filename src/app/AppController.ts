@@ -458,6 +458,7 @@ export class AppController {
       laneWidth: APP_CONFIG.laneWidth,
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
+      params: { ...APP_CONFIG.workerParams },
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -523,6 +524,7 @@ export class AppController {
       laneWidth: APP_CONFIG.laneWidth,
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
+      params: { ...APP_CONFIG.workerParams },
     })
 
     this.pelotonScene.applyState(this.positions)
