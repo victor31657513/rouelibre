@@ -188,23 +188,36 @@ self.onmessage = async (e: MessageEvent) => {
       )
 
       const curvatureIntensity = MathUtils.clamp(curvatureEnvelope.intensity, 0, 1)
-      const curvatureMaxFactor = MathUtils.lerp(0.78, 1.05, curvatureIntensity)
-      const curvatureMinFactor = MathUtils.lerp(1, 1.2, curvatureIntensity)
+      const straightMaxBoost = 1.05
+      const cornerMaxScale = 0.55
+      const straightMinScale = 0.95
+      const cornerMinScale = 0.45
+      const curvatureMaxFactor = MathUtils.lerp(straightMaxBoost, cornerMaxScale, curvatureIntensity)
+      const curvatureMinFactor = MathUtils.lerp(straightMinScale, cornerMinScale, curvatureIntensity)
 
-      let effectiveMinTargetSpeed = Math.max(
-        minTargetSpeed,
-        minTargetSpeed * curvatureMinFactor
+      let effectiveMinTargetSpeed = Math.max(0, minTargetSpeed * curvatureMinFactor)
+      let effectiveMaxTargetSpeed = Math.min(
+        maxTargetSpeed * curvatureMaxFactor,
+        maxTargetSpeed * 1.1
       )
-      let effectiveMaxTargetSpeed = Math.max(
-        effectiveMinTargetSpeed + 0.25,
-        maxTargetSpeed * curvatureMaxFactor
-      )
+      effectiveMaxTargetSpeed = Math.max(0, effectiveMaxTargetSpeed)
+
+      if (curvatureEnvelope.maxAbsCurvature > 1e-4) {
+        const radius = 1 / curvatureEnvelope.maxAbsCurvature
+        const gripFactor = MathUtils.lerp(1.9, 1.4, curvatureIntensity)
+        const curvatureSpeedLimit = Math.sqrt(Math.max(radius, 1)) * gripFactor
+        if (Number.isFinite(curvatureSpeedLimit)) {
+          effectiveMaxTargetSpeed = Math.min(effectiveMaxTargetSpeed, curvatureSpeedLimit)
+        }
+      }
 
       if (effectiveMaxTargetSpeed - effectiveMinTargetSpeed < 0.5) {
         const midpoint = (effectiveMaxTargetSpeed + effectiveMinTargetSpeed) / 2
-        effectiveMinTargetSpeed = Math.max(minTargetSpeed, midpoint - 0.25)
+        effectiveMinTargetSpeed = Math.max(0, midpoint - 0.25)
         effectiveMaxTargetSpeed = midpoint + 0.25
       }
+
+      effectiveMinTargetSpeed = Math.min(effectiveMinTargetSpeed, effectiveMaxTargetSpeed)
 
       const targetSpeed = estimateSafeTargetSpeed({
         spline,
