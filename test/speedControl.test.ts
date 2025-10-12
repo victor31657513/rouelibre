@@ -256,6 +256,46 @@ describe('speed control helpers', () => {
     expect(targetSpeed).toBeCloseTo(9, 5)
   })
 
+  it('keeps target speed high when the desired offset exceeds reachable change', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(12, 0, 0),
+    ])
+
+    const diagnostics: SafeSpeedDiagnostics = {
+      limitingSpeed: 0,
+      limitingReason: 'none',
+      limitingStep: 0,
+      candidateSpeed: 0,
+      offset: 0,
+      minBound: 0,
+      maxBound: 0,
+      minLeftMargin: 0,
+      minRightMargin: 0,
+    }
+
+    const speed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 3,
+      currentOffset: 2.4,
+      desiredOffset: -2.6,
+      neighborMin: -3.5,
+      neighborMax: 3.5,
+      lookAheadDistance: 5,
+      maxOffset: 3.5,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.12,
+      diagnostics,
+    })
+
+    expect(speed).toBeCloseTo(9, 5)
+    expect(diagnostics.limitingReason).toBe('none')
+    expect(diagnostics.candidateSpeed).toBeCloseTo(9, 5)
+  })
+
   it('reports positive margins and no limiting reason when the path is fully clear', () => {
     const spline = new PathSpline([
       new Vector3(0, 0, 0),

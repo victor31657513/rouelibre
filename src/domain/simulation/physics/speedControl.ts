@@ -7,7 +7,7 @@
  */
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../../route/pathSpline'
-import { steerOffsetTowardTarget } from './riderPathing'
+import { constrainOffsetWithinRate, steerOffsetTowardTarget } from './riderPathing'
 
 export interface SlopeAdjustmentOptions {
   /**
@@ -496,10 +496,23 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
       scratchPosition.copy(sample.position).addScaledVector(scratchRight, offset)
 
       const stepTime = stepDistance / Math.max(safeSpeed, eps)
+      const remainingDistance = Math.max(
+        evaluationLookAhead - stepDistance * (step - 1),
+        0,
+      )
+      const timeRemaining = remainingDistance / Math.max(safeSpeed, eps)
+      const reachableDesired = constrainOffsetWithinRate(
+        offset,
+        desiredOffset,
+        clampedMinBound,
+        clampedMaxBound,
+        maxOffsetRate,
+        timeRemaining,
+      )
 
       offset = steerOffsetTowardTarget(
         offset,
-        desiredOffset,
+        reachableDesired,
         clampedMinBound,
         clampedMaxBound,
         stepTime,

@@ -19,6 +19,7 @@ import {
   computeDesiredOffsetProfile,
   computeNeighborBounds,
   computeSignedCurvature,
+  constrainOffsetWithinRate,
   steerOffsetTowardTarget,
 } from './riderPathing'
 
@@ -190,6 +191,9 @@ self.onmessage = async (e: MessageEvent) => {
         lookAheadDistance = Math.max(0, aheadDistance - currentDistance)
       }
 
+      const minBound = neighborBounds.min[i]
+      const maxBound = neighborBounds.max[i]
+
       const desiredProfile = computeDesiredOffsetProfile(spline, progress[i], {
         lookAhead,
         maxOffset,
@@ -197,15 +201,24 @@ self.onmessage = async (e: MessageEvent) => {
         minRadius,
       })
 
-      const minBound = neighborBounds.min[i]
-      const maxBound = neighborBounds.max[i]
+      const planningSpeed = Math.max(0.1, effectiveMaxTargetSpeed)
+      const availableTime =
+        lookAheadDistance > 0 ? lookAheadDistance / planningSpeed : 0
+      const reachableDesired = constrainOffsetWithinRate(
+        currentOffset,
+        desiredProfile,
+        minBound,
+        maxBound,
+        maxOffsetRate,
+        availableTime,
+      )
 
       const targetSpeed = estimateSafeTargetSpeed({
         spline,
         totalLength,
         currentDistance: progress[i],
         currentOffset,
-        desiredOffset: desiredProfile,
+        desiredOffset: reachableDesired,
         neighborMin: minBound,
         neighborMax: maxBound,
         lookAheadDistance,
@@ -308,7 +321,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const updatedOffset = steerOffsetTowardTarget(
         currentOffset,
-        desiredProfile,
+        reachableDesired,
         minBound,
         maxBound,
         dt,
