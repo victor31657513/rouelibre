@@ -22,8 +22,8 @@ describe('speed control helpers', () => {
       maxLengthRatioForMinSpeed: 1.5,
     }
 
-    expect(computeTargetSpeedFromSegmentLength(reference * 0.25, reference, options)).toBe(minSpeed)
-    expect(computeTargetSpeedFromSegmentLength(reference * 2, reference, options)).toBe(maxSpeed)
+    expect(computeTargetSpeedFromSegmentLength(reference * 0.25, reference, options)).toBe(maxSpeed)
+    expect(computeTargetSpeedFromSegmentLength(reference * 2, reference, options)).toBe(minSpeed)
 
     const midLength = reference
     const expected = (maxSpeed + minSpeed) / 2
@@ -43,7 +43,7 @@ describe('speed control helpers', () => {
     const insideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, -1.5, 20)
     const outsideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 1.5, 20)
 
-    expect(insideLength).toBeGreaterThan(outsideLength)
+    expect(outsideLength).toBeGreaterThan(insideLength)
   })
 
   it('limits acceleration and deceleration when approaching the target speed', () => {

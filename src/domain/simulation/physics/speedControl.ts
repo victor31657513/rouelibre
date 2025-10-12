@@ -94,7 +94,7 @@ export function computeOffsetSegmentLength(
   for (let i = 0; i <= segmentCount; i++) {
     const distance = Math.min(clampedStart + stepSize * i, spline.totalLength)
     const sample = spline.sampleByDistance(distance)
-    right.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
+    right.set(sample.tangent.z, 0, -sample.tangent.x).normalize()
     const position = sample.position.clone().addScaledVector(right, safeOffset)
 
     if (previousPosition) {
@@ -134,7 +134,7 @@ export function computeTargetSpeedFromSegmentLength(
   const clampedRatio = MathUtils.clamp(rawRatio, rangeMin, rangeMax)
   const denominator = rangeMax - rangeMin
   const t = denominator <= 0 ? 0 : (clampedRatio - rangeMin) / denominator
-  const interpolated = MathUtils.lerp(minSpeed, maxSpeed, t)
+  const interpolated = MathUtils.lerp(maxSpeed, minSpeed, t)
 
   return MathUtils.clamp(interpolated, Math.min(minSpeed, maxSpeed), Math.max(minSpeed, maxSpeed))
 }
