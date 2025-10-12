@@ -2,6 +2,8 @@
 
 Simulation WebGL d'un peloton cycliste suivant des traces GPX.
 
+> La logique de simulation privilégie des règles globales et minimalistes pour rester facilement extensible et limiter les correctifs ponctuels.
+
 ## Démarrage rapide
 
 1. Installer les dépendances : `npm install`

@@ -189,39 +189,26 @@ self.onmessage = async (e: MessageEvent) => {
       )
 
       const curvatureIntensity = MathUtils.clamp(curvatureEnvelope.intensity, 0, 1)
-      const straightMaxBoost = 1.08
-      const cornerMaxScale = 0.75
-      const straightMinScale = 0.97
-      const cornerMinScale = 0.6
-      const curvatureMaxFactor = MathUtils.lerp(straightMaxBoost, cornerMaxScale, curvatureIntensity)
-      const curvatureMinFactor = MathUtils.lerp(straightMinScale, cornerMinScale, curvatureIntensity)
+      const baseMaxTargetSpeed = Math.max(0, maxTargetSpeed)
 
-      let effectiveMinTargetSpeed = Math.max(0, minTargetSpeed * curvatureMinFactor)
-      let effectiveMaxTargetSpeed = Math.min(
-        maxTargetSpeed * curvatureMaxFactor,
-        maxTargetSpeed * 1.1
-      )
-      effectiveMaxTargetSpeed = Math.max(0, effectiveMaxTargetSpeed)
-
+      let curvatureLimitedMax = baseMaxTargetSpeed
       if (curvatureEnvelope.maxAbsCurvature > 1e-4) {
         const radius = 1 / curvatureEnvelope.maxAbsCurvature
         const curvatureSpeedLimit = computeCorneringSpeedLimit(radius, curvatureIntensity, {
           minRadius,
-          straightLateralAcceleration: 8.5,
-          cornerLateralAcceleration: 5.5,
+          straightLateralAcceleration: 7.2,
+          cornerLateralAcceleration: 5.8,
         })
         if (Number.isFinite(curvatureSpeedLimit) && curvatureSpeedLimit > 0) {
-          effectiveMaxTargetSpeed = Math.min(effectiveMaxTargetSpeed, curvatureSpeedLimit)
+          curvatureLimitedMax = Math.min(curvatureLimitedMax, curvatureSpeedLimit)
         }
       }
 
-      if (effectiveMaxTargetSpeed - effectiveMinTargetSpeed < 0.5) {
-        const midpoint = (effectiveMaxTargetSpeed + effectiveMinTargetSpeed) / 2
-        effectiveMinTargetSpeed = Math.max(0, midpoint - 0.25)
-        effectiveMaxTargetSpeed = midpoint + 0.25
-      }
-
-      effectiveMinTargetSpeed = Math.min(effectiveMinTargetSpeed, effectiveMaxTargetSpeed)
+      const effectiveMaxTargetSpeed = Math.max(0, curvatureLimitedMax)
+      const effectiveMinTargetSpeed = Math.min(
+        effectiveMaxTargetSpeed,
+        Math.max(minTargetSpeed, effectiveMaxTargetSpeed - 1.5)
+      )
 
       const targetSpeed = estimateSafeTargetSpeed({
         spline,
@@ -253,8 +240,8 @@ self.onmessage = async (e: MessageEvent) => {
         maxSlope: 0.25,
         maxUphillPenalty: 2,
         maxDownhillBoost: 1,
-        minSpeed: Math.max(0, effectiveMinTargetSpeed - 1),
-        maxSpeed: effectiveMaxTargetSpeed + 1,
+        minSpeed: Math.max(0, effectiveMinTargetSpeed - 0.5),
+        maxSpeed: effectiveMaxTargetSpeed + 0.5,
       })
 
       const newSpeed = adjustSpeedTowardsTarget(
