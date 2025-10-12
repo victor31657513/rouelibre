@@ -27,6 +27,19 @@
 >
   Quitter
 </button>
+<div
+  id="speed-indicator"
+  class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none rounded-full bg-black/60 px-4 py-1.5 text-center font-sans text-lg font-semibold uppercase tracking-wider text-white shadow"
+>
+  -- km/h
+</div>
+<div
+  id="distance-indicator"
+  class="fixed top-4 right-4 z-50 pointer-events-none rounded-xl bg-black/60 px-3 py-2 text-right font-sans text-sm text-white shadow"
+>
+  <span id="distance-travelled">Parcourus : -- km</span>
+  <span id="distance-remaining">Restants : -- km</span>
+</div>
   <ul
     id="route-list"
     class="menu bg-base-100 rounded-box text-sm font-sans shadow fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 max-w-md"

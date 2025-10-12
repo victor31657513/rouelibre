@@ -49,6 +49,47 @@ body {
   font-family: system-ui, sans-serif; /* font-sans */
 }
 
+#speed-indicator {
+  position: fixed; /* fixed */
+  top: 1rem; /* top-4 */
+  left: 50%; /* left-1/2 */
+  transform: translateX(-50%); /* -translate-x-1/2 */
+  z-index: 50; /* z-50 */
+  pointer-events: none; /* pointer-events-none */
+  background-color: rgba(0, 0, 0, 0.6); /* bg-black/60 */
+  color: #fff; /* text-white */
+  padding: 0.375rem 1rem; /* py-1.5 px-4 */
+  border-radius: 9999px; /* rounded-full */
+  font-family: system-ui, sans-serif; /* font-sans */
+  font-size: 1.125rem; /* text-lg */
+  font-weight: 600; /* font-semibold */
+  letter-spacing: 0.08em; /* tracking-wider */
+  text-transform: uppercase; /* uppercase */
+  text-align: center; /* text-center */
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25); /* shadow */
+}
+
+#distance-indicator {
+  position: fixed; /* fixed */
+  top: 1rem; /* top-4 */
+  right: 1rem; /* right-4 */
+  z-index: 50; /* z-50 */
+  pointer-events: none; /* pointer-events-none */
+  background-color: rgba(0, 0, 0, 0.6); /* bg-black/60 */
+  color: #fff; /* text-white */
+  padding: 0.5rem 0.75rem; /* py-2 px-3 */
+  border-radius: 0.75rem; /* rounded-xl */
+  font-family: system-ui, sans-serif; /* font-sans */
+  font-size: 0.875rem; /* text-sm */
+  text-align: right; /* text-right */
+  line-height: 1.35;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25); /* shadow */
+}
+
+#distance-indicator span {
+  display: block;
+}
+
 @media (max-width: 640px) {
   #home-btn {
     top: 0.75rem; /* top-3 */

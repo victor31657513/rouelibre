@@ -32,6 +32,9 @@ interface DomRefs {
   pauseBtn: HTMLButtonElement
   resetBtn: HTMLButtonElement
   routeList: HTMLElement
+  speedIndicator: HTMLDivElement
+  distanceTravelled: HTMLSpanElement
+  distanceRemaining: HTMLSpanElement
 }
 
 type RoadAssets = {
@@ -58,6 +61,7 @@ export class AppController {
 
   private animating = false
   private lastTick = performance.now()
+  private lastStepDt = 0
   private rotating = false
   private touchRotating = false
   private activeTouchId: number | null = null
@@ -71,6 +75,14 @@ export class AppController {
   private touchIsDragging = false
   private lastMiddleTime = 0
   private readonly mouse = new THREE.Vector2()
+  private readonly speedFormatter = new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
+  private readonly distanceFormatter = new Intl.NumberFormat('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
 
   constructor(dom: DomRefs) {
     this.dom = dom
@@ -89,6 +101,8 @@ export class AppController {
     })
     this.simulation = new SimulationClient((state) => this.onSimulationState(state))
     this.attachEventListeners()
+    this.setSpeedDisplay(null)
+    this.setDistanceDisplay(null, null)
   }
 
   /** Prepares the route selector UI and initial button states. */
@@ -294,6 +308,7 @@ export class AppController {
     if (intersects.length && intersects[0].instanceId !== undefined) {
       setSelectedIndex(intersects[0].instanceId, APP_CONFIG.riderCount)
       this.focusSelected()
+      this.refreshTelemetryDisplay()
     }
   }
 
@@ -318,6 +333,7 @@ export class AppController {
     event.preventDefault()
     changeSelectedIndex(delta, APP_CONFIG.riderCount)
     this.cameraRig.update(0.016, [this.scene.riderObjects[selectedIndex]])
+    this.refreshTelemetryDisplay()
   }
 
   private async loadRoute(
@@ -385,6 +401,7 @@ export class AppController {
     const yawOffsets = new Float32Array(APP_CONFIG.riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
     this.positions = new Float32Array(APP_CONFIG.riderCount * 4)
+    this.lastStepDt = 0
 
     const totalLength = this.spline.totalLength
     const yaw0 = Math.atan2(
@@ -444,6 +461,7 @@ export class AppController {
     this.cameraRig.restoreInitialPose()
     this.focusSelected()
     this.scene.renderer.render(this.scene.scene, this.scene.camera)
+    this.refreshTelemetryDisplay()
   }
 
   private resetPeloton(): void {
@@ -460,6 +478,7 @@ export class AppController {
     const yawOffsets = new Float32Array(APP_CONFIG.riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
     this.positions = new Float32Array(APP_CONFIG.riderCount * 4)
+    this.lastStepDt = 0
     const totalLength = this.spline.totalLength
     const yaw0 = Math.atan2(
       this.currentPath[1].x - this.currentPath[0].x,
@@ -507,6 +526,7 @@ export class AppController {
     this.cameraRig.restoreInitialPose()
     this.focusSelected()
     this.scene.renderer.render(this.scene.scene, this.scene.camera)
+    this.refreshTelemetryDisplay()
   }
 
   private rebuildRoute(): void {
@@ -560,6 +580,83 @@ export class AppController {
     this.animating = false
   }
 
+  private setSpeedDisplay(speedKmh: number | null): void {
+    this.dom.speedIndicator.textContent = this.formatSpeed(speedKmh)
+  }
+
+  private setDistanceDisplay(travelledKm: number | null, remainingKm: number | null): void {
+    this.dom.distanceTravelled.textContent = `Parcourus : ${this.formatDistance(travelledKm)}`
+    this.dom.distanceRemaining.textContent = `Restants : ${this.formatDistance(remainingKm)}`
+  }
+
+  private formatSpeed(speedKmh: number | null): string {
+    if (speedKmh === null || !Number.isFinite(speedKmh)) {
+      return '-- km/h'
+    }
+    return `${this.speedFormatter.format(Math.max(0, speedKmh))} km/h`
+  }
+
+  private formatDistance(distanceKm: number | null): string {
+    if (distanceKm === null || !Number.isFinite(distanceKm)) {
+      return '-- km'
+    }
+    return `${this.distanceFormatter.format(Math.max(0, distanceKm))} km`
+  }
+
+  private refreshTelemetryDisplay(): void {
+    if (!this.positions || this.positions.length === 0) {
+      this.setSpeedDisplay(null)
+      this.setDistanceDisplay(null, null)
+      return
+    }
+    this.updateTelemetry(null, this.positions)
+  }
+
+  private updateTelemetry(previousState: Float32Array | null, currentState: Float32Array): void {
+    if (!this.spline) {
+      this.setSpeedDisplay(null)
+      this.setDistanceDisplay(null, null)
+      return
+    }
+
+    const totalLength = this.spline.totalLength
+    const base = selectedIndex * 4
+    const progress = currentState[base]
+    let speedMs = 0
+
+    if (
+      previousState &&
+      previousState.length === currentState.length &&
+      this.lastStepDt > 0 &&
+      Number.isFinite(progress) &&
+      Number.isFinite(previousState[base])
+    ) {
+      let delta = progress - previousState[base]
+      if (Number.isFinite(totalLength) && totalLength > 0) {
+        const halfLength = totalLength / 2
+        if (delta < -halfLength) {
+          delta += totalLength
+        } else if (delta > halfLength) {
+          delta -= totalLength
+        }
+      }
+      speedMs = delta / this.lastStepDt
+      if (!Number.isFinite(speedMs)) {
+        speedMs = 0
+      }
+    }
+
+    const speedKmh = Math.max(0, speedMs * 3.6)
+    const travelledKm = Number.isFinite(progress) ? Math.max(0, progress) / 1000 : null
+    let remainingKm: number | null = null
+    if (Number.isFinite(totalLength) && totalLength > 0 && Number.isFinite(progress)) {
+      remainingKm = Math.max(0, totalLength - progress) / 1000
+    }
+
+    this.setSpeedDisplay(Number.isFinite(speedKmh) ? speedKmh : null)
+    this.setDistanceDisplay(travelledKm, remainingKm)
+  }
+
   private tick(): void {
     if (!this.animating) return
     const now = performance.now()
@@ -567,6 +664,7 @@ export class AppController {
     this.lastTick = now
 
     this.cameraRig.update(dt, [this.scene.riderObjects[selectedIndex]], this.rotating)
+    this.lastStepDt = dt
     this.simulation.step(dt)
     this.scene.renderer.render(this.scene.scene, this.scene.camera)
 
@@ -578,8 +676,10 @@ export class AppController {
   }
 
   private onSimulationState(state: Float32Array): void {
+    const previous = this.positions
     this.positions = state
     this.pelotonScene.applyState(this.positions)
+    this.updateTelemetry(previous, this.positions)
   }
 
   private showRouteList(): void {
