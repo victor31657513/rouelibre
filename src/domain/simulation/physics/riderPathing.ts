@@ -83,6 +83,56 @@ export function computeSignedCurvature(
   return angle / avgLen
 }
 
+export interface CurvatureEnvelope {
+  averageAbsCurvature: number
+  maxAbsCurvature: number
+  intensity: number
+}
+
+export function computeCurvatureEnvelope(
+  spline: PathSpline,
+  distance: number,
+  totalLength: number,
+  lookAhead: number,
+  referenceRadius: number,
+  sampleCount = 5
+): CurvatureEnvelope {
+  if (!spline || totalLength <= 0) {
+    return { averageAbsCurvature: 0, maxAbsCurvature: 0, intensity: 0 }
+  }
+
+  const safeLookAhead = Math.max(0, lookAhead)
+  const safeSamples = Math.max(1, Math.floor(sampleCount))
+  const step = safeSamples > 0 ? safeLookAhead / safeSamples : 0
+
+  let maxAbsCurvature = 0
+  let sumAbsCurvature = 0
+  let count = 0
+
+  for (let i = 0; i <= safeSamples; i++) {
+    const sampleDistance = distance + step * i
+    const curvature = Math.abs(computeSignedCurvature(spline, sampleDistance, totalLength))
+    if (!Number.isFinite(curvature)) {
+      continue
+    }
+
+    maxAbsCurvature = Math.max(maxAbsCurvature, curvature)
+    sumAbsCurvature += curvature
+    count++
+  }
+
+  const averageAbsCurvature = count > 0 ? sumAbsCurvature / count : 0
+  const fallbackRadius = referenceRadius > 0 ? referenceRadius : 35
+  const referenceCurvature = 1 / Math.max(fallbackRadius, 1e-3)
+  const intensity = MathUtils.clamp(
+    referenceCurvature > 0 ? maxAbsCurvature / referenceCurvature : 0,
+    0,
+    1
+  )
+
+  return { averageAbsCurvature, maxAbsCurvature, intensity }
+}
+
 function computeProgressDistance(a: number, b: number, totalLength: number): number {
   if (totalLength <= 0) return Math.abs(a - b)
   let diff = Math.abs(a - b)
