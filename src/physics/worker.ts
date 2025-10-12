@@ -8,6 +8,12 @@ import {
   computeOffsetSegmentLength,
   computeTargetSpeedFromSegmentLength,
 } from './speedControl'
+import {
+  computeArcLengthScale,
+  computeDesiredOffsetProfile,
+  computeNeighborBounds,
+  steerOffsetTowardTarget,
+} from './riderPathing'
 
 let world: RAPIER.World
 let N = 0
@@ -37,6 +43,7 @@ let maxTargetSpeed = 9
 let minTargetSpeed = 5
 let maxAcceleration = 3
 let maxDeceleration = 5
+const maxOffsetRate = 2.5
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 
@@ -137,11 +144,20 @@ self.onmessage = async (e: MessageEvent) => {
     const dt: number = payload.dt
 
     const { min: minLengthRatio, max: maxLengthRatio } = computeLengthRatioRange(maxOffset, minRadius)
+    const neighborArcDistance = Math.max(3, lookAhead * 0.5)
+    const lateralGap = Math.max(0.6, laneWidth * 0.8)
+    const neighborBounds = computeNeighborBounds(progress, offsets, {
+      laneWidth,
+      maxOffset,
+      totalLength,
+      neighborArcDistance,
+      lateralGap,
+    })
 
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
       const previousSpeed = speeds[i]
-      const clampedOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
+      const currentOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
 
       let targetSpeed = maxTargetSpeed
       let lookAheadDistance = lookAhead
@@ -154,7 +170,7 @@ self.onmessage = async (e: MessageEvent) => {
           spline,
           currentDistance,
           aheadDistance,
-          clampedOffset,
+          currentOffset,
           sampleCount
         )
         const referenceDistance = lookAheadDistance > 0 ? lookAheadDistance : Math.max(lookAhead, 1)
@@ -194,7 +210,29 @@ self.onmessage = async (e: MessageEvent) => {
       )
       speeds[i] = newSpeed
 
-      let s = progress[i] + ((previousSpeed + newSpeed) / 2) * dt
+      const desiredProfile = computeDesiredOffsetProfile(spline, progress[i], {
+        lookAhead,
+        maxOffset,
+        totalLength,
+        minRadius,
+      })
+
+      const minBound = neighborBounds.min[i]
+      const maxBound = neighborBounds.max[i]
+      const updatedOffset = steerOffsetTowardTarget(
+        currentOffset,
+        desiredProfile,
+        minBound,
+        maxBound,
+        dt,
+        maxOffsetRate
+      )
+      offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
+
+      const travel = ((previousSpeed + newSpeed) / 2) * dt
+      const arcScale = computeArcLengthScale(spline, progress[i], totalLength, offsets[i])
+      const effectiveScale = arcScale > 0 ? arcScale : 1
+      let s = progress[i] + (effectiveScale !== 0 ? travel / effectiveScale : travel)
       if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
       progress[i] = s
 
@@ -204,8 +242,8 @@ self.onmessage = async (e: MessageEvent) => {
       const center = sample.position
       const tangent = sample.tangent
       const right = new Vector3(-tangent.z, 0, tangent.x).normalize()
-      offsets[i] = clampedOffset
-      const pos = center.clone().add(right.clone().multiplyScalar(clampedOffset))
+      const lateralOffset = offsets[i]
+      const pos = center.clone().add(right.clone().multiplyScalar(lateralOffset))
 
       const look = spline.sampleByDistance(Math.min(ahead, totalLength))
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
@@ -221,7 +259,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const base4 = i * 4
       state[base4 + 0] = s
-      state[base4 + 1] = clampedOffset
+      state[base4 + 1] = lateralOffset
       state[base4 + 2] = 1
       state[base4 + 3] = yaw
     }
