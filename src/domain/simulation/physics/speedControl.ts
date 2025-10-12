@@ -273,18 +273,31 @@ export function projectWorldDistanceOntoCenterline(
   worldDistance: number,
   curvature: number,
   lateralOffset: number,
-  options: { minRatio?: number; maxRatio?: number } = {},
+  options: { minRatio?: number; maxRatio?: number; softening?: number } = {},
 ): number {
   if (!Number.isFinite(worldDistance) || Math.abs(worldDistance) <= 1e-9) {
     return 0
   }
 
-  const ratio = computeOffsetArcLengthRatio(curvature, lateralOffset, options)
+  const { softening = 0.55, minRatio, maxRatio } = options
+  const ratio = computeOffsetArcLengthRatio(curvature, lateralOffset, { minRatio, maxRatio })
   if (!Number.isFinite(ratio) || ratio <= 1e-6) {
     return worldDistance
   }
 
-  return worldDistance / ratio
+  const blend = MathUtils.clamp(softening, 0, 1)
+  if (blend === 0) {
+    return worldDistance
+  }
+
+  const deviation = ratio - 1
+  const blendedRatio = 1 + deviation * blend
+
+  if (!Number.isFinite(blendedRatio) || Math.abs(blendedRatio) <= 1e-6) {
+    return worldDistance
+  }
+
+  return worldDistance / blendedRatio
 }
 
 export function adjustSpeedTowardsTarget(
