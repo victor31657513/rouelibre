@@ -4,7 +4,9 @@ import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
-  computeTargetSpeed,
+  computeLengthRatioRange,
+  computeOffsetSegmentLength,
+  computeTargetSpeedFromSegmentLength,
 } from './speedControl'
 
 let world: RAPIER.World
@@ -134,26 +136,45 @@ self.onmessage = async (e: MessageEvent) => {
 
     const dt: number = payload.dt
 
+    const { min: minLengthRatio, max: maxLengthRatio } = computeLengthRatioRange(maxOffset, minRadius)
+
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
       const previousSpeed = speeds[i]
+      const clampedOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
 
-      let curvature = 0
+      let targetSpeed = maxTargetSpeed
+      let lookAheadDistance = lookAhead
       if (totalLength > 0) {
-        const curvatureDistance = progress[i] + lookAhead
-        const normalized = MathUtils.euclideanModulo(curvatureDistance, totalLength) / totalLength
-        curvature = spline.estimateCurvature(normalized)
-      }
+        const currentDistance = progress[i]
+        const aheadDistance = Math.min(currentDistance + lookAhead, totalLength)
+        lookAheadDistance = Math.max(0, aheadDistance - currentDistance)
+        const sampleCount = Math.max(6, Math.ceil(lookAheadDistance * 2))
+        const segmentLength = computeOffsetSegmentLength(
+          spline,
+          currentDistance,
+          aheadDistance,
+          clampedOffset,
+          sampleCount
+        )
+        const referenceDistance = lookAheadDistance > 0 ? lookAheadDistance : Math.max(lookAhead, 1)
 
-      const targetSpeed = computeTargetSpeed(curvature, maxTargetSpeed, minTargetSpeed, 1 / minRadius)
+        targetSpeed = computeTargetSpeedFromSegmentLength(segmentLength, referenceDistance, {
+          maxSpeed: maxTargetSpeed,
+          minSpeed: minTargetSpeed,
+          minLengthRatioForMaxSpeed: minLengthRatio,
+          maxLengthRatioForMinSpeed: maxLengthRatio,
+        })
+      }
 
       let slope = 0
       if (totalLength > 0 && lookAhead > 0) {
         const currentDistance = progress[i]
-        const currentSample = spline.sampleByDistance(currentDistance)
         const aheadDistance = Math.min(currentDistance + lookAhead, totalLength)
+        const travelDistance = Math.max(lookAheadDistance, 1e-3)
+        const currentSample = spline.sampleByDistance(currentDistance)
         const aheadSample = spline.sampleByDistance(aheadDistance)
-        slope = computeSlope(currentSample.position, aheadSample.position, lookAhead)
+        slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
       }
 
       const slopeAdjustedTarget = adjustTargetSpeedForSlope(targetSpeed, slope, {
@@ -183,9 +204,8 @@ self.onmessage = async (e: MessageEvent) => {
       const center = sample.position
       const tangent = sample.tangent
       const right = new Vector3(-tangent.z, 0, tangent.x).normalize()
-      const offset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
-      offsets[i] = offset
-      const pos = center.clone().add(right.clone().multiplyScalar(offset))
+      offsets[i] = clampedOffset
+      const pos = center.clone().add(right.clone().multiplyScalar(clampedOffset))
 
       const look = spline.sampleByDistance(Math.min(ahead, totalLength))
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
@@ -201,7 +221,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const base4 = i * 4
       state[base4 + 0] = s
-      state[base4 + 1] = offset
+      state[base4 + 1] = clampedOffset
       state[base4 + 2] = 1
       state[base4 + 3] = yaw
     }
