@@ -44,6 +44,8 @@ let maxYawAccel = 480
 let minRadius = 12
 let maxTargetSpeed = 9
 let minTargetSpeed = 5
+// Limits the allowed delta between straight line and corner target speeds.
+const curveSpeedMargin = 0.4
 let maxAcceleration = 3
 let maxDeceleration = 5
 const maxOffsetRate = 2.5
@@ -181,7 +183,7 @@ self.onmessage = async (e: MessageEvent) => {
       const effectiveMaxTargetSpeed = Math.max(0, maxTargetSpeed)
       const effectiveMinTargetSpeed = Math.min(
         effectiveMaxTargetSpeed,
-        Math.max(minTargetSpeed, effectiveMaxTargetSpeed - 1.5)
+        Math.max(minTargetSpeed, effectiveMaxTargetSpeed - curveSpeedMargin)
       )
 
       const targetSpeed = estimateSafeTargetSpeed({
