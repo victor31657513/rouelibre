@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Vector3 } from 'three'
-import { PathSpline } from '../src/domain/route/pathSpline'
+import { PathSpline } from '../src/systems/pathSmoothing'
 import {
   computeArcLengthScale,
   computeDesiredOffsetProfile,
