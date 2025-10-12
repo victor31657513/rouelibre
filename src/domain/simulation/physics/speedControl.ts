@@ -94,7 +94,7 @@ export function computeOffsetSegmentLength(
   for (let i = 0; i <= segmentCount; i++) {
     const distance = Math.min(clampedStart + stepSize * i, spline.totalLength)
     const sample = spline.sampleByDistance(distance)
-    right.set(sample.tangent.z, 0, -sample.tangent.x).normalize()
+    right.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
     const position = sample.position.clone().addScaledVector(right, safeOffset)
 
     if (previousPosition) {
@@ -161,7 +161,8 @@ export function computeOffsetArcLengthRatio(
     return MathUtils.clamp(1, clampedMin, clampedMax)
   }
 
-  const towardCenter = -lateralOffset * Math.sign(curvature)
+  const orientation = Math.sign(curvature)
+  const towardCenter = lateralOffset * orientation
   const effectiveRadius = baseRadius - towardCenter
   if (!Number.isFinite(effectiveRadius) || effectiveRadius <= 0) {
     return clampedMin

@@ -8,6 +8,7 @@ import {
   computeTargetSpeedFromSegmentLength,
   estimateSafeTargetSpeed,
 } from '../src/domain/simulation/physics/speedControl'
+import { computeSignedCurvature } from '../src/domain/simulation/physics/riderPathing'
 import { PathSpline } from '../src/domain/route/pathSpline'
 import { Vector3 } from 'three'
 
@@ -41,8 +42,25 @@ describe('speed control helpers', () => {
     const startDistance = 3
     const endDistance = Math.min(startDistance + 6, spline.totalLength)
 
-    const insideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, -1.5, 20)
-    const outsideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 1.5, 20)
+    const midDistance = (startDistance + endDistance) / 2
+    const curvature = computeSignedCurvature(spline, midDistance, spline.totalLength)
+    const insideOffset = (Math.sign(curvature) || 1) * 1.5
+    const outsideOffset = -insideOffset
+
+    const insideLength = computeOffsetSegmentLength(
+      spline,
+      startDistance,
+      endDistance,
+      insideOffset,
+      20
+    )
+    const outsideLength = computeOffsetSegmentLength(
+      spline,
+      startDistance,
+      endDistance,
+      outsideOffset,
+      20
+    )
 
     expect(outsideLength).toBeGreaterThan(insideLength)
   })
@@ -61,9 +79,8 @@ describe('speed control helpers', () => {
 
   it('computes arc length ratios reflecting inside and outside lines', () => {
     const curvature = 1 / 25
-    const insideOffset = -2
-    const outsideOffset = 2
-
+    const insideOffset = (Math.sign(curvature) || 1) * 2
+    const outsideOffset = -insideOffset
     const insideRatio = computeOffsetArcLengthRatio(curvature, insideOffset)
     const outsideRatio = computeOffsetArcLengthRatio(curvature, outsideOffset)
 
@@ -111,8 +128,23 @@ describe('speed control helpers', () => {
       maxLengthRatioForMinSpeed: maxRatio,
     }
 
-    const insideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, -1.5, 24)
-    const outsideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 1.5, 24)
+    const curvature = computeSignedCurvature(spline, (startDistance + endDistance) / 2, spline.totalLength)
+    const insideOffset = (Math.sign(curvature) || 1) * 1.5
+    const outsideOffset = -insideOffset
+    const insideLength = computeOffsetSegmentLength(
+      spline,
+      startDistance,
+      endDistance,
+      insideOffset,
+      24
+    )
+    const outsideLength = computeOffsetSegmentLength(
+      spline,
+      startDistance,
+      endDistance,
+      outsideOffset,
+      24
+    )
     const centerLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 0, 24)
 
     const insideSpeed = computeTargetSpeedFromSegmentLength(insideLength, travelDistance, options)
