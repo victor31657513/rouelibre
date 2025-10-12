@@ -1,8 +1,17 @@
+/**
+ * Helpers to decode GPX files into Three.js friendly structures.
+ *
+ * Extension: Support additional GPX attributes (time stamps, heart rate) by
+ * extending the returned record types and ensuring callers opt-in explicitly.
+ */
 import * as THREE from 'three'
 
 export type GPXPoint = { lat: number; lon: number; ele: number }
 export type Vec3 = THREE.Vector3
 
+/**
+ * Parses a GPX XML string into plain latitude/longitude/elevation samples.
+ */
 export function parseGPX(xml: string): GPXPoint[] {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   const pts: GPXPoint[] = []
@@ -18,6 +27,9 @@ export function parseGPX(xml: string): GPXPoint[] {
   return pts
 }
 
+/**
+ * Projects geodetic coordinates to a local Cartesian reference frame.
+ */
 export function projectToLocal(pts: GPXPoint[]): { path3D: Vec3[] } {
   if (pts.length === 0) return { path3D: [] }
   const R = 6371000

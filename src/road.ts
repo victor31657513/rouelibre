@@ -1,3 +1,4 @@
+/** Simple bounds check ensuring a rider stays within the road margins. */
 export function inRoad(
   _s: number,
   t: number,

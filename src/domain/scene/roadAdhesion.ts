@@ -1,8 +1,15 @@
+/**
+ * Utilities that align rider poses with the road mesh using ray casting.
+ *
+ * Extension: For curved banking or off-road segments introduce new projection
+ * strategies that plug into the same interface.
+ */
 import * as THREE from 'three'
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
 
 ;(THREE.Mesh.prototype as any).raycast = acceleratedRaycast
 
+/** Projects a single position/yaw pair onto the road surface. */
 export function projectOntoRoad(
   x: number,
   y: number,
@@ -52,6 +59,7 @@ export function projectOntoRoad(
   return { position: pos, quaternion: quat }
 }
 
+/** Convenience helper that applies {@link projectOntoRoad} to a batch. */
 export function projectOntoRoadBatch(
   states: { x: number; y: number; z: number; yaw: number }[],
   road: THREE.Object3D,

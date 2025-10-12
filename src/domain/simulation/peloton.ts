@@ -1,5 +1,11 @@
+/**
+ * Generates initial peloton layouts along a provided route.
+ *
+ * Extension: expose additional arrangements (e.g. staggered groups) as new
+ * functions sharing the same options structure.
+ */
 import * as THREE from 'three'
-import type { Vec3 } from './gpx'
+import type { Vec3 } from '../route/gpx'
 
 export interface PelotonOptions {
   seed?: number

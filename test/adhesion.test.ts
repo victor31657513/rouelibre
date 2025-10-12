@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { projectOntoRoad } from '../src/systems/adhesion'
+import { projectOntoRoad } from '../src/domain/scene/roadAdhesion'
 
 describe('adhesion', () => {
   it('aligns rider up vector with road normal', () => {
