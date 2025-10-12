@@ -25,7 +25,14 @@ export interface SlopeAdjustmentOptions {
   maxSpeed?: number
 }
 
-export interface SegmentLengthSpeedOptions {
+export interface LengthCompensationTuning {
+  /** Amplification applied when the rider travels a shorter arc than the reference. */
+  insideCompensation?: number
+  /** Amplification applied when the rider travels a longer arc than the reference. */
+  outsideCompensation?: number
+}
+
+export interface SegmentLengthSpeedOptions extends LengthCompensationTuning {
   /** Target speed applied when the travelled path length hits the lower bound. */
   maxSpeed: number
   /** Target speed applied when the travelled path length hits the upper bound. */
@@ -40,6 +47,34 @@ export interface SegmentLengthSpeedOptions {
    * target speed is enforced. Ratios above this value are clamped.
    */
   maxLengthRatioForMinSpeed?: number
+}
+
+export function computeTargetSpeedCompensation(
+  ratio: number,
+  options: LengthCompensationTuning = {}
+): number {
+  const {
+    insideCompensation = 0.35,
+    outsideCompensation = 0.8,
+  } = options
+
+  if (!Number.isFinite(ratio)) {
+    return 1
+  }
+
+  const clampedRatio = Math.max(0, ratio)
+  const deviation = clampedRatio - 1
+  if (Math.abs(deviation) < 1e-6) {
+    return 1
+  }
+
+  if (deviation > 0) {
+    const gain = Math.max(0, outsideCompensation)
+    return Math.max(0, 1 + deviation * gain)
+  }
+
+  const gain = Math.max(0, insideCompensation)
+  return Math.max(0, 1 + -deviation * gain)
 }
 
 export function computeLengthRatioRange(
@@ -135,8 +170,14 @@ export function computeTargetSpeedFromSegmentLength(
   const denominator = rangeMax - rangeMin
   const t = denominator <= 0 ? 0 : (clampedRatio - rangeMin) / denominator
   const interpolated = MathUtils.lerp(maxSpeed, minSpeed, t)
+  const compensation = computeTargetSpeedCompensation(clampedRatio, options)
+  const compensated = interpolated * compensation
 
-  return MathUtils.clamp(interpolated, Math.min(minSpeed, maxSpeed), Math.max(minSpeed, maxSpeed))
+  return MathUtils.clamp(
+    compensated,
+    Math.min(minSpeed, maxSpeed),
+    Math.max(minSpeed, maxSpeed)
+  )
 }
 
 export function computeOffsetArcLengthRatio(
