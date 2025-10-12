@@ -59,6 +59,11 @@ export class AppController {
   private animating = false
   private lastTick = performance.now()
   private rotating = false
+  private touchRotating = false
+  private activeTouchId: number | null = null
+  private lastTouchX = 0
+  private lastTouchTap = 0
+  private lastTouchPosition: { x: number; y: number } | null = null
   private lastMiddleTime = 0
   private readonly mouse = new THREE.Vector2()
 
@@ -137,12 +142,7 @@ export class AppController {
       if (event.button === 1) {
         const now = performance.now()
         if (now - this.lastMiddleTime < 300) {
-          if (this.currentPath) {
-            this.cameraRig.restoreInitialPose()
-          } else {
-            this.cameraRig.resetYaw()
-            this.focusSelected()
-          }
+          this.resetCameraToDefault()
         }
         this.lastMiddleTime = now
       }
@@ -157,6 +157,52 @@ export class AppController {
       if (this.rotating) {
         this.cameraRig.addYaw(event.movementX * CAMERA_CONTROL.rotationSensitivity)
       }
+    })
+
+    canvas.addEventListener('pointerdown', (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return
+      if (this.activeTouchId !== null) return
+      const now = performance.now()
+      const previousTap = this.lastTouchTap
+      const previousPosition = this.lastTouchPosition
+
+      if (previousTap && now - previousTap < 300 && previousPosition) {
+        const dx = Math.abs(event.clientX - previousPosition.x)
+        const dy = Math.abs(event.clientY - previousPosition.y)
+        if (dx < 30 && dy < 30) {
+          this.resetCameraToDefault()
+        }
+      }
+
+      this.touchRotating = true
+      this.activeTouchId = event.pointerId
+      this.lastTouchX = event.clientX
+      this.lastTouchTap = now
+      this.lastTouchPosition = { x: event.clientX, y: event.clientY }
+      canvas.setPointerCapture(event.pointerId)
+      event.preventDefault()
+    })
+
+    const endTouch = (event: PointerEvent) => {
+      if (event.pointerId !== this.activeTouchId) return
+      this.touchRotating = false
+      this.activeTouchId = null
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId)
+      }
+    }
+
+    canvas.addEventListener('pointerup', endTouch)
+    canvas.addEventListener('pointercancel', endTouch)
+
+    canvas.addEventListener('pointermove', (event: PointerEvent) => {
+      if (!this.touchRotating || event.pointerId !== this.activeTouchId) return
+      const deltaX = event.clientX - this.lastTouchX
+      if (deltaX !== 0) {
+        this.cameraRig.addYaw(deltaX * CAMERA_CONTROL.rotationSensitivity)
+      }
+      this.lastTouchX = event.clientX
+      event.preventDefault()
     })
 
     canvas.addEventListener(
@@ -181,6 +227,15 @@ export class AppController {
     })
 
     document.addEventListener('keydown', (event) => this.handleKeydown(event))
+  }
+
+  private resetCameraToDefault(): void {
+    if (this.currentPath) {
+      this.cameraRig.restoreInitialPose()
+    } else {
+      this.cameraRig.resetYaw()
+      this.focusSelected()
+    }
   }
 
   private handleCanvasClick(event: MouseEvent): void {
