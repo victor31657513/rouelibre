@@ -81,7 +81,6 @@ describe('speed control helpers', () => {
     const curvature = 1 / 25
     const insideOffset = (Math.sign(curvature) || 1) * 2
     const outsideOffset = -insideOffset
-
     const insideRatio = computeOffsetArcLengthRatio(curvature, insideOffset)
     const outsideRatio = computeOffsetArcLengthRatio(curvature, outsideOffset)
 
