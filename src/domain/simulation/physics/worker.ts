@@ -46,15 +46,17 @@ let maxYawAccel = 480
 let minRadius = 12
 let maxTargetSpeed = 9
 let minTargetSpeed = 5
-// Limits the allowed delta between straight line and corner target speeds.
-const curveSpeedMargin = 0.15
-// Longitudinal dynamics (VARIANTE SOFT)
-let maxAcceleration = 0.9 // m/s²  (~3.2 km/h par seconde)
-let maxDeceleration = 1.6 // m/s²  (freinage plus doux)
-// Filtre passe-bas de la consigne (plus haut → plus de lissage)
-let targetSpeedDamping = 4.5
-// Limiteur de chute par seconde de la consigne (empêche les « crans »)
-let targetDropRateLimit = 1.0 // m/s par seconde (≃ 3.6 km/h/s)
+// Autoriser une vraie différence entre ligne droite et courbe (moins de yo-yo)
+const curveSpeedMargin = 0.6
+// Accélérations réalistes pour un peloton cycliste
+let maxAcceleration = 0.8
+let maxDeceleration = 1.6
+// Limite d'accélération latérale (m/s²) pour plafond vitesse en courbe
+let aLatMax = 1.8
+// Smoothing & rate limits sur la consigne de vitesse
+let targetSpeedDamping = 4.0
+let targetRiseRateLimit = 0.8 // m/s par seconde
+let targetDropRateLimit = 1.0 // m/s par seconde
 const maxOffsetRate = 2.5
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
@@ -158,7 +160,9 @@ self.onmessage = async (e: MessageEvent) => {
 
     const dt: number = payload.dt
 
-    const neighborArcDistance = Math.max(3, lookAhead * 0.5)
+    // Un voisinage trop long resserre artificiellement le couloir en virage → peloton qui s'agglutine.
+    // On réduit la portée effective pour limiter l'effet accordéon.
+    const neighborArcDistance = Math.max(2, lookAhead * 0.33)
     const lateralGap = Math.max(0.6, laneWidth * 0.8)
     const neighborBounds = computeNeighborBounds(progress, offsets, {
       laneWidth,
@@ -212,6 +216,30 @@ self.onmessage = async (e: MessageEvent) => {
         dt,
       })
 
+      // (A) Plafond "courbure-aware" (v <= sqrt(a_lat_max / courbure_max))
+      const env = computeCurvatureEnvelope(
+        spline,
+        progress[i],
+        totalLength,
+        Math.max(lookAheadDistance, 1),
+        Math.max(1, minRadius)
+      )
+      const k = Math.max(env.maxAbsCurvature, 1e-6)
+      const cornerCeil = Math.sqrt(Math.max(0, aLatMax) / k)
+      const baseTarget = Math.min(targetSpeed, cornerCeil, effectiveMaxTargetSpeed)
+
+      // (B) Rate limit sur la consigne (borne les crans de montée/descente)
+      const prevCmd = commandedTargetSpeeds[i]
+      const maxRise = targetRiseRateLimit * dt
+      const maxDrop = targetDropRateLimit * dt
+      let bounded = baseTarget
+      if (bounded > prevCmd + maxRise) bounded = prevCmd + maxRise
+      if (bounded < prevCmd - maxDrop) bounded = prevCmd - maxDrop
+
+      // (C) Passe-bas 1er ordre sur la consigne
+      const alpha = 1 - Math.exp(-targetSpeedDamping * dt)
+      commandedTargetSpeeds[i] = prevCmd + (bounded - prevCmd) * alpha
+
       let slope = 0
       if (totalLength > 0 && lookAhead > 0) {
         const currentDistance = progress[i]
@@ -222,7 +250,7 @@ self.onmessage = async (e: MessageEvent) => {
         slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
       }
 
-      const slopeAdjustedTarget = adjustTargetSpeedForSlope(targetSpeed, slope, {
+      const slopeAdjustedTarget = adjustTargetSpeedForSlope(commandedTargetSpeeds[i], slope, {
         maxSlope: 0.25,
         maxUphillPenalty: 2,
         maxDownhillBoost: 1,
@@ -230,42 +258,9 @@ self.onmessage = async (e: MessageEvent) => {
         maxSpeed: effectiveMaxTargetSpeed + 0.5,
       })
 
-      // 1) Sécurité basique
-      const safetyClampedTarget = MathUtils.clamp(
-        slopeAdjustedTarget,
-        effectiveMinTargetSpeed,
-        effectiveMaxTargetSpeed
-      )
-
-      // 2) Courbe-aware floor (VARIANTE SOFT) : baisse max réduite en virage
-      const { intensity } = computeCurvatureEnvelope(
-        spline,
-        progress[i],
-        totalLength,
-        lookAheadDistance,
-        minRadius
-      )
-      // Autorise de 0.2 m/s (quasi ligne droite) à ~1.8 m/s (virage serré)
-      const cornerDropMax = MathUtils.lerp(0.2, 1.8, intensity)
-      const maxSpeedThisStep = effectiveMaxTargetSpeed
-      const minSpeedThisStep = Math.max(effectiveMinTargetSpeed, maxSpeedThisStep - cornerDropMax)
-      let boundedTarget = MathUtils.clamp(safetyClampedTarget, minSpeedThisStep, maxSpeedThisStep)
-
-      // 3) Limiteur de chute (rate limiter) — borne la baisse par dt
-      const prevCmdRL = commandedTargetSpeeds[i] || boundedTarget
-      const maxDropThisStep = targetDropRateLimit * dt
-      if (boundedTarget < prevCmdRL - maxDropThisStep) {
-        boundedTarget = prevCmdRL - maxDropThisStep
-      }
-
-      // 4) Lissage temporel (passe-bas 1er ordre, plus fort qu'avant)
-      const alpha = 1 - Math.exp(-targetSpeedDamping * dt)
-      const prevCmd = commandedTargetSpeeds[i] || boundedTarget
-      commandedTargetSpeeds[i] = MathUtils.lerp(prevCmd, boundedTarget, alpha)
-
       const newSpeed = adjustSpeedTowardsTarget(
         previousSpeed,
-        commandedTargetSpeeds[i],
+        slopeAdjustedTarget,
         dt,
         maxAcceleration,
         maxDeceleration
@@ -333,7 +328,9 @@ self.onmessage = async (e: MessageEvent) => {
     minTargetSpeed = payload.minTargetSpeed ?? minTargetSpeed
     maxAcceleration = payload.maxAcceleration ?? maxAcceleration
     maxDeceleration = payload.maxDeceleration ?? maxDeceleration
+    aLatMax = payload.aLatMax ?? aLatMax
     targetSpeedDamping = payload.targetSpeedDamping ?? targetSpeedDamping
+    targetRiseRateLimit = payload.targetRiseRateLimit ?? targetRiseRateLimit
     targetDropRateLimit = payload.targetDropRateLimit ?? targetDropRateLimit
   }
 }
