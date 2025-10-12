@@ -12,6 +12,7 @@ import {
   adjustTargetSpeedForSlope,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
+  computeTargetSpeedCompensation,
   estimateSafeTargetSpeed,
 } from './speedControl'
 import {
@@ -241,7 +242,8 @@ self.onmessage = async (e: MessageEvent) => {
             lengthRatioRange.min,
             lengthRatioRange.max,
           )
-          const desired = targetSpeed * clampedRatio
+          const compensation = computeTargetSpeedCompensation(clampedRatio)
+          const desired = targetSpeed * compensation
           compensatedTarget = MathUtils.clamp(
             desired,
             effectiveMinTargetSpeed,

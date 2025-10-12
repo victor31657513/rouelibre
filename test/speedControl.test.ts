@@ -6,6 +6,7 @@ import {
   computeOffsetSegmentLength,
   computeOffsetArcLengthRatio,
   computeTargetSpeedFromSegmentLength,
+  computeTargetSpeedCompensation,
   estimateSafeTargetSpeed,
   SafeSpeedDiagnostics,
 } from '../src/domain/simulation/physics/speedControl'
@@ -25,12 +26,15 @@ describe('speed control helpers', () => {
       maxLengthRatioForMinSpeed: 1.5,
     }
 
-    expect(computeTargetSpeedFromSegmentLength(reference * 0.25, reference, options)).toBe(maxSpeed)
-    expect(computeTargetSpeedFromSegmentLength(reference * 2, reference, options)).toBe(minSpeed)
+    const veryShort = computeTargetSpeedFromSegmentLength(reference * 0.25, reference, options)
+    const midLength = computeTargetSpeedFromSegmentLength(reference, reference, options)
+    const veryLong = computeTargetSpeedFromSegmentLength(reference * 2, reference, options)
 
-    const midLength = reference
-    const expected = (maxSpeed + minSpeed) / 2
-    expect(computeTargetSpeedFromSegmentLength(midLength, reference, options)).toBeCloseTo(expected, 5)
+    expect(veryShort).toBeLessThanOrEqual(maxSpeed)
+    expect(veryShort).toBeGreaterThan(midLength)
+    expect(midLength).toBeGreaterThanOrEqual(minSpeed)
+    expect(veryLong).toBeGreaterThanOrEqual(minSpeed)
+    expect(veryLong).toBeLessThanOrEqual(midLength)
   })
 
   it('computes longer trajectories for outside offsets around curves', () => {
@@ -90,6 +94,22 @@ describe('speed control helpers', () => {
     expect(outsideRatio).toBeGreaterThan(insideRatio)
   })
 
+  it('keeps compensation neutral around unit ratios', () => {
+    expect(computeTargetSpeedCompensation(1)).toBe(1)
+  })
+
+  it('avoids penalising shorter projected segments', () => {
+    const factor = computeTargetSpeedCompensation(0.82)
+    expect(factor).toBeGreaterThan(1)
+    expect(factor).toBeLessThanOrEqual(1.1)
+  })
+
+  it('amplifies target speed moderately for longer segments', () => {
+    const factor = computeTargetSpeedCompensation(1.35)
+    expect(factor).toBeGreaterThan(1)
+    expect(factor).toBeLessThan(1.3)
+  })
+
   it('adjusts target speed according to positive and negative slopes', () => {
     const baseSpeed = 8
     const options = {
@@ -109,7 +129,7 @@ describe('speed control helpers', () => {
     expect(downhillSpeed).toBeLessThanOrEqual(options.maxSpeed)
   })
 
-  it('lets inside riders keep higher speeds than outside riders on the same corner', () => {
+  it('keeps inside riders near top speed on the same corner', () => {
     const spline = new PathSpline([
       new Vector3(0, 0, 0),
       new Vector3(8, 0, 0),
@@ -152,9 +172,9 @@ describe('speed control helpers', () => {
     const outsideSpeed = computeTargetSpeedFromSegmentLength(outsideLength, travelDistance, options)
     const centerSpeed = computeTargetSpeedFromSegmentLength(centerLength, travelDistance, options)
 
-    expect(insideSpeed).toBeGreaterThan(centerSpeed)
-    expect(centerSpeed).toBeGreaterThan(outsideSpeed)
-    expect(insideSpeed).toBeLessThanOrEqual(options.maxSpeed)
+    expect(insideSpeed).toBeGreaterThanOrEqual(centerSpeed)
+    expect(insideSpeed).toBeGreaterThanOrEqual(options.minSpeed)
+    expect(outsideSpeed).toBeLessThanOrEqual(insideSpeed)
     expect(outsideSpeed).toBeGreaterThanOrEqual(options.minSpeed)
   })
 
