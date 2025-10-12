@@ -8,7 +8,6 @@ export interface FollowCameraParams {
   maxPitchRate?: number
   deadzoneDeg?: number
   lookAheadTime?: number
-  chicaneBypassWeight?: number
   lowPassAlpha?: number
 }
 
@@ -24,7 +23,6 @@ export class StabilizedFollowCamera {
   maxPitchRate: number // radians per second
   deadzoneDeg: number
   lookAheadTime: number
-  chicaneBypassWeight: number
   lowPassAlpha: number
 
   private _smoothedQuat = new THREE.Quaternion()
@@ -66,7 +64,6 @@ export class StabilizedFollowCamera {
     this.maxPitchRate = (params.maxPitchRate ?? 90) * THREE.MathUtils.DEG2RAD
     this.deadzoneDeg = params.deadzoneDeg ?? 8
     this.lookAheadTime = params.lookAheadTime ?? 0.3
-    this.chicaneBypassWeight = params.chicaneBypassWeight ?? 0.7
     this.lowPassAlpha = params.lowPassAlpha ?? 0.12
 
     this._smoothedQuat.copy(camera.quaternion)
@@ -80,7 +77,6 @@ export class StabilizedFollowCamera {
   setMaxPitchRate(v: number): void { this.maxPitchRate = v * THREE.MathUtils.DEG2RAD }
   setDeadzoneDeg(v: number): void { this.deadzoneDeg = v }
   setLookAheadTime(v: number): void { this.lookAheadTime = v }
-  setChicaneBypassWeight(v: number): void { this.chicaneBypassWeight = v }
   setLowPassAlpha(v: number): void { this.lowPassAlpha = v }
 
   update(dt: number, riders: THREE.Object3D[]): void {
@@ -116,10 +112,7 @@ export class StabilizedFollowCamera {
       return
     }
     followDir.normalize()
-    const bypassDir = avgVel.clone().setY(0)
-    if (bypassDir.lengthSq() > 1e-6) bypassDir.normalize()
-    else bypassDir.copy(followDir)
-    const desiredForward = followDir.clone().lerp(bypassDir, this.chicaneBypassWeight).normalize()
+    const desiredForward = followDir
 
     const forward = this.camera.getWorldDirection(new THREE.Vector3())
     const up = this._worldUp

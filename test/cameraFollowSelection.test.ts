@@ -17,7 +17,6 @@ describe('camera follows selected rider', () => {
       deadzoneDeg: 0,
       maxYawRate: 360,
       maxPitchRate: 360,
-      chicaneBypassWeight: 0,
       lookAheadTime: 0,
       lowPassAlpha: 1,
     })
