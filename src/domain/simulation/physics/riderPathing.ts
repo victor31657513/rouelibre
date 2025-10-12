@@ -258,6 +258,37 @@ export function computeDesiredOffsetProfile(
   return MathUtils.clamp(blended * intensity, -maxOffset, maxOffset)
 }
 
+export function constrainOffsetWithinRate(
+  current: number,
+  desired: number,
+  minBound: number,
+  maxBound: number,
+  maxRate: number,
+  timeBudget: number
+): number {
+  const clampedMin = Math.min(minBound, maxBound)
+  const clampedMax = Math.max(minBound, maxBound)
+  const clampedCurrent = MathUtils.clamp(current, clampedMin, clampedMax)
+  const clampedTarget = MathUtils.clamp(desired, clampedMin, clampedMax)
+
+  if (!Number.isFinite(maxRate) || maxRate <= 0) {
+    return clampedTarget
+  }
+
+  if (!Number.isFinite(timeBudget) || timeBudget <= 0) {
+    return clampedCurrent
+  }
+
+  const maxDelta = Math.abs(maxRate) * timeBudget
+  if (!Number.isFinite(maxDelta) || maxDelta <= 0) {
+    return clampedCurrent
+  }
+
+  const minReachable = clampedCurrent - maxDelta
+  const maxReachable = clampedCurrent + maxDelta
+  return MathUtils.clamp(clampedTarget, minReachable, maxReachable)
+}
+
 export function steerOffsetTowardTarget(
   current: number,
   desired: number,
