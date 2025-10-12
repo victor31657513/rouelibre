@@ -248,6 +248,25 @@ export interface SafeSpeedEstimateOptions {
   maxTargetSpeed: number
   minTargetSpeed?: number
   dt: number
+  diagnostics?: SafeSpeedDiagnostics
+}
+
+export type SafeSpeedLimitReason =
+  | 'none'
+  | 'neighbor-bounds'
+  | 'road-bounds'
+  | 'geometry'
+
+export interface SafeSpeedDiagnostics {
+  limitingSpeed: number
+  limitingReason: SafeSpeedLimitReason
+  limitingStep: number
+  candidateSpeed: number
+  offset: number
+  minBound: number
+  maxBound: number
+  minLeftMargin: number
+  minRightMargin: number
 }
 
 function wrapDistance(distance: number, totalLength: number): number {
@@ -257,6 +276,63 @@ function wrapDistance(distance: number, totalLength: number): number {
 
 function isFiniteNumber(value: number): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+interface SpeedCheckDetail {
+  speed: number
+  reason: SafeSpeedLimitReason
+  step: number
+  offset: number
+  minBound: number
+  maxBound: number
+  minLeftMargin: number
+  minRightMargin: number
+}
+
+function createSpeedCheckDetail(
+  initialOffset: number,
+  minBound: number,
+  maxBound: number
+): SpeedCheckDetail {
+  const clampedOffset = MathUtils.clamp(initialOffset, minBound, maxBound)
+  return {
+    speed: 0,
+    reason: 'none',
+    step: 0,
+    offset: clampedOffset,
+    minBound,
+    maxBound,
+    minLeftMargin: clampedOffset - minBound,
+    minRightMargin: maxBound - clampedOffset,
+  }
+}
+
+function resetSpeedCheckDetail(
+  detail: SpeedCheckDetail,
+  speed: number,
+  offset: number,
+  minBound: number,
+  maxBound: number
+): void {
+  detail.speed = speed
+  detail.reason = 'none'
+  detail.step = 0
+  detail.offset = offset
+  detail.minBound = minBound
+  detail.maxBound = maxBound
+  detail.minLeftMargin = offset - minBound
+  detail.minRightMargin = maxBound - offset
+}
+
+function copySpeedCheckDetail(target: SpeedCheckDetail, source: SpeedCheckDetail): void {
+  target.speed = source.speed
+  target.reason = source.reason
+  target.step = source.step
+  target.offset = source.offset
+  target.minBound = source.minBound
+  target.maxBound = source.maxBound
+  target.minLeftMargin = source.minLeftMargin
+  target.minRightMargin = source.minRightMargin
 }
 
 export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): number {
@@ -274,41 +350,101 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
     maxTargetSpeed,
     minTargetSpeed = 0,
     dt,
+    diagnostics,
   } = options
 
-  if (!spline || !isFiniteNumber(maxTargetSpeed) || maxTargetSpeed <= 0) {
-    return Math.max(0, maxTargetSpeed)
+  const finiteMaxTarget = isFiniteNumber(maxTargetSpeed) ? maxTargetSpeed : 0
+  const maxSpeed = Math.max(0, finiteMaxTarget)
+  const clampedMinBound = Math.max(-maxOffset, neighborMin)
+  const clampedMaxBound = Math.min(maxOffset, neighborMax)
+  const clampedOffset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
+
+  if (diagnostics) {
+    diagnostics.limitingSpeed = maxSpeed
+    diagnostics.limitingReason = 'none'
+    diagnostics.limitingStep = 0
+    diagnostics.candidateSpeed = maxSpeed
+    diagnostics.offset = clampedOffset
+    diagnostics.minBound = clampedMinBound
+    diagnostics.maxBound = clampedMaxBound
+    diagnostics.minLeftMargin = clampedOffset - clampedMinBound
+    diagnostics.minRightMargin = clampedMaxBound - clampedOffset
+  }
+
+  if (!spline || finiteMaxTarget <= 0) {
+    return Math.max(0, finiteMaxTarget)
+  }
+
+  if (clampedMinBound > clampedMaxBound) {
+    if (diagnostics) {
+      diagnostics.limitingSpeed = 0
+      diagnostics.limitingReason = 'neighbor-bounds'
+      diagnostics.candidateSpeed = maxSpeed
+      diagnostics.offset = clampedOffset
+      diagnostics.minBound = clampedMinBound
+      diagnostics.maxBound = clampedMaxBound
+      diagnostics.minLeftMargin = 0
+      diagnostics.minRightMargin = 0
+    }
+    return 0
   }
 
   const safeDt = isFiniteNumber(dt) && dt > 0 ? dt : 0
   const safeLookAhead = isFiniteNumber(lookAheadDistance) ? Math.max(0, lookAheadDistance) : 0
   if (safeLookAhead <= 1e-3 || safeDt <= 0) {
-    const minSpeed = Math.max(0, Math.min(maxTargetSpeed, minTargetSpeed))
-    return Math.max(minSpeed, Math.max(0, maxTargetSpeed))
+    const minSpeed = Math.max(0, Math.min(maxSpeed, minTargetSpeed))
+    const result = Math.max(minSpeed, maxSpeed)
+    if (diagnostics) {
+      diagnostics.limitingSpeed = result
+      diagnostics.limitingReason = 'none'
+      diagnostics.candidateSpeed = maxSpeed
+      diagnostics.offset = clampedOffset
+      diagnostics.minBound = clampedMinBound
+      diagnostics.maxBound = clampedMaxBound
+      diagnostics.minLeftMargin = clampedOffset - clampedMinBound
+      diagnostics.minRightMargin = clampedMaxBound - clampedOffset
+    }
+    return result
   }
 
   const lookAheadRelaxation = 0.85
   const evaluationLookAhead = Math.max(safeLookAhead * lookAheadRelaxation, 1e-3)
-
-  const clampedMinBound = Math.max(-maxOffset, neighborMin)
-  const clampedMaxBound = Math.min(maxOffset, neighborMax)
-  if (clampedMinBound > clampedMaxBound) {
-    return 0
-  }
-
   const eps = 1e-3
-  const maxSpeed = Math.max(0, maxTargetSpeed)
 
-  const isSpeedSafe = (speed: number): boolean => {
+  const scratchDetail = diagnostics
+    ? createSpeedCheckDetail(clampedOffset, clampedMinBound, clampedMaxBound)
+    : null
+  const bestSuccessDetail = diagnostics
+    ? createSpeedCheckDetail(clampedOffset, clampedMinBound, clampedMaxBound)
+    : null
+  const lastFailureDetail = diagnostics
+    ? createSpeedCheckDetail(clampedOffset, clampedMinBound, clampedMaxBound)
+    : null
+  let bestSuccessSpeedRecorded = diagnostics ? -Infinity : 0
+
+  const evaluateSpeed = (speed: number): boolean => {
     if (!isFiniteNumber(speed) || speed <= 0) {
+      if (scratchDetail) {
+        resetSpeedCheckDetail(
+          scratchDetail,
+          Math.max(0, speed),
+          clampedOffset,
+          clampedMinBound,
+          clampedMaxBound
+        )
+      }
       return true
     }
 
     const safeSpeed = Math.max(0, speed)
+    let offset = clampedOffset
     const distancePerStep = Math.max(safeSpeed * safeDt, evaluationLookAhead / 8)
     const stepCount = Math.max(1, Math.ceil(evaluationLookAhead / Math.max(distancePerStep, eps)))
     const stepDistance = evaluationLookAhead / stepCount
-    let offset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
+
+    if (scratchDetail) {
+      resetSpeedCheckDetail(scratchDetail, safeSpeed, offset, clampedMinBound, clampedMaxBound)
+    }
 
     for (let step = 1; step <= stepCount; step++) {
       const traveled = stepDistance * step
@@ -329,10 +465,35 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
         maxOffsetRate
       )
 
+      if (scratchDetail) {
+        const leftMargin = offset - clampedMinBound
+        const rightMargin = clampedMaxBound - offset
+        if (leftMargin < scratchDetail.minLeftMargin) {
+          scratchDetail.minLeftMargin = leftMargin
+        }
+        if (rightMargin < scratchDetail.minRightMargin) {
+          scratchDetail.minRightMargin = rightMargin
+        }
+      }
+
       if (offset < clampedMinBound - eps || offset > clampedMaxBound + eps) {
+        if (scratchDetail) {
+          scratchDetail.reason = 'neighbor-bounds'
+          scratchDetail.step = step
+          scratchDetail.offset = offset
+          scratchDetail.minBound = clampedMinBound
+          scratchDetail.maxBound = clampedMaxBound
+        }
         return false
       }
       if (Math.abs(offset) > maxOffset + eps) {
+        if (scratchDetail) {
+          scratchDetail.reason = 'road-bounds'
+          scratchDetail.step = step
+          scratchDetail.offset = offset
+          scratchDetail.minBound = -maxOffset
+          scratchDetail.maxBound = maxOffset
+        }
         return false
       }
       if (
@@ -340,34 +501,98 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
         !Number.isFinite(scratchPosition.y) ||
         !Number.isFinite(scratchPosition.z)
       ) {
+        if (scratchDetail) {
+          scratchDetail.reason = 'geometry'
+          scratchDetail.step = step
+          scratchDetail.offset = offset
+        }
         return false
       }
+    }
+
+    if (scratchDetail) {
+      scratchDetail.step = stepCount
+      scratchDetail.offset = offset
+      scratchDetail.minBound = clampedMinBound
+      scratchDetail.maxBound = clampedMaxBound
     }
 
     return true
   }
 
-  if (isSpeedSafe(maxSpeed)) {
-    return maxSpeed
+  const recordSuccess = () => {
+    if (!diagnostics || !scratchDetail || !bestSuccessDetail) return
+    if (scratchDetail.speed >= bestSuccessSpeedRecorded - 1e-6) {
+      copySpeedCheckDetail(bestSuccessDetail, scratchDetail)
+      bestSuccessSpeedRecorded = scratchDetail.speed
+    }
+  }
+
+  const recordFailure = () => {
+    if (!diagnostics || !scratchDetail || !lastFailureDetail) return
+    copySpeedCheckDetail(lastFailureDetail, scratchDetail)
   }
 
   let best = 0
+
+  if (evaluateSpeed(maxSpeed)) {
+    best = maxSpeed
+    recordSuccess()
+    if (diagnostics && bestSuccessDetail) {
+      diagnostics.limitingSpeed = bestSuccessDetail.speed
+      diagnostics.limitingReason = 'none'
+      diagnostics.limitingStep = bestSuccessDetail.step
+      diagnostics.candidateSpeed = bestSuccessDetail.speed
+      diagnostics.offset = bestSuccessDetail.offset
+      diagnostics.minBound = bestSuccessDetail.minBound
+      diagnostics.maxBound = bestSuccessDetail.maxBound
+      diagnostics.minLeftMargin = bestSuccessDetail.minLeftMargin
+      diagnostics.minRightMargin = bestSuccessDetail.minRightMargin
+    }
+    return best
+  }
+
+  recordFailure()
+
   let low = 0
   let high = maxSpeed
   for (let i = 0; i < 16; i++) {
     const mid = (low + high) / 2
-    if (isSpeedSafe(mid)) {
+    if (evaluateSpeed(mid)) {
       best = mid
       low = mid
+      recordSuccess()
     } else {
       high = mid
+      recordFailure()
     }
   }
 
   const minSpeed = Math.max(0, Math.min(maxSpeed, minTargetSpeed))
-  if (best >= minSpeed) {
-    return Math.max(minSpeed, best)
+  const result = best >= minSpeed ? Math.max(minSpeed, best) : best
+
+  if (diagnostics) {
+    diagnostics.limitingSpeed = result
+    if (lastFailureDetail && lastFailureDetail.reason !== 'none' && lastFailureDetail.speed > result + 1e-4) {
+      diagnostics.limitingReason = lastFailureDetail.reason
+      diagnostics.limitingStep = lastFailureDetail.step
+      diagnostics.candidateSpeed = lastFailureDetail.speed
+      diagnostics.offset = lastFailureDetail.offset
+      diagnostics.minBound = lastFailureDetail.minBound
+      diagnostics.maxBound = lastFailureDetail.maxBound
+      diagnostics.minLeftMargin = lastFailureDetail.minLeftMargin
+      diagnostics.minRightMargin = lastFailureDetail.minRightMargin
+    } else if (bestSuccessDetail) {
+      diagnostics.limitingReason = 'none'
+      diagnostics.limitingStep = bestSuccessDetail.step
+      diagnostics.candidateSpeed = bestSuccessDetail.speed
+      diagnostics.offset = bestSuccessDetail.offset
+      diagnostics.minBound = bestSuccessDetail.minBound
+      diagnostics.maxBound = bestSuccessDetail.maxBound
+      diagnostics.minLeftMargin = bestSuccessDetail.minLeftMargin
+      diagnostics.minRightMargin = bestSuccessDetail.minRightMargin
+    }
   }
 
-  return best
+  return result
 }

@@ -7,6 +7,7 @@ import {
   computeOffsetArcLengthRatio,
   computeTargetSpeedFromSegmentLength,
   estimateSafeTargetSpeed,
+  SafeSpeedDiagnostics,
 } from '../src/domain/simulation/physics/speedControl'
 import { computeSignedCurvature } from '../src/domain/simulation/physics/riderPathing'
 import { PathSpline } from '../src/domain/route/pathSpline'
@@ -235,4 +236,87 @@ describe('speed control helpers', () => {
     expect(targetSpeed).toBeCloseTo(9, 5)
   })
 
+  it('reports positive margins and no limiting reason when the path is fully clear', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(12, 0, 0),
+    ])
+
+    const diagnostics: SafeSpeedDiagnostics = {
+      limitingSpeed: 0,
+      limitingReason: 'none',
+      limitingStep: 0,
+      candidateSpeed: 0,
+      offset: 0,
+      minBound: 0,
+      maxBound: 0,
+      minLeftMargin: 0,
+      minRightMargin: 0,
+    }
+
+    const speed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 3,
+      currentOffset: 0,
+      desiredOffset: 0,
+      neighborMin: -0.6,
+      neighborMax: 0.6,
+      lookAheadDistance: 6,
+      maxOffset: 1,
+      maxOffsetRate: 3,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.12,
+      diagnostics,
+    })
+
+    expect(speed).toBe(9)
+    expect(diagnostics.limitingReason).toBe('none')
+    expect(diagnostics.candidateSpeed).toBeCloseTo(9, 5)
+    expect(diagnostics.minLeftMargin).toBeGreaterThan(0)
+    expect(diagnostics.minRightMargin).toBeGreaterThan(0)
+  })
+
+  it('tracks collapsed neighbor corridors as the limiting factor', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(10, 0, 0),
+    ])
+
+    const diagnostics: SafeSpeedDiagnostics = {
+      limitingSpeed: 0,
+      limitingReason: 'none',
+      limitingStep: 0,
+      candidateSpeed: 0,
+      offset: 0,
+      minBound: 0,
+      maxBound: 0,
+      minLeftMargin: 0,
+      minRightMargin: 0,
+    }
+
+    const speed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 2,
+      currentOffset: 0.15,
+      desiredOffset: 0,
+      neighborMin: 0.15,
+      neighborMax: 0.1,
+      lookAheadDistance: 5,
+      maxOffset: 1,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.1,
+      diagnostics,
+    })
+
+    expect(speed).toBeLessThan(5)
+    expect(diagnostics.limitingReason).toBe('neighbor-bounds')
+    expect(diagnostics.candidateSpeed).toBeCloseTo(9, 5)
+    expect(diagnostics.minLeftMargin).toBeLessThanOrEqual(0)
+    expect(diagnostics.minRightMargin).toBeLessThanOrEqual(0)
+  })
 })
