@@ -15,15 +15,16 @@ import {
   computeRelaxedOffsetTarget,
   computeTargetSpeedCompensation,
   projectWorldDistanceOntoCenterline,
-  estimateSafeTargetSpeed,
 } from './speedControl'
 import {
+  computeCurvatureEnvelope,
   computeDesiredOffsetProfile,
   computeNeighborBounds,
   computeSignedCurvature,
   constrainOffsetWithinRate,
   steerOffsetTowardTarget,
 } from './riderPathing'
+import { draftingFactor, solveVelocityFromPower } from './aero'
 
 let world: RAPIER.World
 let N = 0
@@ -61,6 +62,29 @@ let targetRiseRateLimit = 0.8 // m/s par seconde
 let targetDropRateLimit = 1.0 // m/s par seconde
 const maxOffsetRate = 2.5
 
+const GRAVITY = 9.80665
+const DEFAULT_AIR_DENSITY = 1.2
+const BASE_CDA = 0.32
+const DEFAULT_CRR = 0.004
+const DEFAULT_DRIVETRAIN_EFFICIENCY = 0.97
+const DEFAULT_SYSTEM_MASS = 82
+const DEFAULT_POWER_AVAILABLE = 380
+const DEFAULT_LATERAL_ACCEL = 5.5
+const MAX_DRAFTING_LOOKAHEAD = 12
+const MIN_DRAFTING_LOOKAHEAD = 2
+
+let airDensity = DEFAULT_AIR_DENSITY
+let baseCdA = BASE_CDA
+let rollingResistanceCoeff = DEFAULT_CRR
+let drivetrainEfficiency = DEFAULT_DRIVETRAIN_EFFICIENCY
+let systemMass = DEFAULT_SYSTEM_MASS
+let availablePower = DEFAULT_POWER_AVAILABLE
+let maxLateralAcceleration = DEFAULT_LATERAL_ACCEL
+
+let warnedLateralAccel = false
+let warnedCdA = false
+let warnedDrafting = false
+
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 
 function mulberry32(a: number) {
@@ -77,6 +101,36 @@ function computeSlope(current: Vector3, ahead: Vector3, distance: number): numbe
     return 0
   }
   return (ahead.y - current.y) / distance
+}
+
+function computeDraftingContext(
+  index: number,
+  progress: Float32Array,
+  totalLength: number,
+  maxDistance: number,
+): { gapToLeader: number; leadersAhead: number } {
+  if (!Number.isFinite(maxDistance) || maxDistance <= 0) {
+    return { gapToLeader: Infinity, leadersAhead: 0 }
+  }
+
+  const count = progress.length
+  let bestGap = Infinity
+  let leaders = 0
+
+  for (let j = 0; j < count; j++) {
+    if (j === index) continue
+    let diff = progress[j] - progress[index]
+    if (totalLength > 0 && diff <= 0) {
+      diff += totalLength
+    }
+    if (diff <= 0 || diff > maxDistance) continue
+    leaders++
+    if (diff < bestGap) {
+      bestGap = diff
+    }
+  }
+
+  return { gapToLeader: leaders > 0 ? bestGap : Infinity, leadersAhead: leaders }
 }
 
 
@@ -223,21 +277,79 @@ self.onmessage = async (e: MessageEvent) => {
         availableTime,
       )
 
-      const targetSpeed = estimateSafeTargetSpeed({
+      let slope = 0
+      if (totalLength > 0 && lookAheadDistance > 1e-3) {
+        const currentDistance = progress[i]
+        const aheadDistance = Math.min(currentDistance + lookAheadDistance, totalLength)
+        const travelDistance = Math.max(lookAheadDistance, 1e-3)
+        const currentSample = spline.sampleByDistance(currentDistance)
+        const aheadSample = spline.sampleByDistance(aheadDistance)
+        slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
+      }
+
+      const curvatureEnvelope = computeCurvatureEnvelope(
         spline,
+        progress[i],
         totalLength,
-        currentDistance: progress[i],
-        currentOffset,
-        desiredOffset: targetOffset,
-        neighborMin: minBound,
-        neighborMax: maxBound,
         lookAheadDistance,
-        maxOffset,
-        maxOffsetRate,
-        maxTargetSpeed: effectiveMaxTargetSpeed,
-        minTargetSpeed: effectiveMinTargetSpeed,
-        dt,
+        minRadius,
+      )
+      const kEnv = Math.max(curvatureEnvelope.maxAbsCurvature, 0)
+
+      let vCorner = effectiveMaxTargetSpeed
+      if (!(maxLateralAcceleration > 0)) {
+        if (!warnedLateralAccel) {
+          console.warn('[physics] aLatMax must stay positive to compute corner speeds')
+          warnedLateralAccel = true
+        }
+      } else {
+        const safeCurvature = Math.max(kEnv, 1e-6)
+        const candidate = Math.sqrt(maxLateralAcceleration / safeCurvature)
+        if (Number.isFinite(candidate) && candidate > 0) {
+          vCorner = candidate
+        }
+      }
+
+      const slipLookahead = lookAheadDistance > 0
+        ? Math.min(Math.max(lookAheadDistance, MIN_DRAFTING_LOOKAHEAD), MAX_DRAFTING_LOOKAHEAD)
+        : MAX_DRAFTING_LOOKAHEAD
+      const draftingContext = computeDraftingContext(i, progress, totalLength, slipLookahead)
+      let S = draftingFactor(draftingContext.gapToLeader, draftingContext.leadersAhead)
+      if ((S < 0 || S > 1) && !warnedDrafting) {
+        console.warn('[physics] drafting factor out of bounds, clamping to [0, 1]')
+        warnedDrafting = true
+      }
+      S = MathUtils.clamp(S, 0, 1)
+
+      let CdAeff = baseCdA * S
+      if (CdAeff < 0 && !warnedCdA) {
+        console.warn('[physics] effective CdA fell below zero, clamping to zero')
+        warnedCdA = true
+      }
+      CdAeff = Math.max(0, CdAeff)
+
+      const vPower = solveVelocityFromPower(availablePower, {
+        airDensity,
+        cdA: CdAeff,
+        crr: rollingResistanceCoeff,
+        mass: systemMass,
+        slope,
+        gravity: GRAVITY,
+        drivetrainEfficiency,
       })
+
+      const candidateSpeeds = [vCorner, vPower, effectiveMaxTargetSpeed].filter(
+        (value) => Number.isFinite(value) && value > 0,
+      )
+      const vTargetRaw =
+        candidateSpeeds.length > 0
+          ? Math.min(...candidateSpeeds)
+          : effectiveMaxTargetSpeed
+      const targetSpeed = MathUtils.clamp(
+        vTargetRaw,
+        effectiveMinTargetSpeed,
+        effectiveMaxTargetSpeed,
+      )
 
       let compensatedTarget = targetSpeed
       if (lookAheadDistance > 1e-3) {
@@ -301,16 +413,6 @@ self.onmessage = async (e: MessageEvent) => {
       // (C) Passe-bas 1er ordre sur la consigne
       const alpha = 1 - Math.exp(-targetSpeedDamping * dt)
       commandedTargetSpeeds[i] = prevCmd + (bounded - prevCmd) * alpha
-
-      let slope = 0
-      if (totalLength > 0 && lookAhead > 0) {
-        const currentDistance = progress[i]
-        const aheadDistance = Math.min(currentDistance + lookAhead, totalLength)
-        const travelDistance = Math.max(lookAheadDistance, 1e-3)
-        const currentSample = spline.sampleByDistance(currentDistance)
-        const aheadSample = spline.sampleByDistance(aheadDistance)
-        slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
-      }
 
       const slopeAdjustedTarget = adjustTargetSpeedForSlope(commandedTargetSpeeds[i], slope, {
         maxSlope: 0.25,
