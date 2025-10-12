@@ -2,6 +2,19 @@
 @plugin "daisyui";
 body {
   margin: 0;
+  min-height: 100vh;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+@supports (height: 100dvh) {
+  #app {
+    height: 100dvh;
+  }
 }
 
 /* Ensure UI elements remain visible even without Tailwind utilities */
@@ -34,4 +47,56 @@ body {
   left: 1rem; /* left-4 */
   z-index: 50; /* z-50 */
   font-family: system-ui, sans-serif; /* font-sans */
+}
+
+@media (max-width: 640px) {
+  #home-btn {
+    top: 0.75rem; /* top-3 */
+    left: 0.75rem; /* left-3 */
+  }
+
+  #controls {
+    left: 50%;
+    right: auto;
+    bottom: 0.75rem; /* bottom-3 */
+    transform: translateX(-50%);
+    width: calc(100% - 2.5rem);
+    max-width: 22rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem; /* gap-3 */
+  }
+
+  #controls button {
+    flex: 1 1 calc(50% - 0.75rem);
+    min-width: 7.5rem;
+  }
+
+  #route-list {
+    width: calc(100% - 2.5rem);
+    max-height: calc(100vh - 12rem);
+    overflow-y: auto;
+    left: 50%;
+    top: auto;
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0));
+    transform: translate(-50%, 0);
+    padding: 0.75rem; /* p-3 */
+  }
+
+  @supports (height: 100dvh) {
+    #route-list {
+      max-height: calc(100dvh - 12rem);
+    }
+  }
+
+  #version {
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0));
+    font-size: 0.75rem; /* text-xs */
+  }
+}
+
+@media (max-width: 420px) {
+  #controls button {
+    flex-basis: 100%;
+  }
 }
