@@ -5,6 +5,7 @@ import {
   computeLengthRatioRange,
   computeOffsetSegmentLength,
   computeOffsetArcLengthRatio,
+  computeRelaxedOffsetTarget,
   computeTargetSpeedFromSegmentLength,
   computeTargetSpeedCompensation,
   estimateSafeTargetSpeed,
@@ -92,6 +93,16 @@ describe('speed control helpers', () => {
     expect(insideRatio).toBeLessThan(1)
     expect(outsideRatio).toBeGreaterThan(1)
     expect(outsideRatio).toBeGreaterThan(insideRatio)
+  })
+
+  it('relaxes lateral goals when the corridor leaves comfortable margins', () => {
+    const relaxed = computeRelaxedOffsetTarget(0, 1.4, -2, 2, 3.5)
+    expect(relaxed).toBeCloseTo(0, 5)
+  })
+
+  it('keeps aggressive lateral goals when margins collapse', () => {
+    const relaxed = computeRelaxedOffsetTarget(0.25, -0.4, -0.2, 0.3, 3.5)
+    expect(relaxed).toBeCloseTo(-0.2, 5)
   })
 
   it('keeps compensation neutral around unit ratios', () => {
