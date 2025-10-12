@@ -2,21 +2,47 @@ import { describe, it, expect } from 'vitest'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
-  computeTargetSpeed,
+  computeLengthRatioRange,
+  computeOffsetSegmentLength,
+  computeTargetSpeedFromSegmentLength,
 } from '../src/physics/speedControl'
+import { PathSpline } from '../src/systems/pathSmoothing'
+import { Vector3 } from 'three'
 
 describe('speed control helpers', () => {
-  it('computes target speeds based on curvature thresholds', () => {
+  it('maps rider segment length ratios to bounded target speeds', () => {
     const maxSpeed = 9
     const minSpeed = 5
-    const curvatureForMin = 0.2
+    const reference = 10
+    const options = {
+      maxSpeed,
+      minSpeed,
+      minLengthRatioForMaxSpeed: 0.5,
+      maxLengthRatioForMinSpeed: 1.5,
+    }
 
-    expect(computeTargetSpeed(0, maxSpeed, minSpeed, curvatureForMin)).toBe(maxSpeed)
-    expect(computeTargetSpeed(curvatureForMin * 2, maxSpeed, minSpeed, curvatureForMin)).toBe(minSpeed)
+    expect(computeTargetSpeedFromSegmentLength(reference * 0.25, reference, options)).toBe(minSpeed)
+    expect(computeTargetSpeedFromSegmentLength(reference * 2, reference, options)).toBe(maxSpeed)
 
-    const midCurvature = curvatureForMin * 0.5
+    const midLength = reference
     const expected = (maxSpeed + minSpeed) / 2
-    expect(computeTargetSpeed(midCurvature, maxSpeed, minSpeed, curvatureForMin)).toBeCloseTo(expected, 5)
+    expect(computeTargetSpeedFromSegmentLength(midLength, reference, options)).toBeCloseTo(expected, 5)
+  })
+
+  it('computes longer trajectories for outside offsets around curves', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(8, 0, 0),
+      new Vector3(12, 0, 4),
+      new Vector3(12, 0, 12),
+    ])
+    const startDistance = 3
+    const endDistance = Math.min(startDistance + 6, spline.totalLength)
+
+    const insideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, -1.5, 20)
+    const outsideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 1.5, 20)
+
+    expect(insideLength).toBeGreaterThan(outsideLength)
   })
 
   it('limits acceleration and deceleration when approaching the target speed', () => {
@@ -48,5 +74,39 @@ describe('speed control helpers', () => {
     expect(downhillSpeed).toBeGreaterThan(baseSpeed)
     expect(uphillSpeed).toBeGreaterThanOrEqual(options.minSpeed)
     expect(downhillSpeed).toBeLessThanOrEqual(options.maxSpeed)
+  })
+
+  it('lets inside riders keep higher speeds than outside riders on the same corner', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(8, 0, 0),
+      new Vector3(12, 0, 4),
+      new Vector3(12, 0, 12),
+    ])
+    const lookAhead = 6
+    const startDistance = 3
+    const endDistance = Math.min(startDistance + lookAhead, spline.totalLength)
+    const travelDistance = endDistance - startDistance
+    const { min: minRatio, max: maxRatio } = computeLengthRatioRange(1.5, 12)
+
+    const options = {
+      maxSpeed: 9,
+      minSpeed: 5,
+      minLengthRatioForMaxSpeed: minRatio,
+      maxLengthRatioForMinSpeed: maxRatio,
+    }
+
+    const insideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, -1.5, 24)
+    const outsideLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 1.5, 24)
+    const centerLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 0, 24)
+
+    const insideSpeed = computeTargetSpeedFromSegmentLength(insideLength, travelDistance, options)
+    const outsideSpeed = computeTargetSpeedFromSegmentLength(outsideLength, travelDistance, options)
+    const centerSpeed = computeTargetSpeedFromSegmentLength(centerLength, travelDistance, options)
+
+    expect(insideSpeed).toBeGreaterThan(centerSpeed)
+    expect(centerSpeed).toBeGreaterThan(outsideSpeed)
+    expect(insideSpeed).toBeLessThanOrEqual(options.maxSpeed)
+    expect(outsideSpeed).toBeGreaterThanOrEqual(options.minSpeed)
   })
 })
