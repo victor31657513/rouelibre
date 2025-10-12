@@ -64,6 +64,11 @@ export class AppController {
   private lastTouchX = 0
   private lastTouchTap = 0
   private lastTouchPosition: { x: number; y: number } | null = null
+  private touchStartX = 0
+  private touchStartY = 0
+  private touchStartTime = 0
+  private touchAccumulatedDeltaX = 0
+  private touchIsDragging = false
   private lastMiddleTime = 0
   private readonly mouse = new THREE.Vector2()
 
@@ -168,11 +173,15 @@ export class AppController {
       const previousTap = this.lastTouchTap
       const previousPosition = this.lastTouchPosition
 
-      if (previousTap && now - previousTap < 300 && previousPosition) {
+      if (previousTap && now - previousTap < CAMERA_CONTROL.touchDoubleTapMaxDelay && previousPosition) {
         const dx = Math.abs(event.clientX - previousPosition.x)
         const dy = Math.abs(event.clientY - previousPosition.y)
-        if (dx < 30 && dy < 30) {
+        if (dx < CAMERA_CONTROL.touchDoubleTapMaxDistance && dy < CAMERA_CONTROL.touchDoubleTapMaxDistance) {
+          event.preventDefault()
           this.resetCameraToDefault()
+          this.lastTouchTap = 0
+          this.lastTouchPosition = null
+          return
         }
       }
 
@@ -181,14 +190,25 @@ export class AppController {
       this.lastTouchX = event.clientX
       this.lastTouchTap = now
       this.lastTouchPosition = { x: event.clientX, y: event.clientY }
+      this.touchStartX = event.clientX
+      this.touchStartY = event.clientY
+      this.touchStartTime = event.timeStamp
+      this.touchAccumulatedDeltaX = 0
+      this.touchIsDragging = false
       canvas.setPointerCapture(event.pointerId)
       event.preventDefault()
     })
 
     const endTouch = (event: PointerEvent) => {
       if (event.pointerId !== this.activeTouchId) return
+      if (event.type === 'pointerup') {
+        this.evaluateTouchSwipe(event)
+      }
       this.touchRotating = false
       this.activeTouchId = null
+      this.touchIsDragging = false
+      this.touchAccumulatedDeltaX = 0
+      this.touchStartTime = 0
       if (canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId)
       }
@@ -200,7 +220,14 @@ export class AppController {
     canvas.addEventListener('pointermove', (event: PointerEvent) => {
       if (!this.touchRotating || event.pointerId !== this.activeTouchId) return
       const deltaX = event.clientX - this.lastTouchX
-      if (deltaX !== 0) {
+      this.touchAccumulatedDeltaX += Math.abs(deltaX)
+      const elapsed = event.timeStamp - this.touchStartTime
+      if (!this.touchIsDragging) {
+        this.touchIsDragging =
+          elapsed > CAMERA_CONTROL.touchSwipeMaxDuration ||
+          this.touchAccumulatedDeltaX > CAMERA_CONTROL.touchSwipeMinDistance
+      }
+      if (this.touchIsDragging && deltaX !== 0) {
         this.cameraRig.addYaw(deltaX * CAMERA_CONTROL.rotationSensitivity)
       }
       this.lastTouchX = event.clientX
@@ -229,6 +256,24 @@ export class AppController {
     })
 
     document.addEventListener('keydown', (event) => this.handleKeydown(event))
+  }
+
+  private evaluateTouchSwipe(event: PointerEvent): void {
+    if (this.touchIsDragging) return
+    const totalDeltaX = event.clientX - this.touchStartX
+    const totalDeltaY = event.clientY - this.touchStartY
+    const duration = this.touchStartTime ? event.timeStamp - this.touchStartTime : Number.POSITIVE_INFINITY
+
+    if (
+      Math.abs(totalDeltaX) >= CAMERA_CONTROL.touchSwipeMinDistance &&
+      Math.abs(totalDeltaY) <= CAMERA_CONTROL.touchSwipeVerticalTolerance &&
+      duration <= CAMERA_CONTROL.touchSwipeMaxDuration
+    ) {
+      const direction = Math.sign(totalDeltaX)
+      if (direction !== 0) {
+        this.cameraRig.addYaw(direction * CAMERA_CONTROL.swipeRotationStep)
+      }
+    }
   }
 
   private resetCameraToDefault(): void {
