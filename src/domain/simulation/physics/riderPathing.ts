@@ -224,33 +224,38 @@ export function computeDesiredOffsetProfile(
   const behindAbs = Math.abs(curvatureBehind)
   const curvatureAbs = Math.abs(curvatureNow)
   const maxCurvature = Math.max(curvatureAbs, aheadAbs, farAbs, behindAbs)
-  if (maxCurvature < curvatureThreshold * 0.2) {
+  if (maxCurvature < curvatureThreshold * 0.15) {
     return 0
   }
 
-  const outside = direction * maxOffset * 0.8
-  const inside = -direction * maxOffset * 0.9
-
-  if (maxCurvature < 1e-5) {
+  const normalizedCurvature = MathUtils.clamp(
+    maxCurvature / Math.max(curvatureThreshold, 1e-6),
+    0,
+    1
+  )
+  const intensity = Math.pow(normalizedCurvature, 0.4)
+  if (intensity <= 0) {
     return 0
   }
 
-  const curvatureRatio = curvatureAbs / maxCurvature
-  if (curvatureRatio < 0.55) {
-    return outside
-  }
+  const outside = direction * maxOffset * 0.75
+  const inside = -direction * maxOffset * 0.85
 
-  const aheadRatio = aheadAbs / maxCurvature
-  if (aheadRatio > curvatureRatio + 0.1) {
-    return outside
-  }
+  const safeMax = Math.max(maxCurvature, 1e-6)
+  const normalizedAhead = MathUtils.clamp(Math.max(aheadAbs, farAbs) / safeMax, 0, 1)
+  const normalizedBehind = MathUtils.clamp(behindAbs / safeMax, 0, 1)
+  const normalizedCurrent = MathUtils.clamp(curvatureAbs / safeMax, 0, 1)
 
-  const behindRatio = behindAbs / maxCurvature
-  if (behindRatio > curvatureRatio + 0.1) {
-    return outside
-  }
+  const curvatureFactor = MathUtils.smoothstep(normalizedCurrent, 0.2, 1)
+  const balance = MathUtils.clamp(0.5 + 0.5 * (normalizedAhead - normalizedBehind), 0, 1)
+  const apexFactor = MathUtils.clamp(1 - Math.abs(balance - 0.5) * 2, 0, 1)
 
-  return inside
+  const insideWeight = curvatureFactor * apexFactor
+  const outsideWeight = Math.max(0, 1 - insideWeight)
+
+  const blended = outside * outsideWeight + inside * insideWeight
+
+  return MathUtils.clamp(blended * intensity, -maxOffset, maxOffset)
 }
 
 export function steerOffsetTowardTarget(
