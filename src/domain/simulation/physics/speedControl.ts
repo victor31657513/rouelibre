@@ -266,6 +266,24 @@ export function computeOffsetArcLengthRatio(
   return MathUtils.clamp(ratio, clampedMin, clampedMax)
 }
 
+export function projectWorldDistanceOntoCenterline(
+  worldDistance: number,
+  curvature: number,
+  lateralOffset: number,
+  options: { minRatio?: number; maxRatio?: number } = {},
+): number {
+  if (!Number.isFinite(worldDistance) || Math.abs(worldDistance) <= 1e-9) {
+    return 0
+  }
+
+  const ratio = computeOffsetArcLengthRatio(curvature, lateralOffset, options)
+  if (!Number.isFinite(ratio) || ratio <= 1e-6) {
+    return worldDistance
+  }
+
+  return worldDistance / ratio
+}
+
 export function adjustSpeedTowardsTarget(
   currentSpeed: number,
   targetSpeed: number,

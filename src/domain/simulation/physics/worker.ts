@@ -14,6 +14,7 @@ import {
   computeOffsetSegmentLength,
   computeRelaxedOffsetTarget,
   computeTargetSpeedCompensation,
+  projectWorldDistanceOntoCenterline,
   estimateSafeTargetSpeed,
 } from './speedControl'
 import {
@@ -339,7 +340,17 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
 
       const travel = ((previousSpeed + newSpeed) / 2) * dt
-      let s = progress[i] + travel
+      const curvature = computeSignedCurvature(spline, progress[i], totalLength)
+      const centerlineTravel = projectWorldDistanceOntoCenterline(
+        travel,
+        curvature,
+        updatedOffset,
+        {
+          minRatio: lengthRatioRange.min,
+          maxRatio: lengthRatioRange.max,
+        },
+      )
+      let s = progress[i] + centerlineTravel
       if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
       progress[i] = s
 
