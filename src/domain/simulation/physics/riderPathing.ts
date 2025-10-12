@@ -331,3 +331,130 @@ export function steerOffsetTowardTarget(
   return MathUtils.clamp(next, minBound, maxBound)
 }
 
+export interface OffsetCostWeights {
+  power: number
+  gap: number
+  wall: number
+}
+
+export interface OffsetCandidateEvaluationParams {
+  currentOffset: number
+  candidates: number[]
+  powerRatios: number[]
+  minBound: number
+  maxBound: number
+  maxOffset: number
+  gapAhead: number
+  gapThreshold: number
+  weights: OffsetCostWeights
+  wallComfort: number
+  referenceStep: number
+  lateralGapInfluence?: number
+}
+
+export interface OffsetCandidateResult {
+  targetOffset: number
+  bestIndex: number
+  lateralForce: number
+  cost: number
+}
+
+function clampOffset(offset: number, minBound: number, maxBound: number, maxOffset: number): number {
+  const roadMin = -Math.abs(maxOffset)
+  const roadMax = Math.abs(maxOffset)
+  const clampedMin = Math.max(Math.min(minBound, maxBound), roadMin)
+  const clampedMax = Math.min(Math.max(minBound, maxBound), roadMax)
+  return MathUtils.clamp(offset, clampedMin, clampedMax)
+}
+
+export function generateOffsetCandidates(
+  currentOffset: number,
+  delta: number,
+  minBound: number,
+  maxBound: number,
+  maxOffset: number,
+): number[] {
+  const safeDelta = Math.max(0.05, Math.abs(delta))
+  const values = new Set<number>()
+  const push = (value: number) => {
+    const clamped = clampOffset(value, minBound, maxBound, maxOffset)
+    values.add(Number.isFinite(clamped) ? clamped : 0)
+  }
+
+  push(currentOffset)
+  push(currentOffset + safeDelta)
+  push(currentOffset - safeDelta)
+  push(currentOffset + safeDelta * 2)
+  push(currentOffset - safeDelta * 2)
+  push(minBound)
+  push(maxBound)
+
+  return Array.from(values)
+}
+
+export function evaluateOffsetCandidates(
+  params: OffsetCandidateEvaluationParams,
+): OffsetCandidateResult {
+  const {
+    currentOffset,
+    candidates,
+    powerRatios,
+    minBound,
+    maxBound,
+    maxOffset,
+    gapAhead,
+    gapThreshold,
+    weights,
+    wallComfort,
+    referenceStep,
+    lateralGapInfluence = 0.25,
+  } = params
+
+  const safeWallComfort = Math.max(0.05, Math.abs(wallComfort))
+  const safeStep = Math.max(0.05, Math.abs(referenceStep))
+
+  let bestIndex = 0
+  let bestCost = Infinity
+
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = clampOffset(candidates[i], minBound, maxBound, maxOffset)
+    const powerRatio = Math.max(0, powerRatios[i] ?? powerRatios[0] ?? 0)
+
+    const clampedMin = clampOffset(minBound, minBound, maxBound, maxOffset)
+    const clampedMax = clampOffset(maxBound, minBound, maxBound, maxOffset)
+    const leftClearance = Math.max(0, candidate - clampedMin)
+    const rightClearance = Math.max(0, clampedMax - candidate)
+    const minClearance = Math.min(leftClearance, rightClearance)
+
+    const normalizedClearance = MathUtils.clamp(minClearance / safeWallComfort, 0, 1)
+    const wallPenalty = Math.pow(1 - normalizedClearance, 2)
+
+    const effectiveGap = gapAhead + minClearance * lateralGapInfluence
+    const gapShortage = Math.max(0, gapThreshold - effectiveGap)
+    const normalizedGapShortage =
+      gapThreshold > 1e-3 ? Math.min(1, gapShortage / gapThreshold) : 0
+    const gapPenalty = normalizedGapShortage ** 2
+
+    const cost =
+      weights.power * powerRatio +
+      weights.gap * gapPenalty +
+      weights.wall * wallPenalty
+
+    if (cost < bestCost) {
+      bestCost = cost
+      bestIndex = i
+    }
+  }
+
+  const bestOffset = clampOffset(candidates[bestIndex], minBound, maxBound, maxOffset)
+  const delta = bestOffset - currentOffset
+  const lateralForce = MathUtils.clamp(delta / safeStep, -1, 1)
+
+  return {
+    targetOffset: bestOffset,
+    bestIndex,
+    lateralForce,
+    cost: bestCost,
+  }
+}
+

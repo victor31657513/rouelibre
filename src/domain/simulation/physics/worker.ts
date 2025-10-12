@@ -8,22 +8,22 @@ import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
 import {
-  adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
-  computeRelaxedOffsetTarget,
   computeTargetSpeedCompensation,
   projectWorldDistanceOntoCenterline,
 } from './speedControl'
 import {
   computeCurvatureEnvelope,
-  computeDesiredOffsetProfile,
   computeNeighborBounds,
   computeSignedCurvature,
   constrainOffsetWithinRate,
+  evaluateOffsetCandidates,
+  generateOffsetCandidates,
   steerOffsetTowardTarget,
 } from './riderPathing'
+import type { OffsetCandidateResult } from './riderPathing'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
 
 let world: RAPIER.World
@@ -36,6 +36,8 @@ let progress: Float32Array
 let offsets: Float32Array
 let yawRates: Float32Array
 let commandedTargetSpeeds: Float32Array
+let lateralDecisions: OffsetCandidateResult[] = []
+let noiseGenerators: Array<() => number> = []
 
 let laneWidth = 1
 let roadWidth = 8
@@ -72,6 +74,16 @@ const DEFAULT_POWER_AVAILABLE = 380
 const DEFAULT_LATERAL_ACCEL = 5.5
 const MAX_DRAFTING_LOOKAHEAD = 12
 const MIN_DRAFTING_LOOKAHEAD = 2
+
+const SOCIAL_TAU = 0.6
+const GAP_MIN_LONG = 1.1
+const HEADWAY_TIME = 0.4
+const LONGITUDINAL_REPULSION_GAIN = 3.0
+const COMMAND_NOISE_STDDEV = 0.25
+const OFFSET_CANDIDATE_STEP = 0.65
+const WALL_COMFORT_MARGIN = 0.75
+const LATERAL_GAP_INFLUENCE = 0.35
+const LATERAL_FORCE_DRAG = 0.45
 
 const DIAGNOSTIC_INTERVAL = 1.0
 const referenceRiderIndex = 0
@@ -225,6 +237,8 @@ self.onmessage = async (e: MessageEvent) => {
     offsets = new Float32Array(N)
     yawRates = new Float32Array(N)
     commandedTargetSpeeds = new Float32Array(N)
+    lateralDecisions = new Array(N)
+    noiseGenerators = new Array(N)
     const rng = mulberry32(123456)
 
     for (let i = 0; i < N; i++) {
@@ -262,6 +276,14 @@ self.onmessage = async (e: MessageEvent) => {
       speeds[i] = initialSpeed
       commandedTargetSpeeds[i] = initialSpeed
       yawRates[i] = 0
+      const seed = (0x9e3779b9 ^ (i * 0x85ebca6b)) >>> 0
+      noiseGenerators[i] = mulberry32(seed)
+      lateralDecisions[i] = {
+        targetOffset: clampedOffset,
+        bestIndex: 0,
+        lateralForce: 0,
+        cost: 0,
+      }
     }
 
     ;(self as unknown as Worker).postMessage(
@@ -312,33 +334,6 @@ self.onmessage = async (e: MessageEvent) => {
 
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
-
-      const desiredProfile = computeDesiredOffsetProfile(spline, progress[i], {
-        lookAhead,
-        maxOffset,
-        totalLength,
-        minRadius,
-      })
-
-      const relaxedDesired = computeRelaxedOffsetTarget(
-        currentOffset,
-        desiredProfile,
-        minBound,
-        maxBound,
-        maxOffset,
-      )
-
-      const planningSpeed = Math.max(0.1, effectiveMaxTargetSpeed)
-      const availableTime =
-        lookAheadDistance > 0 ? lookAheadDistance / planningSpeed : 0
-      const targetOffset = constrainOffsetWithinRate(
-        currentOffset,
-        relaxedDesired,
-        minBound,
-        maxBound,
-        maxOffsetRate,
-        availableTime,
-      )
 
       let slope = 0
       if (totalLength > 0 && lookAheadDistance > 1e-3) {
@@ -391,6 +386,9 @@ self.onmessage = async (e: MessageEvent) => {
       }
       CdAeff = Math.max(0, CdAeff)
 
+      const { gapAhead } = computeLongitudinalGaps(i, progress, totalLength)
+      const gapThreshold = GAP_MIN_LONG + HEADWAY_TIME * previousSpeed
+
       const vPower = solveVelocityFromPower(availablePower, {
         airDensity,
         cdA: CdAeff,
@@ -414,10 +412,19 @@ self.onmessage = async (e: MessageEvent) => {
         effectiveMaxTargetSpeed,
       )
 
-      let compensatedTarget = targetSpeed
-      if (lookAheadDistance > 1e-3) {
+      const planningSpeed = Math.max(0.1, effectiveMaxTargetSpeed)
+      const availableTime =
+        lookAheadDistance > 0 ? lookAheadDistance / planningSpeed : 0
+
+      let compensationForBest = 1
+      let offsetPlan: OffsetCandidateResult = lateralDecisions[i]
+
+      if (lookAheadDistance > 0.25) {
+        const horizon = Math.max(lookAheadDistance, laneWidth * 1.5, 3)
         const startDistance = progress[i]
-        const endDistance = Math.min(startDistance + lookAheadDistance, totalLength)
+        const endDistance = totalLength > 0
+          ? Math.min(startDistance + horizon, totalLength)
+          : startDistance + horizon
         const referenceLength = computeOffsetSegmentLength(
           spline,
           startDistance,
@@ -425,45 +432,122 @@ self.onmessage = async (e: MessageEvent) => {
           0,
           16,
         )
-        const segmentLength = computeOffsetSegmentLength(
-          spline,
-          startDistance,
-          endDistance,
+
+        const candidateStep = Math.max(laneWidth * 0.5, OFFSET_CANDIDATE_STEP)
+        const candidates = generateOffsetCandidates(
           currentOffset,
-          16,
+          candidateStep,
+          minBound,
+          maxBound,
+          maxOffset,
         )
 
-        if (referenceLength > 1e-3 && segmentLength > 1e-3) {
-          const rawRatio = segmentLength / referenceLength
-          const clampedRatio = MathUtils.clamp(
-            rawRatio,
-            lengthRatioRange.min,
-            lengthRatioRange.max,
-          )
-          const compensation = computeTargetSpeedCompensation(clampedRatio)
-          const desired = targetSpeed * compensation
-          compensatedTarget = MathUtils.clamp(
-            desired,
+        const candidateCompensations: number[] = []
+        const candidatePowerRatios: number[] = []
+
+        for (const candidate of candidates) {
+          const clampedCandidate = MathUtils.clamp(candidate, -maxOffset, maxOffset)
+          let compensation = 1
+          if (referenceLength > 1e-3) {
+            const segmentLength = computeOffsetSegmentLength(
+              spline,
+              startDistance,
+              endDistance,
+              clampedCandidate,
+              16,
+            )
+            if (segmentLength > 1e-3) {
+              const rawRatio = segmentLength / referenceLength
+              const clampedRatio = MathUtils.clamp(
+                rawRatio,
+                lengthRatioRange.min,
+                lengthRatioRange.max,
+              )
+              compensation = computeTargetSpeedCompensation(clampedRatio)
+            }
+          }
+          candidateCompensations.push(compensation)
+
+          const candidateSpeed = MathUtils.clamp(
+            targetSpeed * compensation,
             effectiveMinTargetSpeed,
             effectiveMaxTargetSpeed,
           )
-        } else {
-          compensatedTarget = MathUtils.clamp(
-            targetSpeed,
-            effectiveMinTargetSpeed,
-            effectiveMaxTargetSpeed,
+          const slopeAdjustedCandidate = adjustTargetSpeedForSlope(
+            candidateSpeed,
+            slope,
+            {
+              maxSlope: 0.25,
+              maxUphillPenalty: 2,
+              maxDownhillBoost: 1,
+              minSpeed: Math.max(0, effectiveMinTargetSpeed - 0.5),
+              maxSpeed: effectiveMaxTargetSpeed + 0.5,
+            },
           )
+          const candidatePower = powerDemand(slopeAdjustedCandidate, {
+            airDensity,
+            cdA: CdAeff,
+            crr: rollingResistanceCoeff,
+            mass: systemMass,
+            slope,
+            gravity: GRAVITY,
+            drivetrainEfficiency,
+          })
+          const normalizedPower =
+            availablePower > 1e-3 ? candidatePower / availablePower : 0
+          candidatePowerRatios.push(Math.max(0, normalizedPower))
         }
+
+        offsetPlan = evaluateOffsetCandidates({
+          currentOffset,
+          candidates,
+          powerRatios: candidatePowerRatios,
+          minBound,
+          maxBound,
+          maxOffset,
+          gapAhead,
+          gapThreshold,
+          weights: { power: 0.55, gap: 0.3, wall: 0.15 },
+          wallComfort: Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN),
+          referenceStep: candidateStep,
+          lateralGapInfluence: LATERAL_GAP_INFLUENCE,
+        })
+        compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
+        lateralDecisions[i] = offsetPlan
       } else {
-        compensatedTarget = MathUtils.clamp(
-          targetSpeed,
-          effectiveMinTargetSpeed,
-          effectiveMaxTargetSpeed,
-        )
+        offsetPlan = {
+          targetOffset: currentOffset,
+          bestIndex: 0,
+          lateralForce: 0,
+          cost: 0,
+        }
+        compensationForBest = 1
+        lateralDecisions[i] = offsetPlan
       }
 
-      // (A) Consigne ajustée par la compensation de longueur : aucune pénalité spécifique au virage
-      const baseTarget = compensatedTarget
+      const plannedOffset = constrainOffsetWithinRate(
+        currentOffset,
+        offsetPlan.targetOffset,
+        minBound,
+        maxBound,
+        maxOffsetRate,
+        availableTime,
+      )
+
+      const compensatedTarget = MathUtils.clamp(
+        targetSpeed * compensationForBest,
+        effectiveMinTargetSpeed,
+        effectiveMaxTargetSpeed,
+      )
+
+      const noiseSource = noiseGenerators[i]
+      const randomUnit = noiseSource ? noiseSource() : Math.random()
+      const commandNoise = (randomUnit * 2 - 1) * COMMAND_NOISE_STDDEV
+      const baseTarget = MathUtils.clamp(
+        compensatedTarget + commandNoise,
+        effectiveMinTargetSpeed,
+        effectiveMaxTargetSpeed,
+      )
 
       // (B) Rate limit sur la consigne (borne les crans de montée/descente)
       const prevCmd = commandedTargetSpeeds[i]
@@ -485,12 +569,31 @@ self.onmessage = async (e: MessageEvent) => {
         maxSpeed: effectiveMaxTargetSpeed + 0.5,
       })
 
-      const newSpeed = adjustSpeedTowardsTarget(
-        previousSpeed,
-        slopeAdjustedTarget,
-        dt,
-        maxAcceleration,
-        maxDeceleration
+      const gapShortage = Math.max(0, gapThreshold - gapAhead)
+      const repulsionRatio =
+        gapThreshold > 1e-3 ? MathUtils.clamp(gapShortage / gapThreshold, 0, 1) : 0
+      const longitudinalRepulsion =
+        repulsionRatio > 0
+          ? -LONGITUDINAL_REPULSION_GAIN * repulsionRatio * repulsionRatio
+          : 0
+
+      const desiredAccel =
+        (slopeAdjustedTarget - previousSpeed) / Math.max(SOCIAL_TAU, 1e-3) -
+        LATERAL_FORCE_DRAG * Math.abs(offsetPlan.lateralForce)
+      const accelInput = desiredAccel + longitudinalRepulsion
+      const clampedAccel = MathUtils.clamp(
+        accelInput,
+        -Math.abs(maxDeceleration),
+        Math.abs(maxAcceleration),
+      )
+      let newSpeed = previousSpeed + clampedAccel * dt
+      if (!Number.isFinite(newSpeed) || newSpeed < 0) {
+        newSpeed = 0
+      }
+      newSpeed = MathUtils.clamp(
+        newSpeed,
+        Math.max(0, effectiveMinTargetSpeed - 0.5),
+        effectiveMaxTargetSpeed + 0.5,
       )
       speeds[i] = newSpeed
 
@@ -519,7 +622,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const updatedOffset = steerOffsetTowardTarget(
         currentOffset,
-        targetOffset,
+        plannedOffset,
         minBound,
         maxBound,
         dt,
