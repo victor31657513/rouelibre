@@ -270,6 +270,7 @@ const bodyGeo = new THREE.BoxGeometry(2, 2, 0.7)
 const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3aa6ff, metalness: 0.2, roughness: 0.7 })
 const riders = new THREE.InstancedMesh(bodyGeo, bodyMat, N)
 riders.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+riders.frustumCulled = false
 scene.add(riders)
 
 // Individual rider objects for camera tracking
