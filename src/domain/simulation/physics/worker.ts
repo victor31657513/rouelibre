@@ -24,7 +24,7 @@ import {
   constrainOffsetWithinRate,
   steerOffsetTowardTarget,
 } from './riderPathing'
-import { draftingFactor, solveVelocityFromPower } from './aero'
+import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
 
 let world: RAPIER.World
 let N = 0
@@ -73,6 +73,20 @@ const DEFAULT_LATERAL_ACCEL = 5.5
 const MAX_DRAFTING_LOOKAHEAD = 12
 const MIN_DRAFTING_LOOKAHEAD = 2
 
+const DIAGNOSTIC_INTERVAL = 1.0
+const referenceRiderIndex = 0
+
+type DiagnosticSnapshot = {
+  speed: number
+  targetRaw: number
+  targetFiltered: number
+  acceleration: number
+  kEnv: number
+  vCorner: number
+  draftFactor: number
+  powerDemand: number
+}
+
 let airDensity = DEFAULT_AIR_DENSITY
 let baseCdA = BASE_CDA
 let rollingResistanceCoeff = DEFAULT_CRR
@@ -84,6 +98,52 @@ let maxLateralAcceleration = DEFAULT_LATERAL_ACCEL
 let warnedLateralAccel = false
 let warnedCdA = false
 let warnedDrafting = false
+
+let diagnosticAccumulator = 0
+let pendingDiagnostics: DiagnosticSnapshot | null = null
+
+function computeLongitudinalGaps(
+  index: number,
+  progress: Float32Array,
+  totalLength: number,
+): { gapAhead: number; gapBehind: number } {
+  const count = progress.length
+  if (index < 0 || index >= count) {
+    return { gapAhead: Infinity, gapBehind: Infinity }
+  }
+
+  const reference = progress[index]
+  let gapAhead = Infinity
+  let gapBehind = Infinity
+
+  for (let j = 0; j < count; j++) {
+    if (j === index) continue
+
+    const forward = progress[j] - reference
+    if (totalLength > 0) {
+      const ahead = forward > 0 ? forward : forward + totalLength
+      if (ahead > 0 && ahead < gapAhead) {
+        gapAhead = ahead
+      }
+
+      const backwardRaw = reference - progress[j]
+      const backward = backwardRaw > 0 ? backwardRaw : backwardRaw + totalLength
+      if (backward > 0 && backward < gapBehind) {
+        gapBehind = backward
+      }
+    } else {
+      if (forward > 0 && forward < gapAhead) {
+        gapAhead = forward
+      }
+      const backward = -forward
+      if (backward > 0 && backward < gapBehind) {
+        gapBehind = backward
+      }
+    }
+  }
+
+  return { gapAhead, gapBehind }
+}
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
 
@@ -215,6 +275,7 @@ self.onmessage = async (e: MessageEvent) => {
     if (!world) return // ignore steps before initialization
 
     const dt: number = payload.dt
+    diagnosticAccumulator += dt
 
     // Un voisinage trop long resserre artificiellement le couloir en virage → peloton qui s'agglutine.
     // On réduit la portée effective pour limiter l'effet accordéon.
@@ -234,6 +295,8 @@ self.onmessage = async (e: MessageEvent) => {
       Math.min(effectiveMaxTargetSpeed, minTargetSpeed),
     )
     const lengthRatioRange = computeLengthRatioRange(maxOffset, minRadius)
+
+    let snapshot: DiagnosticSnapshot | null = null
 
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
@@ -431,6 +494,29 @@ self.onmessage = async (e: MessageEvent) => {
       )
       speeds[i] = newSpeed
 
+      if (i === referenceRiderIndex) {
+        const acceleration = dt > 0 ? (newSpeed - previousSpeed) / dt : 0
+        const power = powerDemand(newSpeed, {
+          airDensity,
+          cdA: CdAeff,
+          crr: rollingResistanceCoeff,
+          mass: systemMass,
+          slope,
+          gravity: GRAVITY,
+          drivetrainEfficiency,
+        })
+        snapshot = {
+          speed: newSpeed,
+          targetRaw: baseTarget,
+          targetFiltered: commandedTargetSpeeds[i],
+          acceleration,
+          kEnv,
+          vCorner,
+          draftFactor: S,
+          powerDemand: power,
+        }
+      }
+
       const updatedOffset = steerOffsetTowardTarget(
         currentOffset,
         targetOffset,
@@ -485,6 +571,26 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     world.step()
+
+    if (referenceRiderIndex < N) {
+      pendingDiagnostics = snapshot
+    } else {
+      pendingDiagnostics = null
+    }
+
+    if (diagnosticAccumulator >= DIAGNOSTIC_INTERVAL && pendingDiagnostics) {
+      const { gapAhead, gapBehind } = computeLongitudinalGaps(
+        referenceRiderIndex,
+        progress,
+        totalLength,
+      )
+      console.log('[physics][diagnostics]', {
+        ...pendingDiagnostics,
+        gapAhead,
+        gapBehind,
+      })
+      diagnosticAccumulator = 0
+    }
 
     ;(self as unknown as Worker).postMessage(
       { type: 'state', data: state.buffer },
