@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { PathSpline } from '../src/systems/pathSmoothing'
+import { PathSpline } from '../src/domain/route/pathSpline'
 
 describe('curvature estimation', () => {
   it('Curvature ≤ 1/MinRadius', () => {

@@ -15,3 +15,14 @@ Ce dépôt utilise TypeScript et Vite.
 - `npm test` : lance les tests unitaires.
 - `npm run lint` : vérifie le linting du code.
 
+## Structure fonctionnelle
+
+- `src/app/` contient l'orchestrateur (`Application.ts`), les contrôleurs de
+  caméra, les modules de rendu (`SceneContext`, `RouteVisuals`, `RiderInstances`),
+  la passerelle worker (`SimulationBridge`) et les états partagés (`RouteState`,
+  `SelectionState`).
+- `src/domain/route/` regroupe le parsing GPX, la simplification et la spline.
+- `src/domain/peloton/formation.ts` calcule la formation initiale du peloton.
+- `src/physics/worker.ts` exécute la simulation Rapier et doit rester isolé des
+  APIs navigateur.
+

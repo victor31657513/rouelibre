@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { resamplePath } from '../src/systems/pathSmoothing'
+import { resamplePath } from '../src/domain/route/pathSpline'
 
 describe('resamplePath', () => {
   it('adds intermediate points', () => {
