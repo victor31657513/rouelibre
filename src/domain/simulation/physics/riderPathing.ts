@@ -224,14 +224,3 @@ export function steerOffsetTowardTarget(
   return MathUtils.clamp(next, minBound, maxBound)
 }
 
-export function computeArcLengthScale(
-  spline: PathSpline,
-  distance: number,
-  totalLength: number,
-  offset: number
-): number {
-  const curvature = computeSignedCurvature(spline, distance, totalLength)
-  const scale = 1 + offset * curvature
-  return Math.max(0.1, scale)
-}
-

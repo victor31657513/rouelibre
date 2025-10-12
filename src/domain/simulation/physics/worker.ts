@@ -13,7 +13,6 @@ import {
   estimateSafeTargetSpeed,
 } from './speedControl'
 import {
-  computeArcLengthScale,
   computeDesiredOffsetProfile,
   computeNeighborBounds,
   steerOffsetTowardTarget,
@@ -233,9 +232,7 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
 
       const travel = ((previousSpeed + newSpeed) / 2) * dt
-      const arcScale = computeArcLengthScale(spline, progress[i], totalLength, offsets[i])
-      const effectiveScale = arcScale > 0 ? arcScale : 1
-      let s = progress[i] + (effectiveScale !== 0 ? travel / effectiveScale : travel)
+      let s = progress[i] + travel
       if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
       progress[i] = s
 
