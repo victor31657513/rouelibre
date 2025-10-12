@@ -4,6 +4,7 @@ import {
   adjustTargetSpeedForSlope,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
+  computeOffsetArcLengthRatio,
   computeTargetSpeedFromSegmentLength,
   estimateSafeTargetSpeed,
 } from '../src/domain/simulation/physics/speedControl'
@@ -56,6 +57,19 @@ describe('speed control helpers', () => {
 
     const decelerated = adjustSpeedTowardsTarget(8, 4, dt, maxAcceleration, maxDeceleration)
     expect(decelerated).toBeCloseTo(8 - maxDeceleration * dt, 5)
+  })
+
+  it('computes arc length ratios reflecting inside and outside lines', () => {
+    const curvature = 1 / 25
+    const insideOffset = -2
+    const outsideOffset = 2
+
+    const insideRatio = computeOffsetArcLengthRatio(curvature, insideOffset)
+    const outsideRatio = computeOffsetArcLengthRatio(curvature, outsideOffset)
+
+    expect(insideRatio).toBeLessThan(1)
+    expect(outsideRatio).toBeGreaterThan(1)
+    expect(outsideRatio).toBeGreaterThan(insideRatio)
   })
 
   it('adjusts target speed according to positive and negative slopes', () => {
@@ -160,6 +174,33 @@ describe('speed control helpers', () => {
 
     expect(targetSpeed).toBeLessThan(5)
     expect(targetSpeed).toBeGreaterThanOrEqual(0)
+  })
+
+  it('keeps outside riders at top speed on wide corners when space allows it', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(10, 0, 0),
+      new Vector3(16, 0, 4),
+      new Vector3(16, 0, 12),
+    ])
+
+    const targetSpeed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 4,
+      currentOffset: 2.5,
+      desiredOffset: 2.5,
+      neighborMin: -3,
+      neighborMax: 3,
+      lookAheadDistance: 8,
+      maxOffset: 3.5,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 5,
+      dt: 0.12,
+    })
+
+    expect(targetSpeed).toBeCloseTo(9, 5)
   })
 
 })
