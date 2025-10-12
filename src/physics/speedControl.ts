@@ -1,5 +1,6 @@
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../systems/pathSmoothing'
+import { steerOffsetTowardTarget } from './riderPathing'
 
 export interface SlopeAdjustmentOptions {
   /**
@@ -188,4 +189,141 @@ export function adjustTargetSpeedForSlope(
   }
 
   return MathUtils.clamp(adjustedSpeed, minSpeed, maxSpeed)
+}
+
+const scratchRight = new Vector3()
+const scratchPosition = new Vector3()
+
+export interface SafeSpeedEstimateOptions {
+  spline: PathSpline
+  totalLength: number
+  currentDistance: number
+  currentOffset: number
+  desiredOffset: number
+  neighborMin: number
+  neighborMax: number
+  lookAheadDistance: number
+  maxOffset: number
+  maxOffsetRate: number
+  maxTargetSpeed: number
+  minTargetSpeed?: number
+  dt: number
+}
+
+function wrapDistance(distance: number, totalLength: number): number {
+  if (totalLength <= 0) return distance
+  return MathUtils.euclideanModulo(distance, totalLength)
+}
+
+function isFiniteNumber(value: number): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): number {
+  const {
+    spline,
+    totalLength,
+    currentDistance,
+    currentOffset,
+    desiredOffset,
+    neighborMin,
+    neighborMax,
+    lookAheadDistance,
+    maxOffset,
+    maxOffsetRate,
+    maxTargetSpeed,
+    minTargetSpeed = 0,
+    dt,
+  } = options
+
+  if (!spline || !isFiniteNumber(maxTargetSpeed) || maxTargetSpeed <= 0) {
+    return Math.max(0, maxTargetSpeed)
+  }
+
+  const safeDt = isFiniteNumber(dt) && dt > 0 ? dt : 0
+  const safeLookAhead = isFiniteNumber(lookAheadDistance) ? Math.max(0, lookAheadDistance) : 0
+  if (safeLookAhead <= 1e-3 || safeDt <= 0) {
+    const minSpeed = Math.max(0, Math.min(maxTargetSpeed, minTargetSpeed))
+    return Math.max(minSpeed, Math.max(0, maxTargetSpeed))
+  }
+
+  const clampedMinBound = Math.max(-maxOffset, neighborMin)
+  const clampedMaxBound = Math.min(maxOffset, neighborMax)
+  if (clampedMinBound > clampedMaxBound) {
+    return 0
+  }
+
+  const eps = 1e-3
+  const maxSpeed = Math.max(0, maxTargetSpeed)
+
+  const isSpeedSafe = (speed: number): boolean => {
+    if (!isFiniteNumber(speed) || speed <= 0) {
+      return true
+    }
+
+    const safeSpeed = Math.max(0, speed)
+    const distancePerStep = Math.max(safeSpeed * safeDt, safeLookAhead / 8)
+    const stepCount = Math.max(1, Math.ceil(safeLookAhead / Math.max(distancePerStep, eps)))
+    const stepDistance = safeLookAhead / stepCount
+    const stepTime = stepDistance / Math.max(safeSpeed, eps)
+    let offset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
+
+    for (let step = 1; step <= stepCount; step++) {
+      const traveled = stepDistance * step
+      const nextDistance = wrapDistance(currentDistance + traveled, totalLength)
+      const sampleDistance = MathUtils.clamp(nextDistance, 0, spline.totalLength)
+      const sample = spline.sampleByDistance(sampleDistance)
+      scratchRight.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
+      scratchPosition.copy(sample.position).addScaledVector(scratchRight, offset)
+
+      offset = steerOffsetTowardTarget(
+        offset,
+        desiredOffset,
+        clampedMinBound,
+        clampedMaxBound,
+        stepTime,
+        maxOffsetRate
+      )
+
+      if (offset < clampedMinBound - eps || offset > clampedMaxBound + eps) {
+        return false
+      }
+      if (Math.abs(offset) > maxOffset + eps) {
+        return false
+      }
+      if (
+        !Number.isFinite(scratchPosition.x) ||
+        !Number.isFinite(scratchPosition.y) ||
+        !Number.isFinite(scratchPosition.z)
+      ) {
+        return false
+      }
+    }
+
+    return true
+  }
+
+  if (isSpeedSafe(maxSpeed)) {
+    return maxSpeed
+  }
+
+  let best = 0
+  let low = 0
+  let high = maxSpeed
+  for (let i = 0; i < 16; i++) {
+    const mid = (low + high) / 2
+    if (isSpeedSafe(mid)) {
+      best = mid
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+
+  const minSpeed = Math.max(0, Math.min(maxSpeed, minTargetSpeed))
+  if (best >= minSpeed) {
+    return Math.max(minSpeed, best)
+  }
+
+  return best
 }

@@ -4,9 +4,7 @@ import { PathSpline, smoothLimitAngle, YawState } from '../systems/pathSmoothing
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
-  computeLengthRatioRange,
-  computeOffsetSegmentLength,
-  computeTargetSpeedFromSegmentLength,
+  estimateSafeTargetSpeed,
 } from './speedControl'
 import {
   computeArcLengthScale,
@@ -143,7 +141,6 @@ self.onmessage = async (e: MessageEvent) => {
 
     const dt: number = payload.dt
 
-    const { min: minLengthRatio, max: maxLengthRatio } = computeLengthRatioRange(maxOffset, minRadius)
     const neighborArcDistance = Math.max(3, lookAhead * 0.5)
     const lateralGap = Math.max(0.6, laneWidth * 0.8)
     const neighborBounds = computeNeighborBounds(progress, offsets, {
@@ -159,29 +156,38 @@ self.onmessage = async (e: MessageEvent) => {
       const previousSpeed = speeds[i]
       const currentOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
 
-      let targetSpeed = maxTargetSpeed
       let lookAheadDistance = lookAhead
       if (totalLength > 0) {
         const currentDistance = progress[i]
         const aheadDistance = Math.min(currentDistance + lookAhead, totalLength)
         lookAheadDistance = Math.max(0, aheadDistance - currentDistance)
-        const sampleCount = Math.max(6, Math.ceil(lookAheadDistance * 2))
-        const segmentLength = computeOffsetSegmentLength(
-          spline,
-          currentDistance,
-          aheadDistance,
-          currentOffset,
-          sampleCount
-        )
-        const referenceDistance = lookAheadDistance > 0 ? lookAheadDistance : Math.max(lookAhead, 1)
-
-        targetSpeed = computeTargetSpeedFromSegmentLength(segmentLength, referenceDistance, {
-          maxSpeed: maxTargetSpeed,
-          minSpeed: minTargetSpeed,
-          minLengthRatioForMaxSpeed: minLengthRatio,
-          maxLengthRatioForMinSpeed: maxLengthRatio,
-        })
       }
+
+      const desiredProfile = computeDesiredOffsetProfile(spline, progress[i], {
+        lookAhead,
+        maxOffset,
+        totalLength,
+        minRadius,
+      })
+
+      const minBound = neighborBounds.min[i]
+      const maxBound = neighborBounds.max[i]
+
+      const targetSpeed = estimateSafeTargetSpeed({
+        spline,
+        totalLength,
+        currentDistance: progress[i],
+        currentOffset,
+        desiredOffset: desiredProfile,
+        neighborMin: minBound,
+        neighborMax: maxBound,
+        lookAheadDistance,
+        maxOffset,
+        maxOffsetRate,
+        maxTargetSpeed,
+        minTargetSpeed,
+        dt,
+      })
 
       let slope = 0
       if (totalLength > 0 && lookAhead > 0) {
@@ -210,15 +216,6 @@ self.onmessage = async (e: MessageEvent) => {
       )
       speeds[i] = newSpeed
 
-      const desiredProfile = computeDesiredOffsetProfile(spline, progress[i], {
-        lookAhead,
-        maxOffset,
-        totalLength,
-        minRadius,
-      })
-
-      const minBound = neighborBounds.min[i]
-      const maxBound = neighborBounds.max[i]
       const updatedOffset = steerOffsetTowardTarget(
         currentOffset,
         desiredProfile,
