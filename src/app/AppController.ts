@@ -339,8 +339,9 @@ export class AppController {
     })
 
     this.pelotonScene.applyState(this.positions)
-    this.scene.renderer.render(this.scene.scene, this.scene.camera)
+    this.cameraRig.restoreInitialPose()
     this.focusSelected()
+    this.scene.renderer.render(this.scene.scene, this.scene.camera)
   }
 
   private resetPeloton(): void {
