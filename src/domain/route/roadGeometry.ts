@@ -67,6 +67,10 @@ export function buildCenterDashes(
   const up = new THREE.Vector3(0, 1, 0)
   const half = lineWidth / 2
   let index = 0
+  // Persist dash progression across segments so that dashes remain evenly
+  // spaced even when the underlying centre line is heavily segmented (curves).
+  let inDash = true
+  let progress = 0
 
   for (let i = 0; i < centerLine.length - 1; i++) {
     const a = centerLine[i]
@@ -76,32 +80,60 @@ export function buildCenterDashes(
     const dir = segment.clone().normalize()
     const right = new THREE.Vector3().crossVectors(dir, up).normalize()
 
-    for (let d = 0; d < segLen; d += dashLen + gapLen) {
-      const start = d
-      const end = Math.min(segLen, d + dashLen)
-      const p0 = a.clone().addScaledVector(dir, start)
-      const p1 = a.clone().addScaledVector(dir, end)
-      const left0 = p0.clone().addScaledVector(right, -half).setY(p0.y + 0.01)
-      const right0 = p0.clone().addScaledVector(right, half).setY(p0.y + 0.01)
-      const left1 = p1.clone().addScaledVector(right, -half).setY(p1.y + 0.01)
-      const right1 = p1.clone().addScaledVector(right, half).setY(p1.y + 0.01)
+    let travelled = 0
+    while (travelled < segLen) {
+      const stateLength = inDash ? dashLen : gapLen
+      const remainingInState = Math.max(0, stateLength - progress)
+      if (remainingInState <= 1e-6) {
+        progress = 0
+        inDash = !inDash
+        continue
+      }
+      const step = Math.min(segLen - travelled, remainingInState)
 
-      positions.push(
-        left0.x,
-        left0.y,
-        left0.z,
-        right0.x,
-        right0.y,
-        right0.z,
-        left1.x,
-        left1.y,
-        left1.z,
-        right1.x,
-        right1.y,
-        right1.z,
-      )
-      indices.push(index, index + 1, index + 3, index, index + 3, index + 2)
-      index += 4
+      if (inDash && step > 0) {
+        const start = travelled
+        const end = travelled + step
+        const p0 = a.clone().addScaledVector(dir, start)
+        const p1 = a.clone().addScaledVector(dir, end)
+        const left0 = p0.clone().addScaledVector(right, -half).setY(p0.y + 0.01)
+        const right0 = p0.clone().addScaledVector(right, half).setY(p0.y + 0.01)
+        const left1 = p1.clone().addScaledVector(right, -half).setY(p1.y + 0.01)
+        const right1 = p1.clone().addScaledVector(right, half).setY(p1.y + 0.01)
+
+        positions.push(
+          left0.x,
+          left0.y,
+          left0.z,
+          right0.x,
+          right0.y,
+          right0.z,
+          left1.x,
+          left1.y,
+          left1.z,
+          right1.x,
+          right1.y,
+          right1.z,
+        )
+        indices.push(index, index + 1, index + 3, index, index + 3, index + 2)
+        index += 4
+      }
+
+      travelled += step
+      progress += step
+
+      if (progress + 1e-6 >= stateLength) {
+        // Advance to the next dash/gap while avoiding floating point drift.
+        progress = progress - stateLength
+        if (progress < 1e-6) progress = 0
+        inDash = !inDash
+      }
+
+      if (step === 0) {
+        // Avoid infinite loops when the remaining progression equals the
+        // current segment length due to precision issues.
+        travelled = segLen
+      }
     }
   }
 
