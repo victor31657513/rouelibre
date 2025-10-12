@@ -36,7 +36,7 @@ describe('speed control helpers', () => {
     expect(veryShort).toBeGreaterThan(midLength)
     expect(midLength).toBeGreaterThanOrEqual(minSpeed)
     expect(veryLong).toBeGreaterThanOrEqual(minSpeed)
-    expect(veryLong).toBeLessThanOrEqual(midLength)
+    expect(veryLong).toBeGreaterThanOrEqual(midLength)
   })
 
   it('computes longer trajectories for outside offsets around curves', () => {
@@ -126,14 +126,30 @@ describe('speed control helpers', () => {
 
   it('avoids penalising shorter projected segments', () => {
     const factor = computeTargetSpeedCompensation(0.82)
-    expect(factor).toBeGreaterThan(1)
-    expect(factor).toBeLessThanOrEqual(1.1)
+    expect(factor).toBeCloseTo(1, 6)
   })
 
   it('amplifies target speed moderately for longer segments', () => {
     const factor = computeTargetSpeedCompensation(1.35)
     expect(factor).toBeGreaterThan(1)
-    expect(factor).toBeLessThan(1.3)
+    expect(factor).toBeLessThanOrEqual(1.35)
+    expect(factor).toBeCloseTo(1.35, 6)
+  })
+
+  it('caps outside boost when requested', () => {
+    const factor = computeTargetSpeedCompensation(1.5, {
+      outsideCompensation: 1,
+      maxOutsideBoost: 1.25,
+    })
+    expect(factor).toBeCloseTo(1.25, 6)
+  })
+
+  it('offers gradual attenuation for shorter segments when desired', () => {
+    const factor = computeTargetSpeedCompensation(0.7, {
+      insideCompensation: 0.5,
+    })
+    expect(factor).toBeLessThan(1)
+    expect(factor).toBeGreaterThan(0.7)
   })
 
   it('adjusts target speed according to positive and negative slopes', () => {
@@ -198,10 +214,10 @@ describe('speed control helpers', () => {
     const outsideSpeed = computeTargetSpeedFromSegmentLength(outsideLength, travelDistance, options)
     const centerSpeed = computeTargetSpeedFromSegmentLength(centerLength, travelDistance, options)
 
-    expect(insideSpeed).toBeGreaterThanOrEqual(centerSpeed)
-    expect(insideSpeed).toBeGreaterThanOrEqual(options.minSpeed)
-    expect(outsideSpeed).toBeLessThanOrEqual(insideSpeed)
+    expect(insideSpeed).toBeCloseTo(options.maxSpeed, 5)
+    expect(centerSpeed).toBeLessThanOrEqual(insideSpeed)
     expect(outsideSpeed).toBeGreaterThanOrEqual(options.minSpeed)
+    expect(outsideSpeed).toBeLessThanOrEqual(centerSpeed)
   })
 
   it('keeps the maximum target speed when the projected path stays within bounds', () => {
