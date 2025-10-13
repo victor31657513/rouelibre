@@ -25,6 +25,7 @@ import {
 } from './riderPathing'
 import type { OffsetCandidateResult, PathBoundaryMode } from './riderPathing'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
+import { computeAheadSampleDistance } from './lookAhead'
 import {
   DEFAULT_WORKER_PARAMS,
   type SimulationParameterOverrides,
@@ -674,24 +675,25 @@ self.onmessage = async (e: MessageEvent) => {
         personalMax = neutral
       }
       const currentOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
-
-      let lookAheadDistance = lookAhead
-      if (totalLength > 0) {
-        const currentDistance = progress[i]
-        const aheadDistance = Math.min(currentDistance + lookAhead, totalLength)
-        lookAheadDistance = Math.max(0, aheadDistance - currentDistance)
-      }
+      const currentDistance = progress[i]
+      const {
+        sampleDistance: aheadSampleDistance,
+        travelDistance: lookAheadDistance,
+      } = computeAheadSampleDistance(
+        currentDistance,
+        lookAhead,
+        totalLength,
+        pathBoundaryMode,
+      )
 
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
 
       let slope = 0
-      if (totalLength > 0 && lookAheadDistance > 1e-3) {
-        const currentDistance = progress[i]
-        const aheadDistance = Math.min(currentDistance + lookAheadDistance, totalLength)
+      if (lookAheadDistance > 1e-3) {
         const travelDistance = Math.max(lookAheadDistance, 1e-3)
         const currentSample = spline.sampleByDistance(currentDistance)
-        const aheadSample = spline.sampleByDistance(aheadDistance)
+        const aheadSample = spline.sampleByDistance(aheadSampleDistance)
         slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
       }
 
@@ -1043,8 +1045,12 @@ self.onmessage = async (e: MessageEvent) => {
       let s = progress[i] + centerlineTravel
       if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
       progress[i] = s
-
-      const ahead = s + lookAhead
+      const { sampleDistance: yawAheadDistance } = computeAheadSampleDistance(
+        s,
+        lookAhead,
+        totalLength,
+        pathBoundaryMode,
+      )
 
       const sample = spline.sampleByDistance(s)
       const center = sample.position
@@ -1053,7 +1059,7 @@ self.onmessage = async (e: MessageEvent) => {
       const lateralOffset = offsets[i]
       const pos = center.clone().add(right.clone().multiplyScalar(lateralOffset))
 
-      const look = spline.sampleByDistance(Math.min(ahead, totalLength))
+      const look = spline.sampleByDistance(yawAheadDistance)
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
       const currentYaw = state[i * 4 + 3]
       const yawState: YawState = { yawRate: yawRates[i] }
