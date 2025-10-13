@@ -566,10 +566,11 @@ export class AppController {
       APP_CONFIG.dashLength,
       APP_CONFIG.gapLength,
     )
+    const startLineOffset = this.computeStartLineOffset()
     const startLine = buildStartLine(
       this.currentPath,
       APP_CONFIG.roadWidth,
-      APP_CONFIG.startLineOffset,
+      startLineOffset,
     )
     const bounds = buildRoadBounds(this.currentPath, APP_CONFIG.roadWidth)
 
@@ -587,6 +588,26 @@ export class AppController {
     this.pelotonScene.setRoadMesh(road)
     this.roadReady = true
     this.pelotonScene.applyState(this.positions)
+  }
+
+  private computeStartLineOffset(): number {
+    const { startLineOffset, startSpacing, riderCount, roadWidth, laneWidth } = APP_CONFIG
+    if (!Number.isFinite(startSpacing) || startSpacing <= 0) {
+      return startLineOffset
+    }
+    if (!Number.isFinite(riderCount) || riderCount <= 0) {
+      return startLineOffset
+    }
+
+    const width = Number.isFinite(roadWidth) && roadWidth > 0 ? roadWidth : laneWidth
+    const lane = Number.isFinite(laneWidth) && laneWidth > 0 ? laneWidth : roadWidth
+    const rawColumns = lane > 0 ? Math.floor(width / lane) : 0
+    const columns = Math.max(1, rawColumns)
+    const rows = Math.ceil(riderCount / columns)
+    const frontDistance = Math.max(0, (rows - 1) * startSpacing)
+    const safetyMargin = startSpacing * 0.5
+
+    return Math.max(startLineOffset, frontDistance + safetyMargin)
   }
 
   private startAnimation(): void {
