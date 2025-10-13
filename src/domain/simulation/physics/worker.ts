@@ -23,7 +23,7 @@ import {
   generateOffsetCandidates,
   steerOffsetTowardTarget,
 } from './riderPathing'
-import type { OffsetCandidateResult } from './riderPathing'
+import type { OffsetCandidateResult, PathBoundaryMode } from './riderPathing'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
 import {
   DEFAULT_WORKER_PARAMS,
@@ -60,6 +60,7 @@ let maxOffset = Infinity
 // trajectoire lissée
 let spline: PathSpline
 let totalLength = 0
+let pathBoundaryMode: PathBoundaryMode = 'loop'
 
 // paramètres ajustables
 let lookAhead = DEFAULT_WORKER_PARAMS.lookAhead
@@ -202,6 +203,18 @@ function computeLongitudinalGaps(
   }
 
   return { gapAhead, gapBehind }
+}
+
+function detectClosedLoop(points: Vector3[], lane: number): boolean {
+  if (points.length < 2) {
+    return false
+  }
+
+  const first = points[0]
+  const last = points[points.length - 1]
+  const separation = first.distanceTo(last)
+  const threshold = Math.max(lane * 4, 10)
+  return separation <= threshold
 }
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
@@ -458,6 +471,12 @@ self.onmessage = async (e: MessageEvent) => {
     }
     spline = new PathSpline(waypoints)
     totalLength = spline.totalLength
+    const closedLoopFlag = payload.closedLoop
+    const isClosed =
+      typeof closedLoopFlag === 'boolean'
+        ? closedLoopFlag
+        : detectClosedLoop(waypoints, laneWidth)
+    pathBoundaryMode = isClosed ? 'loop' : 'clamp'
 
     // buffers pour le calcul
     state = new Float32Array(N * 4)
@@ -675,6 +694,8 @@ self.onmessage = async (e: MessageEvent) => {
         totalLength,
         lookAheadDistance,
         minRadius,
+        undefined,
+        pathBoundaryMode,
       )
       const rawCurvature = Math.max(
         curvatureEnvelope.rawMaxAbsCurvature ?? curvatureEnvelope.maxAbsCurvature,
@@ -992,7 +1013,13 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
 
       const travel = ((previousSpeed + newSpeed) / 2) * dt
-      const curvature = computeSignedCurvature(spline, progress[i], totalLength)
+      const curvature = computeSignedCurvature(
+        spline,
+        progress[i],
+        totalLength,
+        undefined,
+        pathBoundaryMode,
+      )
       const centerlineTravel = projectWorldDistanceOntoCenterline(
         travel,
         curvature,
