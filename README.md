@@ -58,6 +58,15 @@ Flux principal :
 
 Veiller à documenter toute nouvelle fonction publique avec son rôle, ses entrées/sorties et les effets de bord éventuels.
 
+## Calibrer le rayon minimal (`minRadius`)
+
+Le paramètre `minRadius` limite désormais les ralentissements déclenchés par des pics de courbure locaux. Pour conserver des vitesses crédibles :
+
+- Commencer par analyser la trace source (profil latéral ou export CSV) et repérer les virages les plus serrés réellement franchissables par le peloton.
+- Définir `minRadius` légèrement en dessous de ce rayon réel (5 à 10 % de marge) afin d'autoriser une adaptation progressive sans provoquer de freinage prématuré.
+- Ajuster si nécessaire en fonction des spécificités du parcours : circuits urbains (rayon plus faible), descentes rapides (rayon plus élevé).
+- Valider l'ajustement avec `npm run lint && npm test` puis une lecture visuelle in-app pour vérifier que les micro-accrocs ou le bruit de mesure n'entraînent plus de ralentissements artificiels.
+
 ## Ajouter des parcours GPX
 
 1. Copier le fichier GPX dans `public/gpx/`.

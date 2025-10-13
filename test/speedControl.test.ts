@@ -12,7 +12,10 @@ import {
   SafeSpeedDiagnostics,
   projectWorldDistanceOntoCenterline,
 } from '../src/domain/simulation/physics/speedControl'
-import { computeSignedCurvature } from '../src/domain/simulation/physics/riderPathing'
+import {
+  computeCurvatureEnvelope,
+  computeSignedCurvature,
+} from '../src/domain/simulation/physics/riderPathing'
 import { PathSpline } from '../src/domain/route/pathSpline'
 import { Vector3 } from 'three'
 
@@ -507,6 +510,43 @@ describe('speed control helpers', () => {
     })
 
     expect(speed).toBeCloseTo(9, 5)
+  })
+
+  it('caps curvature spikes to keep corner speeds realistic', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(6, 0, 0),
+      new Vector3(12, 0, 1.2),
+      new Vector3(18, 0, 0.2),
+      new Vector3(24, 0, 0),
+    ])
+    const totalLength = spline.totalLength
+    const probeDistance = totalLength * 0.4
+    const lookAhead = 12
+    const minRadius = 60
+
+    const envelope = computeCurvatureEnvelope(
+      spline,
+      probeDistance,
+      totalLength,
+      lookAhead,
+      minRadius,
+      8,
+    )
+
+    const curvatureCap = 1 / minRadius
+    expect(envelope.rawMaxAbsCurvature).toBeGreaterThan(curvatureCap)
+    expect(envelope.maxAbsCurvature).toBeLessThanOrEqual(curvatureCap + 1e-6)
+
+    const maxLateralAcceleration = 4.5
+    const safeCurvature = Math.max(
+      Math.min(envelope.rawMaxAbsCurvature, curvatureCap),
+      1e-6,
+    )
+    const vCorner = Math.sqrt(maxLateralAcceleration / safeCurvature)
+    const theoreticalMinimum = Math.sqrt(maxLateralAcceleration * minRadius)
+
+    expect(vCorner).toBeCloseTo(theoreticalMinimum, 5)
   })
 
 })

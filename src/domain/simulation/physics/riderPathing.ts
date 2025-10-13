@@ -84,8 +84,22 @@ export function computeSignedCurvature(
 }
 
 export interface CurvatureEnvelope {
+  /**
+   * Mean absolute curvature sampled along the look-ahead window.
+   */
   averageAbsCurvature: number
+  /**
+   * Absolute curvature capped by the reference radius. This value is safe to
+   * feed directly into corner-speed heuristics since it already enforces the
+   * minimum turning radius requested by the caller.
+   */
   maxAbsCurvature: number
+  /**
+   * Raw absolute curvature before the reference-radius cap is applied. This
+   * remains available for diagnostics whenever the caller wants to inspect the
+   * unbounded measurements that triggered the envelope.
+   */
+  rawMaxAbsCurvature: number
   intensity: number
 }
 
@@ -98,7 +112,12 @@ export function computeCurvatureEnvelope(
   sampleCount = 5
 ): CurvatureEnvelope {
   if (!spline || totalLength <= 0) {
-    return { averageAbsCurvature: 0, maxAbsCurvature: 0, intensity: 0 }
+    return {
+      averageAbsCurvature: 0,
+      maxAbsCurvature: 0,
+      rawMaxAbsCurvature: 0,
+      intensity: 0,
+    }
   }
 
   const safeLookAhead = Math.max(0, lookAhead)
@@ -123,14 +142,25 @@ export function computeCurvatureEnvelope(
 
   const averageAbsCurvature = count > 0 ? sumAbsCurvature / count : 0
   const fallbackRadius = referenceRadius > 0 ? referenceRadius : 35
-  const referenceCurvature = 1 / Math.max(fallbackRadius, 1e-3)
+  const clampedRadius = Math.max(fallbackRadius, 1e-3)
+  const referenceCurvature = 1 / clampedRadius
+  const cappedCurvature =
+    Number.isFinite(referenceCurvature) && referenceCurvature > 0
+      ? Math.min(maxAbsCurvature, referenceCurvature)
+      : maxAbsCurvature
+  const safeMaxAbsCurvature = Math.max(cappedCurvature, 0)
   const intensity = MathUtils.clamp(
-    referenceCurvature > 0 ? maxAbsCurvature / referenceCurvature : 0,
+    referenceCurvature > 0 ? safeMaxAbsCurvature / referenceCurvature : 0,
     0,
     1
   )
 
-  return { averageAbsCurvature, maxAbsCurvature, intensity }
+  return {
+    averageAbsCurvature,
+    maxAbsCurvature: safeMaxAbsCurvature,
+    rawMaxAbsCurvature: maxAbsCurvature,
+    intensity,
+  }
 }
 
 function computeProgressDistance(a: number, b: number, totalLength: number): number {
