@@ -16,7 +16,6 @@ export const APP_CONFIG = {
   dashLength: 2,
   gapLength: 10,
   lineWidth: 0.15,
-  startLineOffset: 1,
   camDistance: 10,
   camHeight: 6,
   workerParams: { ...DEFAULT_WORKER_PARAMS },
