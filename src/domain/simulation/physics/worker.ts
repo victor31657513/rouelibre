@@ -205,6 +205,13 @@ function computeLongitudinalGaps(
   return { gapAhead, gapBehind }
 }
 
+export function computeAdaptiveMinSpeed(
+  vTargetRaw: number,
+  effectiveMinTargetSpeed: number,
+): number {
+  return Math.max(0, Math.min(vTargetRaw, effectiveMinTargetSpeed))
+}
+
 function detectClosedLoop(points: Vector3[], lane: number): boolean {
   if (points.length < 2) {
     return false
@@ -765,9 +772,13 @@ self.onmessage = async (e: MessageEvent) => {
         candidateSpeeds.length > 0
           ? Math.min(...candidateSpeeds)
           : effectiveMaxTargetSpeed
+      const adaptiveMinSpeed = computeAdaptiveMinSpeed(
+        vTargetRaw,
+        effectiveMinTargetSpeed,
+      )
       const targetSpeed = MathUtils.clamp(
         vTargetRaw,
-        personalMin,
+        adaptiveMinSpeed,
         personalMax,
       )
 
@@ -829,7 +840,7 @@ self.onmessage = async (e: MessageEvent) => {
 
           const candidateSpeed = MathUtils.clamp(
             targetSpeed * compensation,
-            personalMin,
+            adaptiveMinSpeed,
             personalMax,
           )
           const slopeAdjustedCandidate = adjustTargetSpeedForSlope(
@@ -839,7 +850,7 @@ self.onmessage = async (e: MessageEvent) => {
               maxSlope: 0.25,
               maxUphillPenalty: 2,
               maxDownhillBoost: 1,
-              minSpeed: Math.max(0, personalMin - 0.5),
+              minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
               maxSpeed: personalMax + 0.5,
             },
           )
@@ -895,7 +906,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const compensatedTarget = MathUtils.clamp(
         targetSpeed * compensationForBest,
-        personalMin,
+        adaptiveMinSpeed,
         personalMax,
       )
 
@@ -903,7 +914,7 @@ self.onmessage = async (e: MessageEvent) => {
       const commandNoise = sampleNormal(noiseSource ?? Math.random, 0, noiseSigma)
       const baseTarget = MathUtils.clamp(
         compensatedTarget + commandNoise,
-        personalMin,
+        adaptiveMinSpeed,
         personalMax,
       )
       const preferenceBias = MathUtils.clamp(
@@ -913,7 +924,7 @@ self.onmessage = async (e: MessageEvent) => {
       )
       const biasedTarget = MathUtils.clamp(
         baseTarget + preferenceBias * 0.2,
-        personalMin,
+        adaptiveMinSpeed,
         personalMax,
       )
 
@@ -939,7 +950,7 @@ self.onmessage = async (e: MessageEvent) => {
         maxSlope: 0.25,
         maxUphillPenalty: 2,
         maxDownhillBoost: 1,
-        minSpeed: Math.max(0, personalMin - 0.5),
+        minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
         maxSpeed: personalMax + 0.5,
       })
 
@@ -974,7 +985,7 @@ self.onmessage = async (e: MessageEvent) => {
       }
       newSpeed = MathUtils.clamp(
         newSpeed,
-        Math.max(0, personalMin - 0.5),
+        Math.max(0, adaptiveMinSpeed - 0.5),
         personalMax + 0.5,
       )
       speeds[i] = newSpeed

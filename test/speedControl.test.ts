@@ -17,7 +17,7 @@ import {
   computeSignedCurvature,
 } from '../src/domain/simulation/physics/riderPathing'
 import { PathSpline } from '../src/domain/route/pathSpline'
-import { Vector3 } from 'three'
+import { MathUtils, Vector3 } from 'three'
 
 describe('speed control helpers', () => {
   it('maps rider segment length ratios to bounded target speeds', () => {
@@ -592,6 +592,82 @@ describe('speed control helpers', () => {
     expect(clampedStart.maxAbsCurvature).toBeLessThan(1e-4)
     expect(clampedEnd.maxAbsCurvature).toBeLessThan(1e-4)
     expect(loopEnvelope.maxAbsCurvature).toBeGreaterThan(0.01)
+  })
+
+  it('follows adaptive cornering floors when they drop below the personal minimum', async () => {
+    const previousSelf = (globalThis as { self?: unknown }).self
+    const stubSelf = {
+      postMessage: () => undefined,
+      onmessage: null,
+    }
+    const restoreSelf = () => {
+      if (previousSelf === undefined) {
+        delete (globalThis as { self?: unknown }).self
+      } else {
+        ;(globalThis as { self: unknown }).self = previousSelf
+      }
+    }
+    ;(globalThis as { self: unknown }).self = stubSelf
+
+    try {
+      const { computeAdaptiveMinSpeed } = await import(
+        '../src/domain/simulation/physics/worker'
+      )
+
+      const vCorner = 4.6
+      const effectiveMinTargetSpeed = 6.2
+      const personalMax = 9.1
+      const vPower = 11.5
+      const effectiveMaxTargetSpeed = 9.1
+      const vTargetRaw = Math.min(vCorner, vPower, effectiveMaxTargetSpeed)
+      const adaptiveMinSpeed = computeAdaptiveMinSpeed(
+        vTargetRaw,
+        effectiveMinTargetSpeed,
+      )
+
+      expect(adaptiveMinSpeed).toBeCloseTo(vCorner, 6)
+
+      const targetSpeed = MathUtils.clamp(vTargetRaw, adaptiveMinSpeed, personalMax)
+      const compensationForBest = 1
+      const commandNoise = 0
+      const preferredSpeed = 4.6
+      const baseTarget = MathUtils.clamp(
+        targetSpeed * compensationForBest + commandNoise,
+        adaptiveMinSpeed,
+        personalMax,
+      )
+      const preferenceBias = MathUtils.clamp(preferredSpeed - baseTarget, -0.6, 0.6)
+      const biasedTarget = MathUtils.clamp(
+        baseTarget + preferenceBias * 0.2,
+        adaptiveMinSpeed,
+        personalMax,
+      )
+
+      const dt = 5
+      const prevCommand = 8.2
+      const targetRiseRateLimit = 0.8
+      const targetDropRateLimit = 1.0
+      const maxRise = targetRiseRateLimit * dt
+      const maxDrop = targetDropRateLimit * dt
+      let bounded = biasedTarget
+      if (bounded > prevCommand + maxRise) bounded = prevCommand + maxRise
+      if (bounded < prevCommand - maxDrop) bounded = prevCommand - maxDrop
+
+      const targetSpeedDamping = 4.0
+      const reactionTime = 0.3
+      const dampingAlpha = 1 - Math.exp(-targetSpeedDamping * dt)
+      const reactionAlpha = 1 - Math.exp(-dt / reactionTime)
+      const combinedAlpha = MathUtils.clamp(
+        1 - (1 - dampingAlpha) * (1 - reactionAlpha),
+        0,
+        1,
+      )
+      const commandedTarget = prevCommand + (bounded - prevCommand) * combinedAlpha
+
+      expect(commandedTarget).toBeCloseTo(vCorner, 5)
+    } finally {
+      restoreSelf()
+    }
   })
 
 })
