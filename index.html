@@ -6,9 +6,6 @@
   <title>Roue libre – Three + Rapier</title>
   <meta name="description" content="Roue libre showcase using Three.js and Rapier" />
   <link rel="icon" href="/favicon.ico" />
-  <style>
-    body { font-family: system-ui, sans-serif; }
-  </style>
   <script>
     (() => {
       document.documentElement.classList.remove('dark')
@@ -18,11 +15,11 @@
       }
     })()
   </script>
-  <script type="module" crossorigin src="/assets/index-CS_uG2jH.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-Buz7Shcr.css">
+  <script type="module" crossorigin src="/assets/index-BTEzp6DI.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Dv4IlfqR.css">
 </head>
-<body class="m-0 overflow-hidden bg-base-100 text-base-content">
-<canvas id="app" class="block"></canvas>
+<body class="m-0 min-h-screen overflow-hidden bg-base-100 text-base-content font-sans supports-[height:100dvh]:min-h-[100dvh]">
+<canvas id="app" class="block h-screen w-screen supports-[height:100dvh]:h-[100dvh]"></canvas>
 <div
   id="speed-indicator"
   class="fixed top-4 left-4 z-50 pointer-events-none rounded-full bg-black/60 px-4 py-1.5 text-left font-sans text-lg font-semibold uppercase tracking-wider text-white shadow"
@@ -31,14 +28,14 @@
 </div>
 <div
   id="distance-indicator"
-  class="fixed top-4 right-4 z-50 pointer-events-none rounded-xl bg-black/60 px-3 py-2 text-right font-sans text-sm text-white shadow"
+  class="fixed top-4 right-4 z-50 pointer-events-none rounded-xl bg-black/60 px-3 py-2 text-right font-sans text-sm leading-[1.35] text-white shadow"
 >
-  <span id="distance-travelled">Parcourus : -- km</span>
-  <span id="distance-remaining">Restants : -- km</span>
+  <span id="distance-travelled" class="block">Parcourus : -- km</span>
+  <span id="distance-remaining" class="block">Restants : -- km</span>
 </div>
   <ul
     id="route-list"
-    class="menu bg-base-100 rounded-box text-sm font-sans shadow fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 max-w-md"
+    class="menu fixed inset-x-5 top-1/2 z-10 -translate-y-1/2 rounded-box bg-base-100 p-3 text-sm font-sans shadow box-border max-h-[calc(100vh-12rem)] overflow-y-auto supports-[height:100dvh]:max-h-[calc(100dvh-12rem)] sm:left-1/2 sm:right-auto sm:max-h-none sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:p-4 sm:overflow-visible"
   ></ul>
 <div id="loader" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
   <progress
@@ -50,31 +47,31 @@
 </div>
 <div
   id="controls"
-  class="fixed bottom-4 right-4 z-50 flex gap-2 pointer-events-auto"
+  class="pointer-events-auto fixed bottom-3 left-1/2 z-50 flex w-[calc(100%-2.5rem)] -translate-x-1/2 flex-wrap justify-center gap-3 sm:bottom-4 sm:left-auto sm:right-4 sm:w-auto sm:translate-x-0 sm:flex-nowrap sm:gap-2"
 >
   <button
     id="home-btn"
-    class="hidden btn btn-primary font-sans"
+    class="btn btn-primary hidden font-sans flex-1 basis-[calc(50%-0.75rem)] min-w-[7.5rem] max-[420px]:basis-full sm:flex-none sm:basis-auto sm:min-w-0"
   >
     Quitter
   </button>
   <button
     id="start-btn"
-    class="btn btn-primary font-sans"
+    class="btn btn-primary font-sans flex-1 basis-[calc(50%-0.75rem)] min-w-[7.5rem] max-[420px]:basis-full sm:flex-none sm:basis-auto sm:min-w-0"
     disabled
   >
     Start
   </button>
   <button
     id="pause-btn"
-    class="btn btn-primary font-sans"
+    class="btn btn-primary font-sans flex-1 basis-[calc(50%-0.75rem)] min-w-[7.5rem] max-[420px]:basis-full sm:flex-none sm:basis-auto sm:min-w-0"
     disabled
   >
     Pause
   </button>
   <button
     id="reset-btn"
-    class="btn btn-primary font-sans"
+    class="btn btn-primary font-sans flex-1 basis-[calc(50%-0.75rem)] min-w-[7.5rem] max-[420px]:basis-full sm:flex-none sm:basis-auto sm:min-w-0"
     disabled
   >
     Reset
@@ -82,7 +79,7 @@
 </div>
 <div
   id="version"
-  class="fixed bottom-2 left-1/2 -translate-x-1/2 text-white font-sans text-sm z-50 pointer-events-none opacity-100"
+  class="pointer-events-none fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0))] left-1/2 -translate-x-1/2 font-sans text-xs text-white opacity-100 z-50 sm:bottom-2 sm:text-sm"
 ></div>
 </body>
 </html>
