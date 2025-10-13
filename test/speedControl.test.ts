@@ -549,4 +549,49 @@ describe('speed control helpers', () => {
     expect(vCorner).toBeCloseTo(theoreticalMinimum, 5)
   })
 
+  it('keeps curvature low at open route endpoints when clamping sampling', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(50, 0, 0),
+      new Vector3(100, 0, 0),
+      new Vector3(150, 0, 0),
+      new Vector3(150, 0, 30),
+    ])
+    const totalLength = spline.totalLength
+    const lookAhead = 20
+    const minRadius = 80
+
+    const loopEnvelope = computeCurvatureEnvelope(
+      spline,
+      0,
+      totalLength,
+      lookAhead,
+      minRadius,
+      undefined,
+      'loop',
+    )
+    const clampedStart = computeCurvatureEnvelope(
+      spline,
+      0,
+      totalLength,
+      lookAhead,
+      minRadius,
+      undefined,
+      'clamp',
+    )
+    const clampedEnd = computeCurvatureEnvelope(
+      spline,
+      totalLength,
+      totalLength,
+      lookAhead,
+      minRadius,
+      undefined,
+      'clamp',
+    )
+
+    expect(clampedStart.maxAbsCurvature).toBeLessThan(1e-4)
+    expect(clampedEnd.maxAbsCurvature).toBeLessThan(1e-4)
+    expect(loopEnvelope.maxAbsCurvature).toBeGreaterThan(0.01)
+  })
+
 })

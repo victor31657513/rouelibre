@@ -15,6 +15,7 @@ export interface SimulationInitConfig {
   roadWidth: number
   margin: number
   params?: SimulationParameterOverrides
+  closedLoop?: boolean
 }
 
 export type SimulationStateListener = (state: Float32Array) => void
@@ -48,6 +49,7 @@ export class SimulationClient {
           roadWidth: config.roadWidth,
           margin: config.margin,
           params: config.params,
+          closedLoop: config.closedLoop,
         },
       },
       [config.positions, config.yaw, config.path],

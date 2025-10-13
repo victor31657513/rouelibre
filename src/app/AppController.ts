@@ -58,6 +58,7 @@ export class AppController {
   private positions = new Float32Array(APP_CONFIG.riderCount * 4)
   private roadReady = false
   private roadAssets: RoadAssets = {}
+  private routeClosed = false
 
   private animating = false
   private lastTick = performance.now()
@@ -370,6 +371,7 @@ export class AppController {
 
     this.currentPath = smoothed
     this.simplifiedPath = simplified
+    this.routeClosed = this.detectClosedLoop(simplified)
     this.spline = new PathSpline(simplified)
     this.pelotonScene.setSpline(this.spline)
 
@@ -461,6 +463,7 @@ export class AppController {
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
       params: { ...APP_CONFIG.workerParams },
+      closedLoop: this.routeClosed,
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -528,6 +531,7 @@ export class AppController {
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
       params: { ...APP_CONFIG.workerParams },
+      closedLoop: this.routeClosed,
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -535,6 +539,15 @@ export class AppController {
     this.focusSelected()
     this.scene.renderer.render(this.scene.scene, this.scene.camera)
     this.refreshTelemetryDisplay()
+  }
+
+  private detectClosedLoop(path: Vec3[]): boolean {
+    if (path.length < 2) return false
+    const first = path[0]
+    const last = path[path.length - 1]
+    const separation = Math.hypot(last.x - first.x, last.y - first.y, last.z - first.z)
+    const threshold = Math.max(APP_CONFIG.laneWidth * 4, 10)
+    return separation <= threshold
   }
 
   private rebuildRoute(): void {

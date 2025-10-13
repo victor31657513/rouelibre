@@ -7,6 +7,8 @@
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../../route/pathSpline'
 
+export type PathBoundaryMode = 'loop' | 'clamp'
+
 export interface NeighborBounds {
   min: Float32Array
   max: Float32Array
@@ -26,6 +28,7 @@ interface OffsetProfileOptions {
   maxOffset: number
   totalLength: number
   minRadius: number
+  boundaryMode?: PathBoundaryMode
 }
 
 const scratchP0 = new Vector3()
@@ -37,14 +40,33 @@ function wrapDistance(distance: number, totalLength: number): number {
   return MathUtils.euclideanModulo(distance, totalLength)
 }
 
+function normalizeDistance(
+  distance: number,
+  totalLength: number,
+  mode: PathBoundaryMode
+): number {
+  if (totalLength <= 0 || !Number.isFinite(distance)) {
+    return distance
+  }
+
+  if (mode === 'loop') {
+    return wrapDistance(distance, totalLength)
+  }
+
+  if (distance <= 0) return 0
+  if (distance >= totalLength) return totalLength
+  return distance
+}
+
 function sampleXZ(
   spline: PathSpline,
   distance: number,
   totalLength: number,
-  target: Vector3
+  target: Vector3,
+  mode: PathBoundaryMode
 ): Vector3 {
-  const wrapped = wrapDistance(distance, totalLength)
-  const sample = spline.sampleByDistance(wrapped)
+  const normalized = normalizeDistance(distance, totalLength, mode)
+  const sample = spline.sampleByDistance(normalized)
   target.set(sample.position.x, 0, sample.position.z)
   return target
 }
@@ -53,13 +75,14 @@ export function computeSignedCurvature(
   spline: PathSpline,
   distance: number,
   totalLength: number,
-  sampleSpacing = 0.5
+  sampleSpacing = 0.5,
+  boundaryMode: PathBoundaryMode = 'loop'
 ): number {
   if (!spline || totalLength <= 0) return 0
-  const spacing = Math.max(0.1, sampleSpacing)
-  const p0 = sampleXZ(spline, distance - spacing, totalLength, scratchP0)
-  const p1 = sampleXZ(spline, distance, totalLength, scratchP1)
-  const p2 = sampleXZ(spline, distance + spacing, totalLength, scratchP2)
+  const spacing = Math.max(0.1, sampleSpacing ?? 0.5)
+  const p0 = sampleXZ(spline, distance - spacing, totalLength, scratchP0, boundaryMode)
+  const p1 = sampleXZ(spline, distance, totalLength, scratchP1, boundaryMode)
+  const p2 = sampleXZ(spline, distance + spacing, totalLength, scratchP2, boundaryMode)
 
   const v1x = p1.x - p0.x
   const v1z = p1.z - p0.z
@@ -109,7 +132,8 @@ export function computeCurvatureEnvelope(
   totalLength: number,
   lookAhead: number,
   referenceRadius: number,
-  sampleCount = 5
+  sampleCount = 5,
+  boundaryMode: PathBoundaryMode = 'loop'
 ): CurvatureEnvelope {
   if (!spline || totalLength <= 0) {
     return {
@@ -121,7 +145,7 @@ export function computeCurvatureEnvelope(
   }
 
   const safeLookAhead = Math.max(0, lookAhead)
-  const safeSamples = Math.max(1, Math.floor(sampleCount))
+  const safeSamples = Math.max(1, Math.floor(sampleCount ?? 5))
   const step = safeSamples > 0 ? safeLookAhead / safeSamples : 0
 
   let maxAbsCurvature = 0
@@ -130,7 +154,9 @@ export function computeCurvatureEnvelope(
 
   for (let i = 0; i <= safeSamples; i++) {
     const sampleDistance = distance + step * i
-    const curvature = Math.abs(computeSignedCurvature(spline, sampleDistance, totalLength))
+    const curvature = Math.abs(
+      computeSignedCurvature(spline, sampleDistance, totalLength, undefined, boundaryMode)
+    )
     if (!Number.isFinite(curvature)) {
       continue
     }
@@ -234,7 +260,7 @@ export function computeDesiredOffsetProfile(
   distance: number,
   options: OffsetProfileOptions
 ): number {
-  const { lookAhead, maxOffset, totalLength, minRadius } = options
+  const { lookAhead, maxOffset, totalLength, minRadius, boundaryMode = 'loop' } = options
   if (!spline || totalLength <= 0 || maxOffset <= 0) return 0
   const curvatureThreshold = minRadius > 0 ? 1 / minRadius : 0.02
   const halfLook = Math.max(lookAhead * 0.5, 1)
@@ -248,7 +274,13 @@ export function computeDesiredOffsetProfile(
 
   for (const offset of sampleOffsets) {
     const sampleDistance = distance + offset
-    const curvature = computeSignedCurvature(spline, sampleDistance, totalLength)
+    const curvature = computeSignedCurvature(
+      spline,
+      sampleDistance,
+      totalLength,
+      undefined,
+      boundaryMode,
+    )
     if (!Number.isFinite(curvature)) {
       continue
     }
