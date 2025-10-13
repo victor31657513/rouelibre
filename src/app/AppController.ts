@@ -17,7 +17,7 @@ import { SimulationClient } from '../domain/simulation/SimulationClient'
 import { initPeloton } from '../domain/simulation/peloton'
 import { PathSpline, resamplePath } from '../domain/route/pathSpline'
 import { elevationStats, ensureProgressivePath, simplifyPath } from '../domain/route/pathProcessing'
-import { buildCenterDashes, buildRoadBounds, buildRoadMesh } from '../domain/route/roadGeometry'
+import { buildCenterDashes, buildRoadBounds, buildRoadMesh, buildStartLine } from '../domain/route/roadGeometry'
 import { loadGPX } from '../domain/route/routeLoader'
 import type { GPXPoint, Vec3 } from '../domain/route/gpx'
 import { changeSelectedIndex, selectedIndex, setSelectedIndex } from '../domain/state/selection'
@@ -40,6 +40,7 @@ interface DomRefs {
 type RoadAssets = {
   road?: THREE.Mesh
   markings?: THREE.Mesh
+  startLine?: THREE.Mesh
   bounds?: THREE.LineSegments
 }
 
@@ -555,6 +556,7 @@ export class AppController {
     const { scene } = this.scene
     if (this.roadAssets.road) scene.remove(this.roadAssets.road)
     if (this.roadAssets.markings) scene.remove(this.roadAssets.markings)
+    if (this.roadAssets.startLine) scene.remove(this.roadAssets.startLine)
     if (this.roadAssets.bounds) scene.remove(this.roadAssets.bounds)
 
     const road = buildRoadMesh(this.currentPath, APP_CONFIG.roadWidth)
@@ -564,17 +566,24 @@ export class AppController {
       APP_CONFIG.dashLength,
       APP_CONFIG.gapLength,
     )
+    const startLine = buildStartLine(
+      this.currentPath,
+      APP_CONFIG.roadWidth,
+      APP_CONFIG.startLineOffset,
+    )
     const bounds = buildRoadBounds(this.currentPath, APP_CONFIG.roadWidth)
 
     road.name = 'routeMesh'
     markings.name = 'centerMarkings'
+    startLine.name = 'startLine'
     bounds.name = 'roadBounds'
 
     scene.add(road)
     scene.add(markings)
+    scene.add(startLine)
     scene.add(bounds)
 
-    this.roadAssets = { road, markings, bounds }
+    this.roadAssets = { road, markings, startLine, bounds }
     this.pelotonScene.setRoadMesh(road)
     this.roadReady = true
     this.pelotonScene.applyState(this.positions)

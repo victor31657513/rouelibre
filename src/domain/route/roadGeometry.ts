@@ -147,6 +147,29 @@ export function buildCenterDashes(
 }
 
 /**
+ * Builds the mesh representing the start/finish line.
+ */
+export function buildStartLine(
+  centerLine: Vec3[],
+  width: number,
+  offset: number,
+  startLineWidth = 0.3,
+): THREE.Mesh {
+  if (centerLine.length < 2) return new THREE.Mesh()
+  const a = centerLine[0]
+  const b = centerLine[1]
+  const dir = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize()
+  const center = new THREE.Vector3(a.x, a.y + 0.02, a.z).add(dir.clone().multiplyScalar(offset))
+
+  const geom = new THREE.BoxGeometry(width, 0.02, startLineWidth)
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff })
+  const mesh = new THREE.Mesh(geom, mat)
+  mesh.position.copy(center)
+  mesh.rotation.y = Math.atan2(dir.x, dir.z)
+  return mesh
+}
+
+/**
  * Generates thin red lines along both road edges to help visual debugging.
  */
 export function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSegments {
