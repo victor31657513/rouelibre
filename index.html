@@ -21,15 +21,9 @@
 </head>
 <body class="m-0 overflow-hidden bg-base-100 text-base-content">
 <canvas id="app" class="block"></canvas>
-<button
-  id="home-btn"
-  class="hidden fixed top-4 left-4 z-50 btn btn-primary font-sans"
->
-  Quitter
-</button>
 <div
   id="speed-indicator"
-  class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none rounded-full bg-black/60 px-4 py-1.5 text-center font-sans text-lg font-semibold uppercase tracking-wider text-white shadow"
+  class="fixed top-4 left-4 z-50 pointer-events-none rounded-full bg-black/60 px-4 py-1.5 text-left font-sans text-lg font-semibold uppercase tracking-wider text-white shadow"
 >
   -- km/h
 </div>
@@ -56,6 +50,12 @@
   id="controls"
   class="fixed bottom-4 right-4 z-50 flex gap-2 pointer-events-auto"
 >
+  <button
+    id="home-btn"
+    class="hidden btn btn-primary font-sans"
+  >
+    Quitter
+  </button>
   <button
     id="start-btn"
     class="btn btn-primary font-sans"
