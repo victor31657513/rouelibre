@@ -61,7 +61,8 @@ export class AppController {
 
   private animating = false
   private lastTick = performance.now()
-  private lastStepDt = 0
+  private lastStateDt = 0
+  private readonly pendingStepDts: number[] = []
   private rotating = false
   private touchRotating = false
   private activeTouchId: number | null = null
@@ -404,7 +405,8 @@ export class AppController {
     const yawOffsets = new Float32Array(APP_CONFIG.riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
     this.positions = new Float32Array(APP_CONFIG.riderCount * 4)
-    this.lastStepDt = 0
+    this.lastStateDt = 0
+    this.pendingStepDts.length = 0
 
     const totalLength = this.spline.totalLength
     const yaw0 = Math.atan2(
@@ -482,7 +484,8 @@ export class AppController {
     const yawOffsets = new Float32Array(APP_CONFIG.riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
     this.positions = new Float32Array(APP_CONFIG.riderCount * 4)
-    this.lastStepDt = 0
+    this.lastStateDt = 0
+    this.pendingStepDts.length = 0
     const totalLength = this.spline.totalLength
     const yaw0 = Math.atan2(
       this.currentPath[1].x - this.currentPath[0].x,
@@ -583,6 +586,8 @@ export class AppController {
 
   private stopAnimation(): void {
     this.animating = false
+    this.pendingStepDts.length = 0
+    this.lastStateDt = 0
   }
 
   private setSpeedDisplay(speedKmh: number | null): void {
@@ -643,7 +648,7 @@ export class AppController {
     if (
       previousState &&
       previousState.length === currentState.length &&
-      this.lastStepDt > 0 &&
+      this.lastStateDt > 0 &&
       Number.isFinite(progress) &&
       Number.isFinite(previousState[base])
     ) {
@@ -656,7 +661,10 @@ export class AppController {
           delta -= totalLength
         }
       }
-      speedMs = delta / this.lastStepDt
+      const dt = this.lastStateDt
+      if (dt > 0 && Number.isFinite(dt)) {
+        speedMs = delta / dt
+      }
       if (!Number.isFinite(speedMs)) {
         speedMs = 0
       }
@@ -680,7 +688,7 @@ export class AppController {
     this.lastTick = now
 
     this.cameraRig.update(dt, [this.scene.riderObjects[selectedIndex]], this.rotating)
-    this.lastStepDt = dt
+    this.pendingStepDts.push(dt)
     this.simulation.step(dt)
     this.scene.renderer.render(this.scene.scene, this.scene.camera)
 
@@ -695,6 +703,9 @@ export class AppController {
     const previous = this.positions
     this.positions = state
     this.pelotonScene.applyState(this.positions)
+    const queuedDt = this.pendingStepDts.shift()
+    this.lastStateDt =
+      typeof queuedDt === 'number' && Number.isFinite(queuedDt) && queuedDt > 0 ? queuedDt : 0
     this.updateTelemetry(previous, this.positions)
   }
 
