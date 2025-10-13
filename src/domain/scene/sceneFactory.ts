@@ -60,13 +60,6 @@ export function createSceneContext(
   dir.position.set(10, 20, 10)
   scene.add(dir)
 
-  // Ground plane
-  const groundGeo = new THREE.PlaneGeometry(200, 40)
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x1f232b, roughness: 1 })
-  const ground = new THREE.Mesh(groundGeo, groundMat)
-  ground.rotation.x = -Math.PI / 2
-  scene.add(ground)
-
   // Instanced riders + helper objects for camera tracking
   const bodyGeo = new THREE.BoxGeometry(2, 2, 0.7)
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3aa6ff, metalness: 0.2, roughness: 0.7 })
