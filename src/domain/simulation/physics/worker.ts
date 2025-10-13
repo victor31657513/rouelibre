@@ -676,7 +676,17 @@ self.onmessage = async (e: MessageEvent) => {
         lookAheadDistance,
         minRadius,
       )
-      const kEnv = Math.max(curvatureEnvelope.maxAbsCurvature, 0)
+      const rawCurvature = Math.max(
+        curvatureEnvelope.rawMaxAbsCurvature ?? curvatureEnvelope.maxAbsCurvature,
+        0,
+      )
+      const curvatureCap =
+        minRadius > 0 && Number.isFinite(minRadius) ? 1 / minRadius : Infinity
+      const boundedCurvature =
+        Number.isFinite(curvatureCap) && curvatureCap > 0
+          ? Math.min(rawCurvature, curvatureCap)
+          : rawCurvature
+      const kEnv = Math.max(boundedCurvature, 0)
 
       let vCorner = effectiveMaxTargetSpeed
       if (!(maxLateralAcceleration > 0)) {
@@ -685,7 +695,7 @@ self.onmessage = async (e: MessageEvent) => {
           warnedLateralAccel = true
         }
       } else {
-        const safeCurvature = Math.max(kEnv, 1e-6)
+        const safeCurvature = Math.max(boundedCurvature, 1e-6)
         const candidate = Math.sqrt(maxLateralAcceleration / safeCurvature)
         if (Number.isFinite(candidate) && candidate > 0) {
           vCorner = candidate
