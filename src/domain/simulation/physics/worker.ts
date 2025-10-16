@@ -13,6 +13,7 @@ import {
   computeOffsetSegmentLength,
   computeTargetSpeedCompensation,
   projectWorldDistanceOntoCenterline,
+  wrapDistance,
 } from './speedControl'
 import {
   computeCurvatureEnvelope,
@@ -52,6 +53,8 @@ let riderNoiseSigma: Float32Array
 let riderPowerWeights: Float32Array
 let riderGapWeights: Float32Array
 let riderRoles: Int16Array
+let riderPoses: RiderPose[] = []
+let arcProgress: Float32Array
 
 let laneWidth = 1
 let roadWidth = 8
@@ -89,6 +92,7 @@ const DEFAULT_POWER_AVAILABLE = DEFAULT_WORKER_PARAMS.powerAvailable
 const DEFAULT_LATERAL_ACCEL = DEFAULT_WORKER_PARAMS.aLatMax
 const MAX_DRAFTING_LOOKAHEAD = 12
 const MIN_DRAFTING_LOOKAHEAD = 2
+const LONGITUDINAL_EPSILON = 1e-3
 
 const SOCIAL_TAU = 0.6
 const GAP_MIN_LONG = 1.1
@@ -107,6 +111,8 @@ const FALLBACK_WALL_WEIGHT = DEFAULT_WORKER_PARAMS.wW
 type WeightTriple = { power: number; gap: number; wall: number }
 
 type RiderRoleProfile = { powerWeight: number; gapWeight: number }
+
+type RiderPose = { position: Vector3; tangent: Vector3 }
 
 const ROLE_PROFILES: RiderRoleProfile[] = [
   { powerWeight: 0.6, gapWeight: 0.25 }, // sprinteur protecteur, cherche l'aspi
@@ -163,47 +169,124 @@ let warnedDrafting = false
 let diagnosticAccumulator = 0
 let pendingDiagnostics: DiagnosticSnapshot | null = null
 
-function computeLongitudinalGaps(
+const scratchRightVector = new Vector3()
+const scratchRelative = new Vector3()
+
+function createPose(): RiderPose {
+  return { position: new Vector3(), tangent: new Vector3() }
+}
+
+function samplePoseAtDistance(
+  spline: PathSpline,
+  distance: number,
+  offset: number,
+  target: RiderPose,
+): RiderPose {
+  const sample = spline.sampleByDistance(distance)
+  target.position.copy(sample.position)
+  target.tangent.copy(sample.tangent).normalize()
+  scratchRightVector.set(-target.tangent.z, 0, target.tangent.x).normalize()
+  target.position.addScaledVector(scratchRightVector, offset)
+  return target
+}
+
+function alignProjectionToArc(
+  projection: number,
+  arc: number,
+  totalLength: number,
+): number {
+  if (!Number.isFinite(totalLength) || totalLength <= 0 || !Number.isFinite(arc)) {
+    return projection
+  }
+  let best = projection
+  let bestError = Math.abs(projection - arc)
+  for (const step of [-1, 1]) {
+    const candidate = projection + step * totalLength
+    const error = Math.abs(candidate - arc)
+    if (error < bestError) {
+      best = candidate
+      bestError = error
+    }
+  }
+  return best
+}
+
+const scratchReferencePose = createPose()
+const scratchNeighborPose = createPose()
+const scratchNextPose = createPose()
+
+export function computeLongitudinalGaps(
   index: number,
   progress: Float32Array,
+  offsets: Float32Array,
+  spline: PathSpline,
   totalLength: number,
+  poses?: RiderPose[],
 ): { gapAhead: number; gapBehind: number } {
   const count = progress.length
   if (index < 0 || index >= count) {
     return { gapAhead: Infinity, gapBehind: Infinity }
   }
 
-  const reference = progress[index]
+  const referencePose =
+    poses?.[index] ??
+    samplePoseAtDistance(spline, progress[index], offsets[index], scratchReferencePose)
+  const referencePosition = referencePose.position
+  const referenceTangent = referencePose.tangent
+
   let gapAhead = Infinity
   let gapBehind = Infinity
 
   for (let j = 0; j < count; j++) {
     if (j === index) continue
 
-    const forward = progress[j] - reference
+    const neighborPose =
+      poses?.[j] ??
+      samplePoseAtDistance(spline, progress[j], offsets[j], scratchNeighborPose)
+    scratchRelative.subVectors(neighborPose.position, referencePosition)
+    let projection = scratchRelative.dot(referenceTangent)
+
     if (totalLength > 0) {
-      const ahead = forward > 0 ? forward : forward + totalLength
-      if (ahead > 0 && ahead < gapAhead) {
-        gapAhead = ahead
+      const rawDiff = progress[j] - progress[index]
+      const forwardArc = wrapDistance(rawDiff, totalLength)
+      const backwardArc = -wrapDistance(-rawDiff, totalLength)
+
+      if (forwardArc > LONGITUDINAL_EPSILON) {
+        const alignedForward = alignProjectionToArc(projection, forwardArc, totalLength)
+        if (alignedForward > LONGITUDINAL_EPSILON && alignedForward < gapAhead) {
+          gapAhead = alignedForward
+        }
       }
 
-      const backwardRaw = reference - progress[j]
-      const backward = backwardRaw > 0 ? backwardRaw : backwardRaw + totalLength
-      if (backward > 0 && backward < gapBehind) {
-        gapBehind = backward
+      if (Math.abs(backwardArc) > LONGITUDINAL_EPSILON) {
+        const alignedBackward = alignProjectionToArc(projection, backwardArc, totalLength)
+        if (alignedBackward < -LONGITUDINAL_EPSILON) {
+          const behind = Math.abs(alignedBackward)
+          if (behind < gapBehind) {
+            gapBehind = behind
+          }
+        }
       }
     } else {
-      if (forward > 0 && forward < gapAhead) {
-        gapAhead = forward
-      }
-      const backward = -forward
-      if (backward > 0 && backward < gapBehind) {
-        gapBehind = backward
+      if (projection > LONGITUDINAL_EPSILON && projection < gapAhead) {
+        gapAhead = projection
+      } else if (projection < -LONGITUDINAL_EPSILON) {
+        const behind = -projection
+        if (behind < gapBehind) {
+          gapBehind = behind
+        }
       }
     }
   }
 
   return { gapAhead, gapBehind }
+}
+
+function refreshRiderPoseCache(): void {
+  if (!riderPoses || riderPoses.length !== N) return
+  for (let i = 0; i < riderPoses.length; i++) {
+    samplePoseAtDistance(spline, progress[i], offsets[i], riderPoses[i])
+  }
 }
 
 export function computeAdaptiveMinSpeed(
@@ -266,27 +349,50 @@ function computeSlope(current: Vector3, ahead: Vector3, distance: number): numbe
 function computeDraftingContext(
   index: number,
   progress: Float32Array,
+  offsets: Float32Array,
+  spline: PathSpline,
   totalLength: number,
   maxDistance: number,
+  poses?: RiderPose[],
 ): { gapToLeader: number; leadersAhead: number } {
   if (!Number.isFinite(maxDistance) || maxDistance <= 0) {
     return { gapToLeader: Infinity, leadersAhead: 0 }
   }
 
   const count = progress.length
+  if (index < 0 || index >= count) {
+    return { gapToLeader: Infinity, leadersAhead: 0 }
+  }
+
+  const referencePose =
+    poses?.[index] ??
+    samplePoseAtDistance(spline, progress[index], offsets[index], scratchReferencePose)
+  const origin = referencePose.position
+  const tangent = referencePose.tangent
+
   let bestGap = Infinity
   let leaders = 0
 
   for (let j = 0; j < count; j++) {
     if (j === index) continue
-    let diff = progress[j] - progress[index]
-    if (totalLength > 0 && diff <= 0) {
-      diff += totalLength
+
+    const neighborPose =
+      poses?.[j] ??
+      samplePoseAtDistance(spline, progress[j], offsets[j], scratchNeighborPose)
+    scratchRelative.subVectors(neighborPose.position, origin)
+    let projection = scratchRelative.dot(tangent)
+
+    if (totalLength > 0) {
+      const rawDiff = progress[j] - progress[index]
+      const forwardArc = wrapDistance(rawDiff, totalLength)
+      projection = alignProjectionToArc(projection, forwardArc, totalLength)
     }
-    if (diff <= 0 || diff > maxDistance) continue
-    leaders++
-    if (diff < bestGap) {
-      bestGap = diff
+
+    if (projection > LONGITUDINAL_EPSILON && projection <= maxDistance) {
+      leaders++
+      if (projection < bestGap) {
+        bestGap = projection
+      }
     }
   }
 
@@ -505,6 +611,11 @@ self.onmessage = async (e: MessageEvent) => {
     riderPowerWeights = new Float32Array(N)
     riderGapWeights = new Float32Array(N)
     riderRoles = new Int16Array(N)
+    riderPoses = new Array(N)
+    arcProgress = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      riderPoses[i] = createPose()
+    }
     const rng = mulberry32(123456)
     const effectiveMaxInitSpeed = Math.max(0, maxTargetSpeed)
     const effectiveMinInitSpeed = Math.max(
@@ -595,6 +706,8 @@ self.onmessage = async (e: MessageEvent) => {
       }
     }
 
+    refreshRiderPoseCache()
+
     ;(self as unknown as Worker).postMessage(
       { type: 'state', data: state.buffer },
       [state.buffer]
@@ -607,6 +720,7 @@ self.onmessage = async (e: MessageEvent) => {
 
     const dt: number = payload.dt
     diagnosticAccumulator += dt
+    refreshRiderPoseCache()
 
     // Un voisinage trop long resserre artificiellement le couloir en virage → peloton qui s'agglutine.
     // On réduit la portée effective pour limiter l'effet accordéon.
@@ -735,7 +849,15 @@ self.onmessage = async (e: MessageEvent) => {
       const slipLookahead = lookAheadDistance > 0
         ? Math.min(Math.max(lookAheadDistance, MIN_DRAFTING_LOOKAHEAD), MAX_DRAFTING_LOOKAHEAD)
         : MAX_DRAFTING_LOOKAHEAD
-      const draftingContext = computeDraftingContext(i, progress, totalLength, slipLookahead)
+      const draftingContext = computeDraftingContext(
+        i,
+        progress,
+        offsets,
+        spline,
+        totalLength,
+        slipLookahead,
+        riderPoses,
+      )
       let S = draftingFactor(draftingContext.gapToLeader, draftingContext.leadersAhead, {
         minFactor: draftingMinFactor,
         maxReduction: draftingMaxReduction,
@@ -754,7 +876,14 @@ self.onmessage = async (e: MessageEvent) => {
       }
       CdAeff = Math.max(0, CdAeff)
 
-      const { gapAhead } = computeLongitudinalGaps(i, progress, totalLength)
+      const { gapAhead } = computeLongitudinalGaps(
+        i,
+        progress,
+        offsets,
+        spline,
+        totalLength,
+        riderPoses,
+      )
       const gapThreshold = GAP_MIN_LONG + HEADWAY_TIME * gapResponsiveness * previousSpeed
 
       const vPower = solveVelocityFromPower(maxPowerForRider, {
@@ -1026,6 +1155,9 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
 
       const travel = ((previousSpeed + newSpeed) / 2) * dt
+      if (arcProgress) {
+        arcProgress[i] += Math.max(0, travel)
+      }
       const curvature = computeSignedCurvature(
         spline,
         progress[i],
@@ -1052,12 +1184,10 @@ self.onmessage = async (e: MessageEvent) => {
         pathBoundaryMode,
       )
 
-      const sample = spline.sampleByDistance(s)
-      const center = sample.position
-      const tangent = sample.tangent
-      const right = new Vector3(-tangent.z, 0, tangent.x).normalize()
       const lateralOffset = offsets[i]
-      const pos = center.clone().add(right.clone().multiplyScalar(lateralOffset))
+      const pose = samplePoseAtDistance(spline, s, lateralOffset, scratchNextPose)
+      const pos = pose.position
+      const tangent = pose.tangent
 
       const look = spline.sampleByDistance(yawAheadDistance)
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
@@ -1066,7 +1196,7 @@ self.onmessage = async (e: MessageEvent) => {
       const yaw = smoothLimitAngle(currentYaw, targetYaw, yawState, maxYawRate, maxYawAccel, dt)
       yawRates[i] = yawState.yawRate
 
-      rb.setNextKinematicTranslation({ x: pos.x, y: center.y + 1, z: pos.z })
+      rb.setNextKinematicTranslation({ x: pos.x, y: pos.y + 1, z: pos.z })
       const half = yaw / 2
       rb.setNextKinematicRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
       rb.setAngvel({ x: 0, y: yawRates[i], z: 0 }, true)
@@ -1077,6 +1207,8 @@ self.onmessage = async (e: MessageEvent) => {
       state[base4 + 2] = 1
       state[base4 + 3] = yaw
     }
+
+    refreshRiderPoseCache()
 
     world.step()
 
@@ -1090,7 +1222,10 @@ self.onmessage = async (e: MessageEvent) => {
       const { gapAhead, gapBehind } = computeLongitudinalGaps(
         referenceRiderIndex,
         progress,
+        offsets,
+        spline,
         totalLength,
+        riderPoses,
       )
       console.log('[physics][diagnostics]', {
         ...pendingDiagnostics,

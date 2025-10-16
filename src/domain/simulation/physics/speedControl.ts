@@ -397,7 +397,7 @@ export interface SafeSpeedDiagnostics {
   minRightMargin: number
 }
 
-function wrapDistance(distance: number, totalLength: number): number {
+export function wrapDistance(distance: number, totalLength: number): number {
   if (totalLength <= 0) return distance
   return MathUtils.euclideanModulo(distance, totalLength)
 }
