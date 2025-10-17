@@ -767,7 +767,7 @@ self.onmessage = async (e: MessageEvent) => {
       )
       const powerWeight = weightSet.power
       const gapWeight = weightSet.gap
-      const wallWeight = Math.max(0.05, weightSet.wall)
+      const baseWallWeight = Math.max(0.05, weightSet.wall)
       const referenceGap = Math.max(normalizedBaseWeights.gap, 1e-3)
       const referencePower = Math.max(normalizedBaseWeights.power, 1e-3)
       const gapResponsiveness = MathUtils.clamp(
@@ -805,6 +805,26 @@ self.onmessage = async (e: MessageEvent) => {
 
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
+      const hasLateralNeighbor = neighborBounds.hasNeighbor?.[i] ?? false
+      const baseWallComfort = Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN)
+      let wallComfort = baseWallComfort
+      if (!hasLateralNeighbor) {
+        if (!Number.isFinite(maxOffset)) {
+          wallComfort = baseWallComfort * 2
+        } else {
+          wallComfort = Math.max(baseWallComfort, Math.abs(maxOffset) * 0.9)
+        }
+      }
+      const offsetWallWeight = hasLateralNeighbor
+        ? baseWallWeight
+        : Math.max(0.02, baseWallWeight * 0.55)
+      let trajectoryWeight = 0
+      if (preferredOffset !== null) {
+        const baseWeight =
+          TRAJECTORY_PREFERENCE_FACTOR *
+          MathUtils.clamp((gapWeight + baseWallWeight) * 0.5, 0.1, 1.4)
+        trajectoryWeight = hasLateralNeighbor ? baseWeight : baseWeight * 1.35
+      }
 
       let slope = 0
       if (lookAheadDistance > 1e-3) {
@@ -1050,19 +1070,12 @@ self.onmessage = async (e: MessageEvent) => {
           maxOffset,
           gapAhead,
           gapThreshold,
-          weights: { power: powerWeight, gap: gapWeight, wall: wallWeight },
-          wallComfort: Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN),
+          weights: { power: powerWeight, gap: gapWeight, wall: offsetWallWeight },
+          wallComfort,
           referenceStep: candidateStep,
           lateralGapInfluence: LATERAL_GAP_INFLUENCE,
           desiredOffset: preferredOffset ?? undefined,
-          desiredWeight:
-            preferredOffset !== null
-              ? TRAJECTORY_PREFERENCE_FACTOR * MathUtils.clamp(
-                  (gapWeight + wallWeight) * 0.5,
-                  0.1,
-                  1.4,
-                )
-              : 0,
+          desiredWeight: trajectoryWeight,
         })
         compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
         lateralDecisions[i] = offsetPlan
