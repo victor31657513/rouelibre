@@ -432,6 +432,8 @@ export interface OffsetCandidateEvaluationParams {
   wallComfort: number
   referenceStep: number
   lateralGapInfluence?: number
+  desiredOffset?: number
+  desiredWeight?: number
 }
 
 export interface OffsetCandidateResult {
@@ -490,10 +492,19 @@ export function evaluateOffsetCandidates(
     wallComfort,
     referenceStep,
     lateralGapInfluence = 0.25,
+    desiredOffset,
+    desiredWeight = 0,
   } = params
 
   const safeWallComfort = Math.max(0.05, Math.abs(wallComfort))
   const safeStep = Math.max(0.05, Math.abs(referenceStep))
+  const safeDesiredWeight = Math.max(0, desiredWeight)
+  const hasDesired =
+    safeDesiredWeight > 1e-6 && Number.isFinite(desiredOffset ?? NaN)
+  const preferredOffset = hasDesired ? (desiredOffset as number) : 0
+  const normalizationRadius = Number.isFinite(maxOffset) && Math.abs(maxOffset) > 1e-3
+    ? Math.abs(maxOffset)
+    : Math.max(1, Math.abs(minBound), Math.abs(maxBound))
 
   let bestIndex = 0
   let bestCost = Infinity
@@ -517,10 +528,22 @@ export function evaluateOffsetCandidates(
       gapThreshold > 1e-3 ? Math.min(1, gapShortage / gapThreshold) : 0
     const gapPenalty = normalizedGapShortage ** 2
 
+    let trajectoryPenalty = 0
+    if (hasDesired) {
+      const normalizedError = normalizationRadius > 1e-6
+        ? Math.min(
+            1,
+            Math.abs(candidate - preferredOffset) / normalizationRadius,
+          )
+        : Math.abs(candidate - preferredOffset)
+      trajectoryPenalty = safeDesiredWeight * normalizedError * normalizedError
+    }
+
     const cost =
       weights.power * powerRatio +
       weights.gap * gapPenalty +
-      weights.wall * wallPenalty
+      weights.wall * wallPenalty +
+      trajectoryPenalty
 
     if (cost < bestCost) {
       bestCost = cost

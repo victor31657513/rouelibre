@@ -18,6 +18,7 @@ import {
 } from './speedControl'
 import {
   computeCurvatureEnvelope,
+  computeDesiredOffsetProfile,
   computeNeighborBounds,
   computeSignedCurvature,
   constrainOffsetWithinRate,
@@ -104,6 +105,7 @@ const OFFSET_CANDIDATE_STEP = 0.65
 const WALL_COMFORT_MARGIN = 0.75
 const LATERAL_GAP_INFLUENCE = 0.35
 const LATERAL_FORCE_DRAG = 0.45
+const TRAJECTORY_PREFERENCE_FACTOR = 0.65
 
 const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
 const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
@@ -948,13 +950,40 @@ self.onmessage = async (e: MessageEvent) => {
         )
 
         const candidateStep = Math.max(laneWidth * 0.5, OFFSET_CANDIDATE_STEP)
-        const candidates = generateOffsetCandidates(
+        const baseCandidates = generateOffsetCandidates(
           currentOffset,
           candidateStep,
           minBound,
           maxBound,
           maxOffset,
         )
+
+        const desiredOffsetRaw = computeDesiredOffsetProfile(spline, startDistance, {
+          lookAhead: horizon,
+          maxOffset,
+          totalLength,
+          minRadius,
+          boundaryMode: pathBoundaryMode,
+        })
+        let preferredOffset: number | null = null
+        if (Number.isFinite(desiredOffsetRaw)) {
+          const lowerBound = Math.min(minBound, maxBound, -Math.abs(maxOffset))
+          const upperBound = Math.max(maxBound, minBound, Math.abs(maxOffset))
+          const clamped = MathUtils.clamp(
+            desiredOffsetRaw as number,
+            lowerBound,
+            upperBound,
+          )
+          if (Number.isFinite(clamped)) {
+            preferredOffset = clamped
+          }
+        }
+
+        const candidateSet = new Set(baseCandidates)
+        if (preferredOffset !== null) {
+          candidateSet.add(preferredOffset)
+        }
+        const candidates = Array.from(candidateSet)
 
         const candidateCompensations: number[] = []
         const candidatePowerRatios: number[] = []
@@ -1025,6 +1054,15 @@ self.onmessage = async (e: MessageEvent) => {
           wallComfort: Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN),
           referenceStep: candidateStep,
           lateralGapInfluence: LATERAL_GAP_INFLUENCE,
+          desiredOffset: preferredOffset ?? undefined,
+          desiredWeight:
+            preferredOffset !== null
+              ? TRAJECTORY_PREFERENCE_FACTOR * MathUtils.clamp(
+                  (gapWeight + wallWeight) * 0.5,
+                  0.1,
+                  1.4,
+                )
+              : 0,
         })
         compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
         lateralDecisions[i] = offsetPlan
