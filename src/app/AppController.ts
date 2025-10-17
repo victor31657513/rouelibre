@@ -31,8 +31,10 @@ interface DomRefs {
   startBtn: HTMLButtonElement
   pauseBtn: HTMLButtonElement
   resetBtn: HTMLButtonElement
+  controls: HTMLDivElement
   routeList: HTMLElement
   speedIndicator: HTMLDivElement
+  distanceIndicator: HTMLDivElement
   distanceTravelled: HTMLSpanElement
   distanceRemaining: HTMLSpanElement
 }
@@ -105,8 +107,8 @@ export class AppController {
     })
     this.simulation = new SimulationClient((state) => this.onSimulationState(state))
     this.attachEventListeners()
-    this.setSpeedDisplay(null)
-    this.setDistanceDisplay(null, null)
+    this.hideControls()
+    this.hideTelemetry()
   }
 
   /** Prepares the route selector UI and initial button states. */
@@ -132,6 +134,8 @@ export class AppController {
       startBtn.disabled = true
       pauseBtn.disabled = true
       resetBtn.disabled = true
+      this.hideControls()
+      this.hideTelemetry()
     })
 
     startBtn.addEventListener('click', () => {
@@ -139,6 +143,8 @@ export class AppController {
       startBtn.disabled = true
       startBtn.textContent = 'Start'
       pauseBtn.disabled = false
+      this.showControls()
+      this.showTelemetry()
     })
 
     pauseBtn.addEventListener('click', () => {
@@ -154,6 +160,7 @@ export class AppController {
       startBtn.disabled = false
       startBtn.textContent = 'Start'
       pauseBtn.disabled = true
+      this.hideTelemetry()
     })
 
     canvas.addEventListener('mousedown', (event: MouseEvent) => {
@@ -344,6 +351,7 @@ export class AppController {
     url: string,
     preloaded?: { path3D: Vec3[]; points: GPXPoint[] },
   ): Promise<void> {
+    this.hideTelemetry()
     this.dom.loader.classList.add('flex')
     this.dom.loader.classList.remove('hidden')
     this.dom.loaderProgress.value = 0
@@ -391,6 +399,7 @@ export class AppController {
     this.dom.startBtn.textContent = 'Start'
     this.dom.pauseBtn.disabled = true
     this.dom.resetBtn.disabled = false
+    this.showControls()
   }
 
   private preparePeloton(): void {
@@ -631,6 +640,26 @@ export class AppController {
   private setDistanceDisplay(travelledKm: number | null, remainingKm: number | null): void {
     this.dom.distanceTravelled.textContent = `Parcourus : ${this.formatDistance(travelledKm)}`
     this.dom.distanceRemaining.textContent = `Restants : ${this.formatDistance(remainingKm)}`
+  }
+
+  private showControls(): void {
+    this.dom.controls.classList.remove('hidden')
+  }
+
+  private hideControls(): void {
+    this.dom.controls.classList.add('hidden')
+  }
+
+  private showTelemetry(): void {
+    this.dom.speedIndicator.classList.remove('hidden')
+    this.dom.distanceIndicator.classList.remove('hidden')
+  }
+
+  private hideTelemetry(): void {
+    this.dom.speedIndicator.classList.add('hidden')
+    this.dom.distanceIndicator.classList.add('hidden')
+    this.setSpeedDisplay(null)
+    this.setDistanceDisplay(null, null)
   }
 
   private formatSpeed(speedKmh: number | null): string {
