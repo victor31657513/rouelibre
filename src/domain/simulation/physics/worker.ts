@@ -671,7 +671,13 @@ self.onmessage = async (e: MessageEvent) => {
       const leaderIndex = N - 1 - i
       const row = Math.floor(leaderIndex / 9)
       let s = row * 1.2
-      if (totalLength > 0) s = s % totalLength
+      if (totalLength > 0) {
+        if (pathBoundaryMode === 'loop') {
+          s = MathUtils.euclideanModulo(s, totalLength)
+        } else {
+          s = MathUtils.clamp(s, 0, totalLength)
+        }
+      }
       progress[i] = s
 
       const sample = spline.sampleByDistance(s)
@@ -1239,7 +1245,13 @@ self.onmessage = async (e: MessageEvent) => {
         },
       )
       let s = progress[i] + centerlineTravel
-      if (totalLength > 0) s = MathUtils.euclideanModulo(s, totalLength)
+      if (totalLength > 0) {
+        if (pathBoundaryMode === 'loop') {
+          s = MathUtils.euclideanModulo(s, totalLength)
+        } else {
+          s = MathUtils.clamp(s, 0, totalLength)
+        }
+      }
       progress[i] = s
       const { sampleDistance: yawAheadDistance } = computeAheadSampleDistance(
         s,
