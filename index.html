@@ -15,20 +15,20 @@
       }
     })()
   </script>
-  <script type="module" crossorigin src="/assets/index-C3k5ZWy0.js"></script>
+  <script type="module" crossorigin src="/assets/index-Dam6Fgwv.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-Dv4IlfqR.css">
 </head>
 <body class="m-0 min-h-screen overflow-hidden bg-base-100 text-base-content font-sans supports-[height:100dvh]:min-h-[100dvh]">
 <canvas id="app" class="block h-screen w-screen supports-[height:100dvh]:h-[100dvh]"></canvas>
 <div
   id="speed-indicator"
-  class="fixed top-4 left-4 z-50 pointer-events-none rounded-full bg-black/60 px-4 py-1.5 text-left font-sans text-lg font-semibold uppercase tracking-wider text-white shadow"
+  class="hidden fixed top-4 left-4 z-50 pointer-events-none rounded-full bg-black/60 px-4 py-1.5 text-left font-sans text-lg font-semibold uppercase tracking-wider text-white shadow"
 >
   -- km/h
 </div>
 <div
   id="distance-indicator"
-  class="fixed top-4 right-4 z-50 pointer-events-none rounded-xl bg-black/60 px-3 py-2 text-right font-sans text-sm leading-[1.35] text-white shadow"
+  class="hidden fixed top-4 right-4 z-50 pointer-events-none rounded-xl bg-black/60 px-3 py-2 text-right font-sans text-sm leading-[1.35] text-white shadow"
 >
   <span id="distance-travelled" class="block">Parcourus : -- km</span>
   <span id="distance-remaining" class="block">Restants : -- km</span>
@@ -47,7 +47,7 @@
 </div>
 <div
   id="controls"
-  class="pointer-events-auto fixed bottom-3 left-1/2 z-50 flex w-[calc(100%-2.5rem)] -translate-x-1/2 flex-wrap justify-center gap-3 sm:bottom-4 sm:left-auto sm:right-4 sm:w-auto sm:translate-x-0 sm:flex-nowrap sm:gap-2"
+  class="hidden pointer-events-auto fixed bottom-3 left-1/2 z-50 flex w-[calc(100%-2.5rem)] -translate-x-1/2 flex-wrap justify-center gap-3 sm:bottom-4 sm:left-auto sm:right-4 sm:w-auto sm:translate-x-0 sm:flex-nowrap sm:gap-2"
 >
   <button
     id="home-btn"
