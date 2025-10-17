@@ -7,7 +7,11 @@
  */
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../../route/pathSpline'
-import { constrainOffsetWithinRate, steerOffsetTowardTarget } from './riderPathing'
+import {
+  constrainOffsetWithinRate,
+  steerOffsetTowardTarget,
+  type CurvatureEnvelope,
+} from './riderPathing'
 
 export interface SlopeAdjustmentOptions {
   /**
@@ -357,6 +361,78 @@ export function adjustTargetSpeedForSlope(
   }
 
   return MathUtils.clamp(adjustedSpeed, minSpeed, maxSpeed)
+}
+
+export interface CorneringSpeedOptions {
+  maxLateralAcceleration: number
+  sustainedBlendStart?: number
+  sustainedBlendEnd?: number
+  coverageExponent?: number
+  reliefFactor?: number
+  spikeRetention?: number
+}
+
+export function computeCorneringSpeedFromEnvelope(
+  envelope: CurvatureEnvelope,
+  options: CorneringSpeedOptions,
+): number {
+  const {
+    maxLateralAcceleration,
+    sustainedBlendStart = 0.25,
+    sustainedBlendEnd = 0.85,
+    coverageExponent = 1.2,
+    reliefFactor = 0.25,
+    spikeRetention = 0.35,
+  } = options
+
+  const safeAccel = Number.isFinite(maxLateralAcceleration)
+    ? Math.max(0, maxLateralAcceleration)
+    : 0
+  if (safeAccel <= 0) {
+    return Infinity
+  }
+
+  const peakCurvature = Math.max(0, envelope.maxAbsCurvature)
+  if (peakCurvature <= 1e-9) {
+    return Infinity
+  }
+
+  const baseCurvatureRaw = Math.max(
+    envelope.rootMeanSquareAbsCurvature,
+    envelope.averageAbsCurvature,
+    1e-9,
+  )
+  const baseCurvature = peakCurvature > 0
+    ? Math.min(baseCurvatureRaw, peakCurvature)
+    : baseCurvatureRaw
+  const boundedPeak = Math.max(peakCurvature, baseCurvature)
+  const headroom = Math.max(0, boundedPeak - baseCurvature)
+
+  const rawCoverage = MathUtils.clamp(envelope.coverageRatio ?? 0, 0, 1)
+  const blendedCoverage = MathUtils.clamp(
+    MathUtils.smoothstep(rawCoverage, sustainedBlendStart, sustainedBlendEnd),
+    0,
+    1,
+  )
+  const weightedCoverage = Math.pow(
+    blendedCoverage,
+    Math.max(coverageExponent, 1e-3),
+  )
+
+  const retention = MathUtils.clamp(spikeRetention, 0, 1)
+  const coverageBlend = weightedCoverage + (1 - weightedCoverage) * retention
+
+  const effectiveCurvature = baseCurvature + headroom * coverageBlend
+  const relief = 1 + Math.max(0, reliefFactor) * (1 - coverageBlend)
+  const softenedCurvature = effectiveCurvature / relief
+  const minimumCurvature = baseCurvature * MathUtils.lerp(0.7, 1, coverageBlend)
+  const normalizedCurvature = Math.max(
+    softenedCurvature,
+    minimumCurvature,
+    1e-9,
+  )
+
+  return Math.sqrt(safeAccel / normalizedCurvature)
 }
 
 const scratchRight = new Vector3()
