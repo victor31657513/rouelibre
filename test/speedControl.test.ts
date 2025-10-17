@@ -8,6 +8,7 @@ import {
   computeRelaxedOffsetTarget,
   computeTargetSpeedFromSegmentLength,
   computeTargetSpeedCompensation,
+  computeCorneringSpeedFromEnvelope,
   estimateSafeTargetSpeed,
   SafeSpeedDiagnostics,
   projectWorldDistanceOntoCenterline,
@@ -15,6 +16,7 @@ import {
 import {
   computeCurvatureEnvelope,
   computeSignedCurvature,
+  type CurvatureEnvelope,
 } from '../src/domain/simulation/physics/riderPathing'
 import { PathSpline } from '../src/domain/route/pathSpline'
 import { MathUtils, Vector3 } from 'three'
@@ -539,14 +541,60 @@ describe('speed control helpers', () => {
     expect(envelope.maxAbsCurvature).toBeLessThanOrEqual(curvatureCap + 1e-6)
 
     const maxLateralAcceleration = 4.5
-    const safeCurvature = Math.max(
-      Math.min(envelope.rawMaxAbsCurvature, curvatureCap),
-      1e-6,
-    )
-    const vCorner = Math.sqrt(maxLateralAcceleration / safeCurvature)
+    const cappedEnvelope = {
+      ...envelope,
+      maxAbsCurvature: Math.min(envelope.maxAbsCurvature, curvatureCap),
+    }
+    const vCorner = computeCorneringSpeedFromEnvelope(cappedEnvelope, {
+      maxLateralAcceleration,
+      sustainedBlendStart: 0.2,
+      sustainedBlendEnd: 0.8,
+      coverageExponent: 1.35,
+      reliefFactor: 0.25,
+      spikeRetention: 0.35,
+    })
     const theoreticalMinimum = Math.sqrt(maxLateralAcceleration * minRadius)
 
-    expect(vCorner).toBeCloseTo(theoreticalMinimum, 5)
+    expect(vCorner).toBeGreaterThanOrEqual(theoreticalMinimum * 0.98)
+    expect(vCorner).toBeLessThanOrEqual(theoreticalMinimum * 1.3)
+  })
+
+  it('keeps extra speed in check when curvature dominates the horizon', () => {
+    const options = {
+      maxLateralAcceleration: 4.2,
+      sustainedBlendStart: 0.2,
+      sustainedBlendEnd: 0.8,
+      coverageExponent: 1.35,
+      reliefFactor: 0.25,
+      spikeRetention: 0.35,
+    }
+
+    const sustained: CurvatureEnvelope = {
+      averageAbsCurvature: 0.065,
+      rootMeanSquareAbsCurvature: 0.071,
+      maxAbsCurvature: 0.08,
+      rawMaxAbsCurvature: 0.08,
+      coverageRatio: 0.92,
+      intensity: 0.8,
+    }
+
+    const spiky: CurvatureEnvelope = {
+      averageAbsCurvature: 0.018,
+      rootMeanSquareAbsCurvature: 0.032,
+      maxAbsCurvature: 0.08,
+      rawMaxAbsCurvature: 0.08,
+      coverageRatio: 0.18,
+      intensity: 0.2,
+    }
+
+    const sustainedSpeed = computeCorneringSpeedFromEnvelope(sustained, options)
+    const spikySpeed = computeCorneringSpeedFromEnvelope(spiky, options)
+
+    const theoretical = Math.sqrt(options.maxLateralAcceleration / sustained.maxAbsCurvature)
+
+    expect(sustainedSpeed).toBeCloseTo(theoretical, 5)
+    expect(spikySpeed).toBeGreaterThan(sustainedSpeed)
+    expect(spikySpeed).toBeLessThanOrEqual(sustainedSpeed * 1.4)
   })
 
   it('keeps curvature low at open route endpoints when clamping sampling', () => {

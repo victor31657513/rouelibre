@@ -9,6 +9,7 @@ import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
 import {
   adjustTargetSpeedForSlope,
+  computeCorneringSpeedFromEnvelope,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
   computeTargetSpeedCompensation,
@@ -839,10 +840,22 @@ self.onmessage = async (e: MessageEvent) => {
           warnedLateralAccel = true
         }
       } else {
-        const safeCurvature = Math.max(boundedCurvature, 1e-6)
-        const candidate = Math.sqrt(maxLateralAcceleration / safeCurvature)
+        const candidate = computeCorneringSpeedFromEnvelope(
+          {
+            ...curvatureEnvelope,
+            maxAbsCurvature: kEnv,
+          },
+          {
+            maxLateralAcceleration,
+            sustainedBlendStart: 0.2,
+            sustainedBlendEnd: 0.8,
+            coverageExponent: 1.35,
+            reliefFactor: 0.25,
+            spikeRetention: 0.35,
+          },
+        )
         if (Number.isFinite(candidate) && candidate > 0) {
-          vCorner = candidate
+          vCorner = Math.min(vCorner, candidate)
         }
       }
 

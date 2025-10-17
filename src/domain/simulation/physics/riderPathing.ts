@@ -112,6 +112,11 @@ export interface CurvatureEnvelope {
    */
   averageAbsCurvature: number
   /**
+   * Quadratic mean of the absolute curvature, providing a profile that reacts
+   * strongly to sustained bends while remaining tolerant to brief spikes.
+   */
+  rootMeanSquareAbsCurvature: number
+  /**
    * Absolute curvature capped by the reference radius. This value is safe to
    * feed directly into corner-speed heuristics since it already enforces the
    * minimum turning radius requested by the caller.
@@ -123,6 +128,12 @@ export interface CurvatureEnvelope {
    * unbounded measurements that triggered the envelope.
    */
   rawMaxAbsCurvature: number
+  /**
+   * Ratio describing how much of the look-ahead horizon is dominated by the
+   * peak curvature. Values near zero indicate a very localised spike whereas
+   * values near one correspond to sustained bends.
+   */
+  coverageRatio: number
   intensity: number
 }
 
@@ -150,6 +161,7 @@ export function computeCurvatureEnvelope(
 
   let maxAbsCurvature = 0
   let sumAbsCurvature = 0
+  let sumSquares = 0
   let count = 0
 
   for (let i = 0; i <= safeSamples; i++) {
@@ -163,10 +175,13 @@ export function computeCurvatureEnvelope(
 
     maxAbsCurvature = Math.max(maxAbsCurvature, curvature)
     sumAbsCurvature += curvature
+    sumSquares += curvature * curvature
     count++
   }
 
   const averageAbsCurvature = count > 0 ? sumAbsCurvature / count : 0
+  const rootMeanSquareAbsCurvature =
+    count > 0 ? Math.sqrt(sumSquares / count) : 0
   const fallbackRadius = referenceRadius > 0 ? referenceRadius : 35
   const clampedRadius = Math.max(fallbackRadius, 1e-3)
   const referenceCurvature = 1 / clampedRadius
@@ -175,6 +190,9 @@ export function computeCurvatureEnvelope(
       ? Math.min(maxAbsCurvature, referenceCurvature)
       : maxAbsCurvature
   const safeMaxAbsCurvature = Math.max(cappedCurvature, 0)
+  const coverageRatio = safeMaxAbsCurvature > 1e-6
+    ? MathUtils.clamp(averageAbsCurvature / safeMaxAbsCurvature, 0, 1)
+    : 0
   const intensity = MathUtils.clamp(
     referenceCurvature > 0 ? safeMaxAbsCurvature / referenceCurvature : 0,
     0,
@@ -183,8 +201,10 @@ export function computeCurvatureEnvelope(
 
   return {
     averageAbsCurvature,
+    rootMeanSquareAbsCurvature,
     maxAbsCurvature: safeMaxAbsCurvature,
     rawMaxAbsCurvature: maxAbsCurvature,
+    coverageRatio,
     intensity,
   }
 }
