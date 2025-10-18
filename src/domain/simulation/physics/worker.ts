@@ -57,6 +57,7 @@ let riderGapWeights: Float32Array
 let riderRoles: Int16Array
 let riderPoses: RiderPose[] = []
 let arcProgress: Float32Array
+let lastStepTimestamp: number | null = null
 
 let laneWidth = 1
 let roadWidth = 8
@@ -106,6 +107,9 @@ const WALL_COMFORT_MARGIN = 0.75
 const LATERAL_GAP_INFLUENCE = 0.35
 const LATERAL_FORCE_DRAG = 0.45
 const TRAJECTORY_PREFERENCE_FACTOR = 0.65
+
+const MIN_STEP_DT = 1 / 120
+const MAX_STEP_DT = 0.2
 
 const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
 const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
@@ -177,6 +181,13 @@ const scratchRelative = new Vector3()
 
 function createPose(): RiderPose {
   return { position: new Vector3(), tangent: new Vector3() }
+}
+
+function getCurrentTimestamp(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now()
+  }
+  return Date.now()
 }
 
 function samplePoseAtDistance(
@@ -572,6 +583,7 @@ self.onmessage = async (e: MessageEvent) => {
     if (!world) await RAPIER.init() // charge le WASM
     // réinitialise le monde à chaque nouvelle préparation de parcours
     world = new RAPIER.World({ x: 0, y: 0, z: 0 })
+    lastStepTimestamp = getCurrentTimestamp()
 
     N = payload.N as number
     const initial = new Float32Array(payload.positions)
@@ -727,7 +739,20 @@ self.onmessage = async (e: MessageEvent) => {
   if (type === 'step') {
     if (!world) return // ignore steps before initialization
 
-    const dt: number = payload.dt
+    const requestedDt = Number.isFinite(payload?.dt)
+      ? MathUtils.clamp(payload.dt, MIN_STEP_DT, MAX_STEP_DT)
+      : MIN_STEP_DT
+    const currentTimestamp = getCurrentTimestamp()
+    let dt = requestedDt
+    if (Number.isFinite(currentTimestamp)) {
+      if (lastStepTimestamp !== null && Number.isFinite(lastStepTimestamp)) {
+        const elapsedSeconds = Math.max(0, (currentTimestamp - lastStepTimestamp) / 1000)
+        if (elapsedSeconds > 0) {
+          dt = MathUtils.clamp(elapsedSeconds, MIN_STEP_DT, MAX_STEP_DT)
+        }
+      }
+      lastStepTimestamp = currentTimestamp
+    }
     diagnosticAccumulator += dt
     refreshRiderPoseCache()
 
