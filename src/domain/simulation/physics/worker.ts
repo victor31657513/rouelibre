@@ -849,13 +849,6 @@ self.onmessage = async (e: MessageEvent) => {
       const offsetWallWeight = hasLateralNeighbor
         ? baseWallWeight
         : Math.max(0.02, baseWallWeight * 0.55)
-      let trajectoryWeight = 0
-      if (preferredOffset !== null) {
-        const baseWeight =
-          TRAJECTORY_PREFERENCE_FACTOR *
-          MathUtils.clamp((gapWeight + baseWallWeight) * 0.5, 0.1, 1.4)
-        trajectoryWeight = hasLateralNeighbor ? baseWeight : baseWeight * 1.35
-      }
 
       let slope = 0
       if (lookAheadDistance > 1e-3) {
@@ -1028,6 +1021,14 @@ self.onmessage = async (e: MessageEvent) => {
           if (Number.isFinite(clamped)) {
             preferredOffset = clamped
           }
+        }
+
+        let trajectoryWeight = 0
+        if (preferredOffset !== null) {
+          const baseWeight =
+            TRAJECTORY_PREFERENCE_FACTOR *
+            MathUtils.clamp((gapWeight + baseWallWeight) * 0.5, 0.1, 1.4)
+          trajectoryWeight = hasLateralNeighbor ? baseWeight : baseWeight * 1.35
         }
 
         const candidateSet = new Set(baseCandidates)
