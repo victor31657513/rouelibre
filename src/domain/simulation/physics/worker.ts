@@ -18,6 +18,7 @@ import {
 } from './speedControl'
 import {
   computeCurvatureEnvelope,
+  computeDesiredOffsetProfile,
   computeNeighborBounds,
   computeSignedCurvature,
   constrainOffsetWithinRate,
@@ -56,6 +57,11 @@ let riderGapWeights: Float32Array
 let riderRoles: Int16Array
 let riderPoses: RiderPose[] = []
 let arcProgress: Float32Array
+let trajectoryProfileOffsets: Float32Array | null = null
+let trajectoryProfileStep = 1
+let lateralPlanCooldowns: Float32Array
+let lateralPlanCompensations: Float32Array
+let lastStepTimestamp: number | null = null
 
 let laneWidth = 1
 let roadWidth = 8
@@ -104,6 +110,9 @@ const OFFSET_CANDIDATE_STEP = 0.65
 const WALL_COMFORT_MARGIN = 0.75
 const LATERAL_GAP_INFLUENCE = 0.35
 const LATERAL_FORCE_DRAG = 0.45
+const TRAJECTORY_PREFERENCE_FACTOR = 0.65
+const LATERAL_PLANNING_INTERVAL_MIN = 0.25
+const LATERAL_PLANNING_INTERVAL_MAX = 0.7
 
 const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
 const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
@@ -155,6 +164,83 @@ const FALLBACK_WEIGHT_TRIPLE: WeightTriple = {
   power: FALLBACK_POWER_WEIGHT,
   gap: FALLBACK_GAP_WEIGHT,
   wall: FALLBACK_WALL_WEIGHT,
+}
+
+function rebuildTrajectoryProfile(): void {
+  if (!spline || totalLength <= 0 || !Number.isFinite(maxOffset) || maxOffset <= 0) {
+    trajectoryProfileOffsets = null
+    trajectoryProfileStep = 1
+    return
+  }
+
+  const horizon = Math.max(lookAhead, laneWidth * 1.5, 3)
+  const sampleStep = Math.max(0.5, Math.min(2.5, horizon * 0.5))
+  const step = Number.isFinite(sampleStep) ? sampleStep : 1
+  const sampleCount = Math.max(1, Math.ceil(totalLength / step))
+  const profile = new Float32Array(sampleCount + 1)
+
+  for (let idx = 0; idx <= sampleCount; idx++) {
+    const distance = Math.min(idx * step, totalLength)
+    const desired = computeDesiredOffsetProfile(spline, distance, {
+      lookAhead: horizon,
+      maxOffset,
+      totalLength,
+      minRadius,
+      boundaryMode: pathBoundaryMode,
+    })
+    profile[idx] = Number.isFinite(desired) ? (desired as number) : 0
+  }
+
+  trajectoryProfileOffsets = profile
+  trajectoryProfileStep = Math.max(step, 1e-3)
+}
+
+function sampleTrajectoryProfile(distance: number): number | null {
+  if (!trajectoryProfileOffsets || trajectoryProfileOffsets.length === 0) {
+    return null
+  }
+  if (!Number.isFinite(distance)) {
+    return null
+  }
+
+  let clampedDistance = distance
+  if (pathBoundaryMode === 'loop' && totalLength > 0) {
+    clampedDistance = MathUtils.euclideanModulo(distance, totalLength)
+  } else if (totalLength > 0) {
+    clampedDistance = MathUtils.clamp(distance, 0, totalLength)
+  } else {
+    clampedDistance = Math.max(0, distance)
+  }
+
+  if (!Number.isFinite(trajectoryProfileStep) || trajectoryProfileStep <= 1e-6) {
+    const value = trajectoryProfileOffsets[0]
+    return Number.isFinite(value) ? value : null
+  }
+
+  const index = clampedDistance / trajectoryProfileStep
+  const lowerIndex = Math.max(0, Math.floor(index))
+  const upperIndex = Math.min(trajectoryProfileOffsets.length - 1, lowerIndex + 1)
+  const t = MathUtils.clamp(index - lowerIndex, 0, 1)
+  const v0 = trajectoryProfileOffsets[lowerIndex]
+  const v1 = trajectoryProfileOffsets[upperIndex]
+  const blended = MathUtils.lerp(v0, v1, t)
+  return Number.isFinite(blended) ? blended : null
+}
+
+function computeLateralPlanningInterval(speed: number, intensity: number): number {
+  const speedBlend = MathUtils.clamp(speed / 8, 0, 1)
+  const intensityBlend = MathUtils.clamp(intensity, 0, 1)
+  const blend = Math.max(speedBlend, intensityBlend)
+  const interval = MathUtils.lerp(
+    LATERAL_PLANNING_INTERVAL_MAX,
+    LATERAL_PLANNING_INTERVAL_MIN,
+    blend,
+  )
+  return MathUtils.clamp(
+    interval,
+    LATERAL_PLANNING_INTERVAL_MIN,
+    LATERAL_PLANNING_INTERVAL_MAX,
+  )
 }
 
 let normalizedBaseWeights = normalizeWeights(
@@ -560,6 +646,10 @@ function applyParameterOverrides(overrides?: SimulationParameterOverrides | null
     updateBaseWeights(nextPower, nextGap, nextWall)
     recomputeRoleWeights()
   }
+
+  if (spline && totalLength > 0) {
+    rebuildTrajectoryProfile()
+  }
 }
 
 
@@ -592,6 +682,7 @@ self.onmessage = async (e: MessageEvent) => {
         ? closedLoopFlag
         : detectClosedLoop(waypoints, laneWidth)
     pathBoundaryMode = isClosed ? 'loop' : 'clamp'
+    rebuildTrajectoryProfile()
 
     // buffers pour le calcul
     state = new Float32Array(N * 4)
@@ -614,6 +705,11 @@ self.onmessage = async (e: MessageEvent) => {
     riderRoles = new Int16Array(N)
     riderPoses = new Array(N)
     arcProgress = new Float32Array(N)
+    lateralPlanCooldowns = new Float32Array(N)
+    lateralPlanCompensations = new Float32Array(N)
+    for (let i = 0; i < N; i++) {
+      lateralPlanCompensations[i] = 1
+    }
     for (let i = 0; i < N; i++) {
       riderPoses[i] = createPose()
     }
@@ -714,12 +810,25 @@ self.onmessage = async (e: MessageEvent) => {
       [state.buffer]
     )
     state = new Float32Array(N * 4)
+    lastStepTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
   }
 
   if (type === 'step') {
     if (!world) return // ignore steps before initialization
 
-    const dt: number = payload.dt
+    const requestedDt =
+      typeof payload.dt === 'number' && payload.dt > 0 ? payload.dt : 1 / 60
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    let dt = requestedDt
+    if (lastStepTimestamp !== null) {
+      const elapsedSeconds = Math.max(0, (now - lastStepTimestamp) / 1000)
+      if (Number.isFinite(elapsedSeconds) && elapsedSeconds > 0) {
+        const minDt = Math.max(requestedDt * 0.5, 1 / 240)
+        const maxDt = Math.max(minDt, Math.min(requestedDt * 4, 0.5))
+        dt = MathUtils.clamp(elapsedSeconds, minDt, maxDt)
+      }
+    }
+    lastStepTimestamp = now
     diagnosticAccumulator += dt
     refreshRiderPoseCache()
 
@@ -820,6 +929,16 @@ self.onmessage = async (e: MessageEvent) => {
         minRadius,
         undefined,
         pathBoundaryMode,
+      )
+      const curvatureIntensity = MathUtils.clamp(
+        curvatureEnvelope.intensity ?? 0,
+        0,
+        1,
+      )
+      const trajectoryWeightScale = MathUtils.smoothstep(
+        curvatureIntensity,
+        0.12,
+        0.55,
       )
       const rawCurvature = Math.max(
         curvatureEnvelope.rawMaxAbsCurvature ?? curvatureEnvelope.maxAbsCurvature,
@@ -930,104 +1049,127 @@ self.onmessage = async (e: MessageEvent) => {
       const availableTime =
         lookAheadDistance > 0 ? lookAheadDistance / planningSpeed : 0
 
-      let compensationForBest = 1
+      let planCooldown = lateralPlanCooldowns
+        ? Math.max(0, lateralPlanCooldowns[i] - dt)
+        : 0
+      let compensationForBest = lateralPlanCompensations?.[i] ?? 1
       let offsetPlan: OffsetCandidateResult = lateralDecisions[i]
+      if (!offsetPlan) {
+        offsetPlan = {
+          targetOffset: currentOffset,
+          bestIndex: 0,
+          lateralForce: 0,
+          cost: 0,
+        }
+      }
 
       if (lookAheadDistance > 0.25) {
         const horizon = Math.max(lookAheadDistance, laneWidth * 1.5, 3)
         const startDistance = progress[i]
-        const endDistance = totalLength > 0
-          ? Math.min(startDistance + horizon, totalLength)
-          : startDistance + horizon
-        const referenceLength = computeOffsetSegmentLength(
-          spline,
-          startDistance,
-          endDistance,
-          0,
-          16,
-        )
 
-        const candidateStep = Math.max(laneWidth * 0.5, OFFSET_CANDIDATE_STEP)
-        const candidates = generateOffsetCandidates(
-          currentOffset,
-          candidateStep,
-          minBound,
-          maxBound,
-          maxOffset,
-        )
-
-        const candidateCompensations: number[] = []
-        const candidatePowerRatios: number[] = []
-
-        for (const candidate of candidates) {
-          const clampedCandidate = MathUtils.clamp(candidate, -maxOffset, maxOffset)
-          let compensation = 1
-          if (referenceLength > 1e-3) {
-            const segmentLength = computeOffsetSegmentLength(
-              spline,
-              startDistance,
-              endDistance,
-              clampedCandidate,
-              16,
-            )
-            if (segmentLength > 1e-3) {
-              const rawRatio = segmentLength / referenceLength
-              const clampedRatio = MathUtils.clamp(
-                rawRatio,
-                lengthRatioRange.min,
-                lengthRatioRange.max,
-              )
-              compensation = computeTargetSpeedCompensation(clampedRatio)
-            }
+        let preferredOffset: number | null = null
+        const sampledPreference = sampleTrajectoryProfile(startDistance)
+        if (sampledPreference !== null) {
+          const lowerBound = Math.min(minBound, maxBound, -Math.abs(maxOffset))
+          const upperBound = Math.max(maxBound, minBound, Math.abs(maxOffset))
+          const clamped = MathUtils.clamp(sampledPreference, lowerBound, upperBound)
+          if (Number.isFinite(clamped)) {
+            preferredOffset = clamped
           }
-          candidateCompensations.push(compensation)
-
-          const candidateSpeed = MathUtils.clamp(
-            targetSpeed * compensation,
-            adaptiveMinSpeed,
-            personalMax,
-          )
-          const slopeAdjustedCandidate = adjustTargetSpeedForSlope(
-            candidateSpeed,
-            slope,
-            {
-              maxSlope: 0.25,
-              maxUphillPenalty: 2,
-              maxDownhillBoost: 1,
-              minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
-              maxSpeed: personalMax + 0.5,
-            },
-          )
-          const candidatePower = powerDemand(slopeAdjustedCandidate, {
-            airDensity,
-            cdA: CdAeff,
-            crr: rollingResistanceCoeff,
-            mass,
-            slope,
-            gravity: GRAVITY,
-            drivetrainEfficiency,
-          })
-          const normalizedPower =
-            maxPowerForRider > 1e-3 ? candidatePower / maxPowerForRider : 0
-          candidatePowerRatios.push(Math.max(0, normalizedPower))
         }
 
-        offsetPlan = evaluateOffsetCandidates({
-          currentOffset,
-          candidates,
-          powerRatios: candidatePowerRatios,
-          minBound,
-          maxBound,
-          maxOffset,
-          gapAhead,
-          gapThreshold,
-          weights: { power: powerWeight, gap: gapWeight, wall: wallWeight },
-          wallComfort: Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN),
-          referenceStep: candidateStep,
-          lateralGapInfluence: LATERAL_GAP_INFLUENCE,
-        })
-        compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
-        lateralDecisions[i] = offsetPlan
+        if (planCooldown <= 0) {
+          const endDistance = totalLength > 0
+            ? Math.min(startDistance + horizon, totalLength)
+            : startDistance + horizon
+          const referenceLength = computeOffsetSegmentLength(
+            spline,
+            startDistance,
+            endDistance,
+            0,
+            16,
+          )
+
+          const candidateStep = Math.max(laneWidth * 0.5, OFFSET_CANDIDATE_STEP)
+          const baseCandidates = generateOffsetCandidates(
+            currentOffset,
+            candidateStep,
+            minBound,
+            maxBound,
+            maxOffset,
+          )
+
+          const candidateSet = new Set(baseCandidates)
+          if (preferredOffset !== null) {
+            candidateSet.add(preferredOffset)
+          }
+          const candidates = Array.from(candidateSet)
+
+          const candidateCompensations: number[] = []
+          const candidatePowerRatios: number[] = []
+
+          for (const candidate of candidates) {
+            const clampedCandidate = MathUtils.clamp(candidate, -maxOffset, maxOffset)
+            let compensation = 1
+            if (referenceLength > 1e-3) {
+              const segmentLength = computeOffsetSegmentLength(
+                spline,
+                startDistance,
+                endDistance,
+                clampedCandidate,
+                16,
+              )
+              if (segmentLength > 1e-3) {
+                const rawRatio = segmentLength / referenceLength
+                const clampedRatio = MathUtils.clamp(
+                  rawRatio,
+                  lengthRatioRange.min,
+                  lengthRatioRange.max,
+                )
+                compensation = computeTargetSpeedCompensation(clampedRatio)
+              }
+            }
+            candidateCompensations.push(compensation)
+            candidatePowerRatios.push(0)
+          }
+
+          offsetPlan = evaluateOffsetCandidates({
+            currentOffset,
+            candidates,
+            powerRatios: candidatePowerRatios,
+            minBound,
+            maxBound,
+            maxOffset,
+            gapAhead,
+            gapThreshold,
+            weights: { power: powerWeight, gap: gapWeight, wall: wallWeight },
+            wallComfort: Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN),
+            referenceStep: candidateStep,
+            lateralGapInfluence: LATERAL_GAP_INFLUENCE,
+            desiredOffset: preferredOffset ?? undefined,
+            desiredWeight:
+              preferredOffset !== null
+                ? TRAJECTORY_PREFERENCE_FACTOR * MathUtils.clamp(
+                    (gapWeight + wallWeight) * 0.5,
+                    0.1,
+                    1.4,
+                  ) * Math.max(0, trajectoryWeightScale)
+                : 0,
+          })
+          compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
+          lateralDecisions[i] = offsetPlan
+          if (lateralPlanCompensations) {
+            lateralPlanCompensations[i] = compensationForBest
+          }
+          if (lateralPlanCooldowns) {
+            lateralPlanCooldowns[i] = computeLateralPlanningInterval(
+              Math.max(previousSpeed, targetSpeed),
+              trajectoryWeightScale,
+            )
+          }
+        } else if (lateralPlanCooldowns) {
+          lateralPlanCooldowns[i] = planCooldown
+        }
       } else {
         offsetPlan = {
           targetOffset: currentOffset,
@@ -1037,6 +1179,12 @@ self.onmessage = async (e: MessageEvent) => {
         }
         compensationForBest = 1
         lateralDecisions[i] = offsetPlan
+        if (lateralPlanCompensations) {
+          lateralPlanCompensations[i] = compensationForBest
+        }
+        if (lateralPlanCooldowns) {
+          lateralPlanCooldowns[i] = planCooldown
+        }
       }
 
       const plannedOffset = constrainOffsetWithinRate(
