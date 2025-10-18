@@ -26,7 +26,11 @@ import {
   generateOffsetCandidates,
   steerOffsetTowardTarget,
 } from './riderPathing'
-import type { OffsetCandidateResult, PathBoundaryMode } from './riderPathing'
+import type {
+  CurvatureEnvelope,
+  OffsetCandidateResult,
+  PathBoundaryMode,
+} from './riderPathing'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
 import { computeAheadSampleDistance } from './lookAhead'
 import {
@@ -114,6 +118,11 @@ const MAX_STEP_DT = 0.2
 const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
 const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
 const FALLBACK_WALL_WEIGHT = DEFAULT_WORKER_PARAMS.wW
+
+const MIN_CURVE_SPEED_MARGIN = 0.35
+const HAIRPIN_RADIUS_TIGHT = 16
+const HAIRPIN_RADIUS_RELAXED = 40
+const HAIRPIN_ACTIVATION_THRESHOLD = 0.35
 
 type WeightTriple = { power: number; gap: number; wall: number }
 
@@ -308,6 +317,81 @@ export function computeAdaptiveMinSpeed(
   effectiveMinTargetSpeed: number,
 ): number {
   return Math.max(0, Math.min(vTargetRaw, effectiveMinTargetSpeed))
+}
+
+export function evaluateHairpinCornering(options: {
+  curvatureEnvelope: CurvatureEnvelope
+  localCurvature: number
+  maxTargetSpeed: number
+  candidateSpeed: number
+  minSpeedMargin?: number
+  activationThreshold?: number
+}): { activation: number; cornerSpeed: number } {
+  const {
+    curvatureEnvelope,
+    localCurvature,
+    maxTargetSpeed,
+    candidateSpeed,
+    minSpeedMargin = MIN_CURVE_SPEED_MARGIN,
+    activationThreshold = HAIRPIN_ACTIVATION_THRESHOLD,
+  } = options
+
+  const safeMaxSpeed = Number.isFinite(maxTargetSpeed)
+    ? Math.max(0, maxTargetSpeed)
+    : 0
+
+  if (!(safeMaxSpeed > 0)) {
+    return { activation: 0, cornerSpeed: 0 }
+  }
+
+  const coverage = MathUtils.clamp(
+    curvatureEnvelope.coverageRatio ?? 0,
+    0,
+    1,
+  )
+  const intensity = MathUtils.clamp(curvatureEnvelope.intensity ?? 0, 0, 1)
+  const localCurvatureSafe = Number.isFinite(localCurvature)
+    ? Math.max(0, localCurvature)
+    : 0
+  const localRadius = localCurvatureSafe > 1e-6
+    ? 1 / localCurvatureSafe
+    : Infinity
+
+  const radiusSeverity = Number.isFinite(localRadius)
+    ? 1 - MathUtils.smoothstep(localRadius, HAIRPIN_RADIUS_TIGHT, HAIRPIN_RADIUS_RELAXED)
+    : 0
+  const sustainedSeverity = Math.pow(coverage, 1.2)
+  const curvatureSeverity = Math.pow(intensity, 1.1)
+  const combinedSeed = Math.max(
+    radiusSeverity,
+    curvatureSeverity * (0.6 + 0.4 * sustainedSeverity),
+  )
+
+  const activation = MathUtils.clamp(
+    (combinedSeed - activationThreshold) /
+      Math.max(1 - activationThreshold, 1e-3),
+    0,
+    1,
+  )
+
+  if (activation <= 0) {
+    return { activation: 0, cornerSpeed: safeMaxSpeed }
+  }
+
+  const safeCandidate = Number.isFinite(candidateSpeed) && candidateSpeed > 0
+    ? Math.min(candidateSpeed, safeMaxSpeed)
+    : safeMaxSpeed
+
+  const baseline = MathUtils.lerp(safeMaxSpeed, safeCandidate, activation)
+  const margin = MathUtils.clamp(
+    minSpeedMargin * (1 - activation),
+    0,
+    safeMaxSpeed,
+  )
+  const reduced = baseline - margin
+  const cornerSpeed = Math.max(safeCandidate, Math.min(safeMaxSpeed, reduced))
+
+  return { activation, cornerSpeed }
 }
 
 function detectClosedLoop(points: Vector3[], lane: number): boolean {
@@ -879,7 +963,7 @@ self.onmessage = async (e: MessageEvent) => {
           : rawCurvature
       const kEnv = Math.max(boundedCurvature, 0)
 
-      let vCorner = effectiveMaxTargetSpeed
+      let cornerCandidate = effectiveMaxTargetSpeed
       if (!(maxLateralAcceleration > 0)) {
         if (!warnedLateralAccel) {
           console.warn('[physics] aLatMax must stay positive to compute corner speeds')
@@ -901,9 +985,16 @@ self.onmessage = async (e: MessageEvent) => {
           },
         )
         if (Number.isFinite(candidate) && candidate > 0) {
-          vCorner = Math.min(vCorner, candidate)
+          cornerCandidate = Math.min(cornerCandidate, candidate)
         }
       }
+
+      const { cornerSpeed: vCorner } = evaluateHairpinCornering({
+        curvatureEnvelope,
+        localCurvature: kEnv,
+        maxTargetSpeed: effectiveMaxTargetSpeed,
+        candidateSpeed: cornerCandidate,
+      })
 
       const slipLookahead = lookAheadDistance > 0
         ? Math.min(Math.max(lookAheadDistance, MIN_DRAFTING_LOOKAHEAD), MAX_DRAFTING_LOOKAHEAD)
