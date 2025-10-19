@@ -730,9 +730,8 @@ describe('speed control helpers', () => {
       const vCorner = 4.6
       const effectiveMinTargetSpeed = 6.2
       const personalMax = 9.1
-      const vPower = 11.5
       const effectiveMaxTargetSpeed = 9.1
-      const vTargetRaw = Math.min(vCorner, vPower, effectiveMaxTargetSpeed)
+      const vTargetRaw = Math.min(vCorner, effectiveMaxTargetSpeed)
       const adaptiveMinSpeed = computeAdaptiveMinSpeed(
         vTargetRaw,
         effectiveMinTargetSpeed,
