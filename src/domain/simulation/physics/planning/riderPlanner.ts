@@ -52,6 +52,18 @@ export interface RiderEnvironment {
   targetRiseRateLimit: number
   targetDropRateLimit: number
   maxLateralAcceleration: number
+  /**
+   * Thresholds driving the adaptive cornering classification and braking model.
+   * Intensity and coverage are expressed as normalised ratios while the radius
+   * threshold is given in metres. The lateral acceleration targets the braking
+   * force applied when a hairpin is detected.
+   */
+  cornering: {
+    intensityThreshold: number
+    coverageThreshold: number
+    radiusThreshold: number
+    lateralAcceleration: number
+  }
   neighborBounds: {
     min: Float32Array
     max: Float32Array
@@ -144,6 +156,7 @@ export function planRiderStep(
     targetRiseRateLimit,
     targetDropRateLimit,
     maxLateralAcceleration,
+    cornering,
     neighborBounds,
     airDensity,
     baseCdA,
@@ -236,6 +249,12 @@ export function planRiderStep(
         coverageExponent: 1.35,
         reliefFactor: 0.25,
         spikeRetention: 0.35,
+        hairpinLateralAcceleration: cornering.lateralAcceleration,
+        classificationOptions: {
+          hairpinIntensityThreshold: cornering.intensityThreshold,
+          hairpinCoverageThreshold: cornering.coverageThreshold,
+          hairpinRadiusThreshold: cornering.radiusThreshold,
+        },
       },
     )
     if (Number.isFinite(candidate) && candidate > 0) {

@@ -12,6 +12,10 @@ import {
   steerOffsetTowardTarget,
   type CurvatureEnvelope,
 } from './riderPathing'
+import {
+  assessCorneringProfile,
+  type CorneringClassificationOptions,
+} from './cornering'
 
 export interface SlopeAdjustmentOptions {
   /**
@@ -455,6 +459,8 @@ export interface CorneringSpeedOptions {
   coverageExponent?: number
   reliefFactor?: number
   spikeRetention?: number
+  hairpinLateralAcceleration?: number
+  classificationOptions?: CorneringClassificationOptions
 }
 
 export function computeCorneringSpeedFromEnvelope(
@@ -468,11 +474,22 @@ export function computeCorneringSpeedFromEnvelope(
     coverageExponent = 1.2,
     reliefFactor = 0.25,
     spikeRetention = 0.35,
+    hairpinLateralAcceleration,
+    classificationOptions,
   } = options
 
-  const safeAccel = Number.isFinite(maxLateralAcceleration)
-    ? Math.max(0, maxLateralAcceleration)
-    : 0
+  const classification = assessCorneringProfile(envelope, classificationOptions)
+
+  if (classification.category !== 'hairpin') {
+    return Infinity
+  }
+
+  const resolvedAcceleration = Number.isFinite(hairpinLateralAcceleration)
+    ? Math.max(0, hairpinLateralAcceleration)
+    : Number.isFinite(maxLateralAcceleration)
+      ? Math.max(0, maxLateralAcceleration)
+      : 0
+  const safeAccel = resolvedAcceleration
   if (safeAccel <= 0) {
     return Infinity
   }
@@ -517,7 +534,10 @@ export function computeCorneringSpeedFromEnvelope(
     1e-9,
   )
 
-  return Math.sqrt(safeAccel / normalizedCurvature)
+  const baseCorneringSpeed = Math.sqrt(safeAccel / normalizedCurvature)
+  const brakingFactor = MathUtils.clamp(classification.brakingFactor, 0, 1)
+
+  return baseCorneringSpeed * brakingFactor
 }
 
 const scratchRight = new Vector3()
