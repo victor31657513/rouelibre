@@ -60,7 +60,11 @@ export class PelotonSceneUpdater {
     const qRoad = this.roadMesh
       ? this.roadMesh.getWorldQuaternion(new THREE.Quaternion())
       : new THREE.Quaternion()
-    const count = this.riderObjects.length
+    const count = Math.min(
+      this.riderObjects.length,
+      this.ridersMesh.count,
+      Math.floor(state.length / 4),
+    )
 
     for (let i = 0; i < count; i++) {
       const base = i * 4

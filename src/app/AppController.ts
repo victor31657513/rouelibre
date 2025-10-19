@@ -10,6 +10,7 @@
  */
 import * as THREE from 'three'
 import { APP_CONFIG, CAMERA_BOUNDS, CAMERA_CONTROL } from './config'
+import { DEFAULT_MODE_ID, SIMULATION_MODES, getModeById, type SimulationMode } from './modes'
 import { createSceneContext, type SceneContext } from '../domain/scene/sceneFactory'
 import { CameraRig } from '../domain/camera/CameraRig'
 import { PelotonSceneUpdater } from '../domain/simulation/PelotonSceneUpdater'
@@ -21,6 +22,7 @@ import { buildCenterDashes, buildRoadBounds, buildRoadMesh, buildStartLine } fro
 import { loadGPX } from '../domain/route/routeLoader'
 import type { GPXPoint, Vec3 } from '../domain/route/gpx'
 import { changeSelectedIndex, selectedIndex, setSelectedIndex } from '../domain/state/selection'
+import { initModeSelector, type ModeSelectorHandle } from '../ui/modeSelector'
 import { initRouteSelector } from '../ui/routeSelector'
 
 interface DomRefs {
@@ -32,6 +34,8 @@ interface DomRefs {
   pauseBtn: HTMLButtonElement
   resetBtn: HTMLButtonElement
   controls: HTMLDivElement
+  homePanel: HTMLDivElement
+  modeSelector: HTMLDivElement
   routeList: HTMLElement
   speedIndicator: HTMLDivElement
   distanceIndicator: HTMLDivElement
@@ -53,11 +57,16 @@ export class AppController {
   private readonly pelotonScene: PelotonSceneUpdater
   private readonly simulation: SimulationClient
 
+  private readonly maxRiderCount = APP_CONFIG.riderCount
+  private mode: SimulationMode
+  private riderCount: number
+  private modeSelectorHandle: ModeSelectorHandle | null = null
+
   private currentPath: Vec3[] | null = null
   private simplifiedPath: Vec3[] | null = null
   private spline: PathSpline | null = null
   private pathData: Float32Array | null = null
-  private positions = new Float32Array(APP_CONFIG.riderCount * 4)
+  private positions: Float32Array
   private roadReady = false
   private roadAssets: RoadAssets = {}
   private routeClosed = false
@@ -92,11 +101,15 @@ export class AppController {
 
   constructor(dom: DomRefs) {
     this.dom = dom
+    this.mode = getModeById(DEFAULT_MODE_ID)
+    this.riderCount = Math.max(1, Math.min(this.mode.riderCount, this.maxRiderCount))
+
     this.scene = createSceneContext(this.dom.canvas, {
-      riderCount: APP_CONFIG.riderCount,
+      riderCount: this.maxRiderCount,
       cameraDistance: APP_CONFIG.camDistance,
       cameraHeight: APP_CONFIG.camHeight,
     })
+    this.scene.ridersMesh.count = this.riderCount
     this.cameraRig = new CameraRig(this.scene.camera, {
       followOffset: new THREE.Vector3(0, APP_CONFIG.camHeight, -APP_CONFIG.camDistance),
     })
@@ -106,6 +119,9 @@ export class AppController {
       margin: APP_CONFIG.roadMargin,
     })
     this.simulation = new SimulationClient((state) => this.onSimulationState(state))
+    this.positions = new Float32Array(this.riderCount * 4)
+    setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
+    this.applyModeColors()
     this.attachEventListeners()
     this.hideControls()
     this.hideTelemetry()
@@ -117,10 +133,43 @@ export class AppController {
     this.dom.pauseBtn.disabled = true
     this.dom.resetBtn.disabled = true
     this.dom.canvas.classList.add('hidden')
+    this.modeSelectorHandle = initModeSelector({
+      containerId: 'mode-selector',
+      modes: SIMULATION_MODES,
+      activeId: this.mode.id,
+      onSelect: (mode) => this.onModeSelected(mode),
+    })
     this.showRouteList()
     await initRouteSelector('route-list', async (path, points, url) => {
       await this.loadRoute(url, { path3D: path, points })
     })
+  }
+
+  private onModeSelected(mode: SimulationMode): void {
+    if (this.mode.id === mode.id && this.riderCount === mode.riderCount) {
+      return
+    }
+
+    this.mode = mode
+    const nextCount = Math.max(1, Math.min(mode.riderCount, this.maxRiderCount))
+    const countChanged = nextCount !== this.riderCount
+    this.riderCount = nextCount
+    this.scene.ridersMesh.count = this.riderCount
+    this.positions = new Float32Array(this.riderCount * 4)
+    setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
+    this.applyModeColors()
+    this.modeSelectorHandle?.setActive(this.mode.id)
+
+    if (this.currentPath && this.spline && this.simplifiedPath && this.pathData) {
+      this.stopAnimation()
+      this.preparePeloton()
+      this.dom.startBtn.disabled = false
+      this.dom.startBtn.textContent = 'Start'
+      this.dom.pauseBtn.disabled = true
+      this.hideTelemetry()
+    } else if (countChanged) {
+      this.refreshTelemetryDisplay()
+    }
   }
 
   private attachEventListeners(): void {
@@ -317,7 +366,7 @@ export class AppController {
     this.scene.raycaster.setFromCamera(this.mouse, this.scene.camera)
     const intersects = this.scene.raycaster.intersectObject(this.scene.ridersMesh)
     if (intersects.length && intersects[0].instanceId !== undefined) {
-      setSelectedIndex(intersects[0].instanceId, APP_CONFIG.riderCount)
+      setSelectedIndex(intersects[0].instanceId, this.riderCount)
       this.focusSelected()
       this.refreshTelemetryDisplay()
     }
@@ -342,8 +391,11 @@ export class AppController {
         return
     }
     event.preventDefault()
-    changeSelectedIndex(delta, APP_CONFIG.riderCount)
-    this.cameraRig.update(0.016, [this.scene.riderObjects[selectedIndex]])
+    changeSelectedIndex(delta, this.riderCount)
+    const target = this.getSelectedRiderObject()
+    if (target) {
+      this.cameraRig.update(0.016, [target])
+    }
     this.refreshTelemetryDisplay()
   }
 
@@ -405,7 +457,11 @@ export class AppController {
   private preparePeloton(): void {
     if (!this.currentPath || !this.spline || !this.simplifiedPath) return
 
-    const pelotonPositions = initPeloton(this.currentPath, APP_CONFIG.riderCount, {
+    const riderCount = this.riderCount
+    this.scene.ridersMesh.count = riderCount
+    this.applyModeColors()
+
+    const pelotonPositions = initPeloton(this.currentPath, riderCount, {
       seed: APP_CONFIG.rngSeed,
       spacing: APP_CONFIG.startSpacing,
       laneWidth: APP_CONFIG.laneWidth,
@@ -413,9 +469,9 @@ export class AppController {
       margin: APP_CONFIG.roadMargin,
     })
 
-    const yawOffsets = new Float32Array(APP_CONFIG.riderCount)
+    const yawOffsets = new Float32Array(riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
-    this.positions = new Float32Array(APP_CONFIG.riderCount * 4)
+    this.positions = new Float32Array(riderCount * 4)
     this.lastStateDt = 0
     this.pendingStepDts.length = 0
 
@@ -425,14 +481,14 @@ export class AppController {
       this.currentPath[1].z - this.currentPath[0].z,
     )
 
-    for (let i = 0; i < APP_CONFIG.riderCount; i++) {
+    for (let i = 0; i < riderCount; i++) {
       const base = i * 4
       const sign = yawRng() < 0.5 ? -1 : 1
       const magnitude = 2 + yawRng() * 2
       const yawOffset = sign * magnitude * (Math.PI / 180)
       yawOffsets[i] = yawOffset
 
-      const leaderIndex = APP_CONFIG.riderCount - 1 - i
+      const leaderIndex = riderCount - 1 - i
       const row = Math.floor(leaderIndex / 9)
       let s = row * APP_CONFIG.startSpacing
       if (totalLength > 0) s = s % totalLength
@@ -451,8 +507,8 @@ export class AppController {
       this.positions[base + 3] = yaw0 + yawOffset
     }
 
-    const median = Math.floor(APP_CONFIG.riderCount / 2)
-    setSelectedIndex(median, APP_CONFIG.riderCount)
+    const median = Math.floor(riderCount / 2)
+    setSelectedIndex(median, riderCount)
 
     const pathArray = new Float32Array(this.simplifiedPath.length * 3)
     for (let i = 0; i < this.simplifiedPath.length; i++) {
@@ -464,7 +520,7 @@ export class AppController {
     this.pathData = pathArray.slice()
 
     this.simulation.initialize({
-      riderCount: APP_CONFIG.riderCount,
+      riderCount,
       positions: pelotonPositions.buffer,
       yaw: yawOffsets.buffer,
       path: pathArray.buffer,
@@ -485,7 +541,10 @@ export class AppController {
   private resetPeloton(): void {
     if (!this.currentPath || !this.pathData || !this.spline) return
 
-    const pelotonPositions = initPeloton(this.currentPath, APP_CONFIG.riderCount, {
+    const riderCount = this.riderCount
+    this.scene.ridersMesh.count = riderCount
+
+    const pelotonPositions = initPeloton(this.currentPath, riderCount, {
       seed: APP_CONFIG.rngSeed,
       spacing: APP_CONFIG.startSpacing,
       laneWidth: APP_CONFIG.laneWidth,
@@ -493,9 +552,9 @@ export class AppController {
       margin: APP_CONFIG.roadMargin,
     })
 
-    const yawOffsets = new Float32Array(APP_CONFIG.riderCount)
+    const yawOffsets = new Float32Array(riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
-    this.positions = new Float32Array(APP_CONFIG.riderCount * 4)
+    this.positions = new Float32Array(riderCount * 4)
     this.lastStateDt = 0
     this.pendingStepDts.length = 0
     const totalLength = this.spline.totalLength
@@ -504,14 +563,14 @@ export class AppController {
       this.currentPath[1].z - this.currentPath[0].z,
     )
 
-    for (let i = 0; i < APP_CONFIG.riderCount; i++) {
+    for (let i = 0; i < riderCount; i++) {
       const base = i * 4
       const sign = yawRng() < 0.5 ? -1 : 1
       const magnitude = 2 + yawRng() * 2
       const yawOffset = sign * magnitude * (Math.PI / 180)
       yawOffsets[i] = yawOffset
 
-      const leaderIndex = APP_CONFIG.riderCount - 1 - i
+      const leaderIndex = riderCount - 1 - i
       const row = Math.floor(leaderIndex / 9)
       let s = row * APP_CONFIG.startSpacing
       if (totalLength > 0) s = s % totalLength
@@ -532,7 +591,7 @@ export class AppController {
 
     const pathCopy = this.pathData.slice()
     this.simulation.initialize({
-      riderCount: APP_CONFIG.riderCount,
+      riderCount,
       positions: pelotonPositions.buffer,
       yaw: yawOffsets.buffer,
       path: pathCopy.buffer,
@@ -750,7 +809,8 @@ export class AppController {
     const dt = Math.min(0.05, (now - this.lastTick) / 1000)
     this.lastTick = now
 
-    this.cameraRig.update(dt, [this.scene.riderObjects[selectedIndex]], this.rotating)
+    const focusTarget = this.getSelectedRiderObject()
+    this.cameraRig.update(dt, focusTarget ? [focusTarget] : [], this.rotating)
     this.pendingStepDts.push(dt)
     this.simulation.step(dt)
     this.scene.renderer.render(this.scene.scene, this.scene.camera)
@@ -759,7 +819,16 @@ export class AppController {
   }
 
   private focusSelected(): void {
-    this.cameraRig.focus([this.scene.riderObjects[selectedIndex]])
+    const target = this.getSelectedRiderObject()
+    if (target) {
+      this.cameraRig.focus([target])
+    }
+  }
+
+  private getSelectedRiderObject(): THREE.Object3D | null {
+    if (this.riderCount <= 0) return null
+    const index = Math.min(Math.max(selectedIndex, 0), this.riderCount - 1)
+    return this.scene.riderObjects[index] ?? null
   }
 
   private onSimulationState(state: Float32Array): void {
@@ -772,12 +841,44 @@ export class AppController {
     this.updateTelemetry(previous, this.positions)
   }
 
+  private applyModeColors(): void {
+    const mesh = this.scene.ridersMesh
+    if (!mesh.instanceColor || mesh.instanceColor.count < this.maxRiderCount) {
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(
+        new Float32Array(this.maxRiderCount * 3),
+        3,
+      )
+    }
+
+    const baseColor = new THREE.Color(0x3aa6ff)
+    for (let i = 0; i < this.maxRiderCount; i++) {
+      mesh.setColorAt(i, baseColor)
+    }
+
+    const { teamColors, teamSize } = this.mode
+    if (teamColors && teamColors.length > 0 && teamSize && teamSize > 0) {
+      const clampedTeamSize = Math.max(1, Math.floor(teamSize))
+      teamColors.forEach((hex, teamIndex) => {
+        const colour = new THREE.Color(hex)
+        for (let member = 0; member < clampedTeamSize; member++) {
+          const riderIndex = teamIndex * clampedTeamSize + member
+          if (riderIndex >= this.maxRiderCount) break
+          mesh.setColorAt(riderIndex, colour)
+        }
+      })
+    }
+
+    if (mesh.instanceColor) {
+      mesh.instanceColor.needsUpdate = true
+    }
+  }
+
   private showRouteList(): void {
-    this.dom.routeList.classList.remove('hidden')
+    this.dom.homePanel.classList.remove('hidden')
   }
 
   private hideRouteList(): void {
-    this.dom.routeList.classList.add('hidden')
+    this.dom.homePanel.classList.add('hidden')
   }
 
   private createMulberry(seed: number): () => number {

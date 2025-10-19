@@ -62,7 +62,12 @@ export function createSceneContext(
 
   // Instanced riders + helper objects for camera tracking
   const bodyGeo = new THREE.BoxGeometry(2, 2, 0.7)
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3aa6ff, metalness: 0.2, roughness: 0.7 })
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: 0x3aa6ff,
+    metalness: 0.2,
+    roughness: 0.7,
+    vertexColors: true,
+  })
   const ridersMesh = new THREE.InstancedMesh(bodyGeo, bodyMat, riderCount)
   ridersMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
   ridersMesh.frustumCulled = false
