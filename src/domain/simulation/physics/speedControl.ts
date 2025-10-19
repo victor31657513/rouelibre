@@ -160,46 +160,131 @@ export function computeLengthRatioRange(
   return { min, max }
 }
 
-export function computeOffsetSegmentLength(
+const DEFAULT_MIN_OFFSET_FOR_SAMPLING = 0.05
+
+export interface SegmentSamplingOptions {
+  sampleCount?: number
+  minOffsetForSampling?: number
+  adaptiveStep?: boolean
+}
+
+export type OffsetSegmentSampler = (
   spline: PathSpline,
   startDistance: number,
   endDistance: number,
-  lateralOffset: number,
-  sampleCount = 12
-): number {
-  const safeOffset = isFinite(lateralOffset) ? lateralOffset : 0
-  if (!spline || !isFinite(startDistance) || !isFinite(endDistance)) {
-    return 0
+  lateralOffsets: readonly number[],
+  options?: SegmentSamplingOptions,
+) => number[]
+
+export function computeOffsetSegmentLengths(
+  spline: PathSpline,
+  startDistance: number,
+  endDistance: number,
+  lateralOffsets: readonly number[],
+  options: SegmentSamplingOptions = {},
+): number[] {
+  if (!spline || lateralOffsets.length === 0) {
+    return []
+  }
+
+  const safeOffsets = lateralOffsets.map((offset) =>
+    Number.isFinite(offset) ? offset : 0,
+  )
+
+  if (!isFinite(startDistance) || !isFinite(endDistance)) {
+    return safeOffsets.map(() => 0)
   }
 
   const clampedStart = MathUtils.clamp(startDistance, 0, spline.totalLength)
   const clampedEnd = MathUtils.clamp(endDistance, 0, spline.totalLength)
   const travel = clampedEnd - clampedStart
   if (!isFinite(travel) || travel <= 0) {
-    return 0
+    return safeOffsets.map(() => 0)
   }
 
-  const steps = Math.max(1, Math.floor(sampleCount))
-  const segmentCount = Math.max(1, steps)
+  const {
+    sampleCount = 12,
+    minOffsetForSampling = DEFAULT_MIN_OFFSET_FOR_SAMPLING,
+    adaptiveStep = true,
+  } = options
+
+  const baseSteps = Math.max(1, Math.floor(sampleCount))
+  let segmentCount = Math.max(1, baseSteps)
+  if (adaptiveStep) {
+    const desiredSegmentLength = 1.25
+    const adaptiveSegments = Math.max(
+      1,
+      Math.ceil(travel / Math.max(0.5, desiredSegmentLength)),
+    )
+    segmentCount = Math.max(1, Math.min(baseSteps, adaptiveSegments))
+  }
+
   const stepSize = travel / segmentCount
   const right = new Vector3()
-  let total = 0
-  let previousPosition: Vector3 | null = null
+  const scratch = new Vector3()
+  const previousPositions = safeOffsets.map(() => new Vector3())
+  const totals = safeOffsets.map(() => 0)
+  const needsSampling = safeOffsets.map(
+    (offset) => Math.abs(offset) > minOffsetForSampling,
+  )
+
+  const centerPrevious = new Vector3()
+  let centerlineLength = 0
+  let hasPrevious = false
 
   for (let i = 0; i <= segmentCount; i++) {
     const distance = Math.min(clampedStart + stepSize * i, spline.totalLength)
     const sample = spline.sampleByDistance(distance)
     right.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
-    const position = sample.position.clone().addScaledVector(right, safeOffset)
 
-    if (previousPosition) {
-      total += position.distanceTo(previousPosition)
+    if (hasPrevious) {
+      centerlineLength += sample.position.distanceTo(centerPrevious)
+    }
+    centerPrevious.copy(sample.position)
+
+    for (let j = 0; j < safeOffsets.length; j++) {
+      if (!needsSampling[j]) {
+        continue
+      }
+      const offset = safeOffsets[j]
+      scratch.copy(sample.position).addScaledVector(right, offset)
+      if (hasPrevious) {
+        totals[j] += scratch.distanceTo(previousPositions[j])
+      }
+      previousPositions[j].copy(scratch)
     }
 
-    previousPosition = position
+    if (!hasPrevious) {
+      for (let j = 0; j < safeOffsets.length; j++) {
+        if (!needsSampling[j]) {
+          previousPositions[j].copy(sample.position)
+        }
+      }
+    }
+
+    hasPrevious = true
   }
 
-  return total
+  return totals.map((length, index) =>
+    needsSampling[index] ? length : centerlineLength,
+  )
+}
+
+export function computeOffsetSegmentLength(
+  spline: PathSpline,
+  startDistance: number,
+  endDistance: number,
+  lateralOffset: number,
+  sampleCount = 12,
+): number {
+  const [length] = computeOffsetSegmentLengths(
+    spline,
+    startDistance,
+    endDistance,
+    [lateralOffset],
+    { sampleCount },
+  )
+  return length ?? 0
 }
 
 export function computeTargetSpeedFromSegmentLength(
