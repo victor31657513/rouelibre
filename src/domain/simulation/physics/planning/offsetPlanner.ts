@@ -7,8 +7,9 @@ import {
 } from '../riderPathing'
 import {
   adjustTargetSpeedForSlope,
-  computeOffsetSegmentLength,
+  computeOffsetSegmentLengths,
   computeTargetSpeedCompensation,
+  type SegmentSamplingOptions,
 } from '../speedControl'
 import { powerDemand } from '../aero'
 import { pruneOffsetSequence } from './riderManagement'
@@ -23,6 +24,14 @@ export const OFFSET_CANDIDATE_STEP = 0.65
 export const WALL_COMFORT_MARGIN = 0.75
 export const LATERAL_GAP_INFLUENCE = 0.35
 export const TRAJECTORY_PREFERENCE_FACTOR = 0.65
+
+function formatCacheKey(value: number, precision = 5): string {
+  if (!Number.isFinite(value)) {
+    return 'nan'
+  }
+  const factor = Math.pow(10, precision)
+  return (Math.round(value * factor) / factor).toString()
+}
 
 interface OffsetPlanInput {
   currentOffset: number
@@ -58,6 +67,12 @@ interface OffsetPlanInput {
   gravity: number
   drivetrainEfficiency: number
   maxPower: number
+  segmentSampler?: (
+    startDistance: number,
+    endDistance: number,
+    offsets: readonly number[],
+    options?: SegmentSamplingOptions,
+  ) => number[]
 }
 
 export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
@@ -95,6 +110,7 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
     gravity,
     drivetrainEfficiency,
     maxPower,
+    segmentSampler,
   } = input
 
   if (lookAheadDistance <= 0.25) {
@@ -125,7 +141,7 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
   const horizon = Math.max(lookAheadDistance, laneWidth * 1.5, 3)
   const startDistance = currentDistance
   const endDistance = totalLength > 0 ? Math.min(startDistance + horizon, totalLength) : startDistance + horizon
-  const referenceLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 0, 16)
+  const samplingOptions: SegmentSamplingOptions = { sampleCount: 16, adaptiveStep: true }
 
   const candidateStep = Math.max(laneWidth * 0.5, OFFSET_CANDIDATE_STEP)
   const baseCandidates = generateOffsetCandidates(
@@ -233,26 +249,56 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
   const candidateCompensations: number[] = []
   const candidatePowerRatios: number[] = []
 
-  for (const candidate of candidates) {
-    const clampedCandidate = MathUtils.clamp(candidate, -maxOffset, maxOffset)
-    let compensation = 1
-    if (referenceLength > 1e-3) {
-      const segmentLength = computeOffsetSegmentLength(
+  const clampedCandidates = candidates.map((candidate) =>
+    MathUtils.clamp(candidate, -maxOffset, maxOffset),
+  )
+  const offsetsToSample = [0, ...clampedCandidates]
+  const sampledLengths = segmentSampler
+    ? segmentSampler(startDistance, endDistance, offsetsToSample, samplingOptions)
+    : computeOffsetSegmentLengths(
         spline,
         startDistance,
         endDistance,
-        clampedCandidate,
-        16,
+        offsetsToSample,
+        samplingOptions,
       )
-      if (segmentLength > 1e-3) {
-        const rawRatio = segmentLength / referenceLength
-        const clampedRatio = MathUtils.clamp(
-          rawRatio,
-          lengthRatioRange.min,
-          lengthRatioRange.max,
-        )
-        compensation = computeTargetSpeedCompensation(clampedRatio)
+  const referenceLength = sampledLengths[0] ?? 0
+  const candidateLengths =
+    sampledLengths.length >= offsetsToSample.length
+      ? sampledLengths.slice(1)
+      : clampedCandidates.map(() => referenceLength)
+  const safeReference = Math.max(1e-3, referenceLength)
+
+  const compensationCache = new Map<string, number>()
+  const powerCache = new Map<string, number>()
+  const powerParams = {
+    airDensity,
+    cdA,
+    crr: rollingResistanceCoeff,
+    mass,
+    slope,
+    gravity,
+    drivetrainEfficiency,
+  }
+
+  for (let index = 0; index < candidates.length; index++) {
+    const segmentLength = candidateLengths[index] ?? referenceLength
+
+    let compensation = 1
+    if (segmentLength > 1e-3 && safeReference > 1e-3) {
+      const rawRatio = segmentLength / safeReference
+      const clampedRatio = MathUtils.clamp(
+        rawRatio,
+        lengthRatioRange.min,
+        lengthRatioRange.max,
+      )
+      const cacheKey = formatCacheKey(clampedRatio)
+      let cached = compensationCache.get(cacheKey)
+      if (cached === undefined) {
+        cached = computeTargetSpeedCompensation(clampedRatio)
+        compensationCache.set(cacheKey, cached)
       }
+      compensation = cached
     }
     candidateCompensations.push(compensation)
 
@@ -268,15 +314,18 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
       minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
       maxSpeed: personalMax + 0.5,
     })
-    const candidatePower = powerDemand(slopeAdjustedCandidate, {
-      airDensity,
-      cdA,
-      crr: rollingResistanceCoeff,
-      mass,
-      slope,
-      gravity,
-      drivetrainEfficiency,
-    })
+
+    if (!Number.isFinite(slopeAdjustedCandidate) || slopeAdjustedCandidate <= 0) {
+      candidatePowerRatios.push(0)
+      continue
+    }
+
+    const speedKey = formatCacheKey(slopeAdjustedCandidate, 4)
+    let candidatePower = powerCache.get(speedKey)
+    if (candidatePower === undefined) {
+      candidatePower = powerDemand(slopeAdjustedCandidate, powerParams)
+      powerCache.set(speedKey, candidatePower)
+    }
     const normalizedPower = maxPower > 1e-3 ? candidatePower / maxPower : 0
     candidatePowerRatios.push(Math.max(0, normalizedPower))
   }

@@ -5,7 +5,11 @@ import {
   computeSignedCurvature,
   steerOffsetTowardTarget,
 } from '../riderPathing'
-import { computeCorneringSpeedFromEnvelope, projectWorldDistanceOntoCenterline } from '../speedControl'
+import {
+  computeCorneringSpeedFromEnvelope,
+  projectWorldDistanceOntoCenterline,
+  type SegmentSamplingOptions,
+} from '../speedControl'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from '../aero'
 import type {
   OffsetPhaseQueueEntry,
@@ -66,6 +70,12 @@ export interface RiderEnvironment {
   normalizedBaseWeights: WeightTriple
   maxOffsetRate: number
   lengthRatioRange: { min: number; max: number }
+  segmentSampler?: (
+    startDistance: number,
+    endDistance: number,
+    offsets: readonly number[],
+    options?: SegmentSamplingOptions,
+  ) => number[]
 }
 
 export interface RiderProperties {
@@ -147,6 +157,7 @@ export function planRiderStep(
     gravity,
     normalizedBaseWeights,
     maxOffsetRate,
+    segmentSampler,
   } = env
 
   const previousSpeed = speeds[index]
@@ -321,6 +332,7 @@ export function planRiderStep(
     availableTime,
     maxOffsetRate,
     sequence: rider.desiredSequence ?? [],
+    segmentSampler,
     powerWeight: riderPowerWeight,
     gapWeight: riderGapWeight,
     baseWallWeight,

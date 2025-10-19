@@ -4,6 +4,7 @@ import {
   adjustTargetSpeedForSlope,
   computeLengthRatioRange,
   computeOffsetSegmentLength,
+  computeOffsetSegmentLengths,
   computeOffsetArcLengthRatio,
   computeRelaxedOffsetTarget,
   computeTargetSpeedFromSegmentLength,
@@ -75,6 +76,55 @@ describe('speed control helpers', () => {
     const outsideLength = Math.max(lengthPositive, lengthNegative)
 
     expect(outsideLength).toBeGreaterThan(insideLength)
+  })
+
+  it('reuses the centerline length for negligible offsets', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(10, 0, 0),
+    ])
+    const startDistance = 1
+    const endDistance = Math.min(startDistance + 4, spline.totalLength)
+    const centerLength = computeOffsetSegmentLength(spline, startDistance, endDistance, 0, 24)
+    const tinyOffsetLength = computeOffsetSegmentLength(
+      spline,
+      startDistance,
+      endDistance,
+      0.01,
+      24,
+    )
+
+    expect(tinyOffsetLength).toBeCloseTo(centerLength, 6)
+  })
+
+  it('offers a batched API matching scalar segment evaluations', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(6, 0, 0),
+      new Vector3(10, 0, 3),
+      new Vector3(10, 0, 12),
+    ])
+    const startDistance = 2
+    const endDistance = Math.min(startDistance + 7, spline.totalLength)
+    const offsets = [0, -0.6, 0.6, 1.2]
+    const batched = computeOffsetSegmentLengths(
+      spline,
+      startDistance,
+      endDistance,
+      offsets,
+      { sampleCount: 28 },
+    )
+
+    offsets.forEach((offset, index) => {
+      const scalar = computeOffsetSegmentLength(
+        spline,
+        startDistance,
+        endDistance,
+        offset,
+        28,
+      )
+      expect(batched[index]).toBeCloseTo(scalar, 6)
+    })
   })
 
   it('limits acceleration and deceleration when approaching the target speed', () => {

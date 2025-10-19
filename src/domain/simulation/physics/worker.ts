@@ -7,7 +7,11 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
-import { computeLengthRatioRange } from './speedControl'
+import {
+  computeLengthRatioRange,
+  computeOffsetSegmentLengths,
+  type SegmentSamplingOptions,
+} from './speedControl'
 import { computeNeighborBounds } from './riderPathing'
 import type { PathBoundaryMode } from './riderPathing'
 import {
@@ -75,6 +79,91 @@ let maxOffset = Infinity
 let spline: PathSpline
 let totalLength = 0
 let pathBoundaryMode: PathBoundaryMode = 'loop'
+
+type SegmentLengthCacheEntry = {
+  start: number
+  end: number
+  sampleCount: number
+  offsetsKey: string
+  optionsKey: string
+  lengths: number[]
+}
+
+let segmentLengthCache: SegmentLengthCacheEntry | null = null
+
+function formatSegmentOffsetsKey(offsets: readonly number[], precision = 3): string {
+  if (offsets.length === 0) {
+    return 'empty'
+  }
+  const factor = Math.pow(10, precision)
+  return offsets
+    .map((value) =>
+      Number.isFinite(value)
+        ? (Math.round(value * factor) / factor).toString()
+        : '0',
+    )
+    .join('|')
+}
+
+function formatSegmentOptionsKey(options: SegmentSamplingOptions | undefined): string {
+  if (!options) {
+    return 'default'
+  }
+  const { sampleCount = 12, minOffsetForSampling, adaptiveStep = true } = options
+  const minOffsetKey = Number.isFinite(minOffsetForSampling ?? NaN)
+    ? (Math.round((minOffsetForSampling ?? 0) * 1000) / 1000).toString()
+    : 'auto'
+  return `${sampleCount}|${adaptiveStep ? 1 : 0}|${minOffsetKey}`
+}
+
+function sampleOffsetSegmentLengths(
+  startDistance: number,
+  endDistance: number,
+  offsets: readonly number[],
+  options?: SegmentSamplingOptions,
+): number[] {
+  if (!spline) {
+    return offsets.map(() => 0)
+  }
+
+  const resolvedSampleCount = Math.max(1, Math.floor(options?.sampleCount ?? 12))
+  const resolvedOptions: SegmentSamplingOptions = {
+    ...options,
+    sampleCount: resolvedSampleCount,
+  }
+  const offsetsKey = formatSegmentOffsetsKey(offsets)
+  const optionsKey = formatSegmentOptionsKey(resolvedOptions)
+
+  if (
+    segmentLengthCache &&
+    Math.abs(segmentLengthCache.start - startDistance) < 1e-3 &&
+    Math.abs(segmentLengthCache.end - endDistance) < 1e-3 &&
+    segmentLengthCache.sampleCount === resolvedSampleCount &&
+    segmentLengthCache.offsetsKey === offsetsKey &&
+    segmentLengthCache.optionsKey === optionsKey
+  ) {
+    return segmentLengthCache.lengths.slice()
+  }
+
+  const lengths = computeOffsetSegmentLengths(
+    spline,
+    startDistance,
+    endDistance,
+    offsets,
+    resolvedOptions,
+  )
+
+  segmentLengthCache = {
+    start: startDistance,
+    end: endDistance,
+    sampleCount: resolvedSampleCount,
+    offsetsKey,
+    optionsKey,
+    lengths,
+  }
+
+  return lengths.slice()
+}
 
 // paramètres ajustables
 let lookAhead = DEFAULT_WORKER_PARAMS.lookAhead
@@ -334,6 +423,7 @@ self.onmessage = async (e: MessageEvent) => {
       waypoints.push(new Vector3(raw[i], raw[i + 1], raw[i + 2]))
     }
     spline = new PathSpline(waypoints)
+    segmentLengthCache = null
     totalLength = spline.totalLength
     const closedLoopFlag = payload.closedLoop
     const isClosed =
@@ -543,6 +633,8 @@ self.onmessage = async (e: MessageEvent) => {
       normalizedBaseWeights,
       maxOffsetRate,
       lengthRatioRange,
+      segmentSampler: (startDistance, endDistance, offsets, options) =>
+        sampleOffsetSegmentLengths(startDistance, endDistance, offsets, options),
     }
 
     let snapshot: DiagnosticSnapshot | null = null
