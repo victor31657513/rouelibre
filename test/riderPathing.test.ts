@@ -193,5 +193,84 @@ describe('rider pathing helpers', () => {
     expect(apexPhaseInside).toBe(true)
     expect(exitPhaseOutside).toBe(true)
   })
+
+  it('enforces the classic racing line for an isolated rider on a gentle bend', () => {
+    const spline = createCurvedSpline()
+    const totalLength = spline.totalLength
+    const lookAhead = 10
+    const maxOffset = 2.8
+    const progress = 7
+
+    const desiredProfile = computeDesiredOffsetProfile(spline, progress, {
+      lookAhead,
+      maxOffset,
+      totalLength,
+      minRadius: 55,
+      hasNeighbor: false,
+    })
+
+    expect(desiredProfile.intensity).toBeGreaterThan(0)
+    expect(desiredProfile.orientation).not.toBe(0)
+
+    const orientation = Math.sign(desiredProfile.orientation)
+    const orientedEntry = desiredProfile.phases.entry * orientation
+    const orientedApex = desiredProfile.phases.apex * orientation
+    const orientedExit = desiredProfile.phases.exit * orientation
+
+    expect(orientedEntry).toBeGreaterThan(0.05 * maxOffset)
+    expect(orientedApex).toBeLessThan(-0.05 * maxOffset)
+    expect(orientedExit).toBeGreaterThan(0.05 * maxOffset)
+  })
+
+  it('maintains a strong outside target for isolated riders on shallow curves', () => {
+    const spline = createCurvedSpline()
+    const totalLength = spline.totalLength
+    const maxOffset = 2.4
+
+    let weakestOutside = Number.POSITIVE_INFINITY
+    let parameters:
+      | {
+          progress: number
+          lookAhead: number
+          minRadius: number
+          progression: number
+        }
+      | null = null
+
+    for (let lookAhead = 4; lookAhead <= 14; lookAhead += 1) {
+      for (let minRadius = 60; minRadius <= 180; minRadius += 10) {
+        for (let progress = 0; progress < totalLength; progress += 0.5) {
+          const profile = computeDesiredOffsetProfile(spline, progress, {
+            lookAhead,
+            maxOffset,
+            totalLength,
+            minRadius,
+            hasNeighbor: false,
+          })
+
+          if (profile.orientation === 0 || profile.intensity <= 1e-4) {
+            continue
+          }
+
+          const orientation = Math.sign(profile.orientation)
+          const orientedTarget = profile.target * orientation
+          if (
+            orientedTarget <= 0 ||
+            (profile.progression > 0.25 && profile.progression < 0.75)
+          ) {
+            continue
+          }
+
+          if (orientedTarget < weakestOutside) {
+            weakestOutside = orientedTarget
+            parameters = { progress, lookAhead, minRadius, progression: profile.progression }
+          }
+        }
+      }
+    }
+
+    expect(parameters).not.toBeNull()
+    expect(weakestOutside).toBeGreaterThanOrEqual(0.25 * maxOffset)
+  })
 })
 
