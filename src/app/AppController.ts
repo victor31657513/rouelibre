@@ -24,6 +24,7 @@ import type { GPXPoint, Vec3 } from '../domain/route/gpx'
 import { changeSelectedIndex, selectedIndex, setSelectedIndex } from '../domain/state/selection'
 import { initModeSelector, type ModeSelectorHandle } from '../ui/modeSelector'
 import { initRouteSelector } from '../ui/routeSelector'
+import type { SimulationParameterOverrides } from '../domain/simulation/physics/workerParams'
 
 interface DomRefs {
   canvas: HTMLCanvasElement
@@ -527,7 +528,7 @@ export class AppController {
       laneWidth: APP_CONFIG.laneWidth,
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
-      params: { ...APP_CONFIG.workerParams },
+      params: this.resolveWorkerParams(),
       closedLoop: this.routeClosed,
     })
 
@@ -598,7 +599,7 @@ export class AppController {
       laneWidth: APP_CONFIG.laneWidth,
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
-      params: { ...APP_CONFIG.workerParams },
+      params: this.resolveWorkerParams(),
       closedLoop: this.routeClosed,
     })
 
@@ -616,6 +617,15 @@ export class AppController {
     const separation = Math.hypot(last.x - first.x, last.y - first.y, last.z - first.z)
     const threshold = Math.max(APP_CONFIG.laneWidth * 4, 10)
     return separation <= threshold
+  }
+
+  private resolveWorkerParams(): SimulationParameterOverrides {
+    const baseParams: SimulationParameterOverrides = { ...APP_CONFIG.workerParams }
+    const overrides = this.mode.workerParams
+    if (!overrides) {
+      return baseParams
+    }
+    return { ...baseParams, ...overrides }
   }
 
   private rebuildRoute(): void {
