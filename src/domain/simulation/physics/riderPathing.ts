@@ -29,6 +29,21 @@ interface OffsetProfileOptions {
   totalLength: number
   minRadius: number
   boundaryMode?: PathBoundaryMode
+  hasNeighbor?: boolean
+}
+
+export interface OffsetPhaseProfile {
+  entry: number
+  apex: number
+  exit: number
+}
+
+export interface DesiredOffsetProfile {
+  target: number
+  intensity: number
+  orientation: number
+  progression: number
+  phases: OffsetPhaseProfile
 }
 
 const scratchP0 = new Vector3()
@@ -279,12 +294,42 @@ export function computeDesiredOffsetProfile(
   spline: PathSpline,
   distance: number,
   options: OffsetProfileOptions
-): number {
-  const { lookAhead, maxOffset, totalLength, minRadius, boundaryMode = 'loop' } = options
-  if (!spline || totalLength <= 0 || maxOffset <= 0) return 0
+): DesiredOffsetProfile {
+  const {
+    lookAhead,
+    maxOffset,
+    totalLength,
+    minRadius,
+    boundaryMode = 'loop',
+    hasNeighbor = true,
+  } = options
+  if (!spline || totalLength <= 0 || maxOffset <= 0) {
+    return {
+      target: 0,
+      intensity: 0,
+      orientation: 0,
+      progression: 0.5,
+      phases: { entry: 0, apex: 0, exit: 0 },
+    }
+  }
   const curvatureThreshold = minRadius > 0 ? 1 / minRadius : 0.02
-  const halfLook = Math.max(lookAhead * 0.5, 1)
-  const sampleOffsets = [-halfLook, -halfLook * 0.4, 0, halfLook * 0.25, halfLook, lookAhead]
+  const safeLookAhead = Math.max(lookAhead, 1)
+  const halfLook = Math.max(safeLookAhead * 0.5, 1)
+  const forwardHorizon = hasNeighbor ? safeLookAhead : safeLookAhead * 1.25
+  const rearHorizon = hasNeighbor ? safeLookAhead * 0.9 : safeLookAhead * 1.1
+  const sampleOffsets = [
+    -rearHorizon,
+    -halfLook * 1.4,
+    -halfLook * 0.95,
+    -halfLook * 0.45,
+    -halfLook * 0.12,
+    0,
+    halfLook * 0.2,
+    halfLook * 0.55,
+    halfLook * 0.95,
+    forwardHorizon * 0.8,
+    forwardHorizon * 1.2,
+  ]
 
   let signedSum = 0
   let aheadAbs = 0
@@ -305,22 +350,47 @@ export function computeDesiredOffsetProfile(
       continue
     }
 
-    const weight = 1 - Math.min(Math.abs(offset) / Math.max(lookAhead, 1), 1)
-    const clampedWeight = Math.max(weight, 0.1)
+    const horizon = offset >= 0 ? forwardHorizon : rearHorizon
+    const normalizedDistance = Math.min(Math.abs(offset) / Math.max(horizon, 1), 1)
+    const edgeBoost = normalizedDistance > 0.75 ? 0.3 : normalizedDistance > 0.4 ? 0.18 : 0
+    const directionalFocus = offset >= 0
+      ? hasNeighbor
+        ? 1.08
+        : 1.35
+      : hasNeighbor
+        ? 1
+        : 1.18
+    const anchorBias = offset >= 0
+      ? hasNeighbor
+        ? 0.12
+        : 0.2
+      : hasNeighbor
+        ? 0.08
+        : 0.12
+    const weight = (1 - normalizedDistance) * directionalFocus + anchorBias + edgeBoost
+    const clampedWeight = Math.max(weight, hasNeighbor ? 0.12 : 0.22)
     signedSum += curvature * clampedWeight
 
     const absCurvature = Math.abs(curvature)
     maxAbsCurvature = Math.max(maxAbsCurvature, absCurvature)
     if (offset >= 0) {
-      aheadAbs += absCurvature * clampedWeight
-      forwardSigned += curvature * clampedWeight
+      const forwardBias = hasNeighbor ? 1.05 : 1.25
+      aheadAbs += absCurvature * clampedWeight * forwardBias
+      forwardSigned += curvature * clampedWeight * forwardBias
     } else {
-      behindAbs += absCurvature * clampedWeight
+      const entryBias = hasNeighbor ? 1 : 1.15
+      behindAbs += absCurvature * clampedWeight * entryBias
     }
   }
 
   if (maxAbsCurvature < curvatureThreshold * 0.15) {
-    return 0
+    return {
+      target: 0,
+      intensity: 0,
+      orientation: 0,
+      progression: 0.5,
+      phases: { entry: 0, apex: 0, exit: 0 },
+    }
   }
 
   let orientation = 0
@@ -335,7 +405,13 @@ export function computeDesiredOffsetProfile(
     }
   }
   if (orientation === 0) {
-    return 0
+    return {
+      target: 0,
+      intensity: 0,
+      orientation: 0,
+      progression: 0.5,
+      phases: { entry: 0, apex: 0, exit: 0 },
+    }
   }
 
   const normalizedCurvature = MathUtils.clamp(
@@ -343,22 +419,68 @@ export function computeDesiredOffsetProfile(
     0,
     1,
   )
-  const intensity = Math.pow(normalizedCurvature, 0.35)
+  let intensity = Math.pow(normalizedCurvature, 0.35)
+  if (!hasNeighbor) {
+    intensity = Math.min(1, intensity * 1.35 + 0.08)
+  }
   if (intensity <= 1e-3) {
-    return 0
+    return {
+      target: 0,
+      intensity: 0,
+      orientation: 0,
+      progression: 0.5,
+      phases: { entry: 0, apex: 0, exit: 0 },
+    }
   }
 
   const totalEnvelope = aheadAbs + behindAbs
   const progression =
     totalEnvelope > 1e-6 ? MathUtils.clamp(aheadAbs / totalEnvelope, 0, 1) : 0.5
-  const apexWeight = MathUtils.smoothstep(progression, 0.35, 0.75)
-  const outsideWeight = 1 - apexWeight
+  const entryExponent = hasNeighbor ? 1.15 : 1.35
+  const exitExponent = hasNeighbor ? 1.1 : 1.32
+  const entryBlend = Math.pow(MathUtils.clamp(progression, 0, 1), entryExponent)
+  const exitBlend = Math.pow(MathUtils.clamp(1 - progression, 0, 1), exitExponent)
+  const apexCore = Math.max(0, 1 - Math.abs(progression - 0.5) * 2)
+  const apexBlend = Math.max(0.05, Math.pow(apexCore, hasNeighbor ? 1.35 : 1.15))
+  const blendSum = entryBlend + apexBlend + exitBlend
+  const safeBlend = blendSum > 1e-6 ? blendSum : 1
+  const entryWeight = entryBlend / safeBlend
+  const apexWeight = apexBlend / safeBlend
+  const exitWeight = exitBlend / safeBlend
+  const outsideTarget = orientation * maxOffset * (hasNeighbor ? 0.55 : 0.62)
+  const insideTarget = -orientation * maxOffset * (hasNeighbor ? 1 : 1.05)
+  const flankIntensity = hasNeighbor
+    ? Math.min(1, intensity * 0.92)
+    : Math.min(1, intensity * 1.3 + 0.1)
+  const apexIntensity = hasNeighbor
+    ? Math.min(1, intensity * 1.08)
+    : Math.min(1, intensity * 1.75 + 0.18)
+  const entryTarget = MathUtils.clamp(outsideTarget * flankIntensity, -maxOffset, maxOffset)
+  const apexTarget = MathUtils.clamp(insideTarget * apexIntensity, -maxOffset, maxOffset)
+  const exitTarget = MathUtils.clamp(outsideTarget * flankIntensity, -maxOffset, maxOffset)
+  const exitDominance = Math.pow(
+    MathUtils.clamp((hasNeighbor ? 0.4 : 0.55) - progression, 0, 1),
+    hasNeighbor ? 1.2 : 0.9,
+  )
+  const target = MathUtils.clamp(
+    entryTarget * entryWeight +
+      apexTarget * apexWeight * (1 - exitDominance) +
+      exitTarget * (exitWeight + exitDominance * 0.5),
+    -maxOffset,
+    maxOffset,
+  )
 
-  const outsideTarget = orientation * maxOffset * 0.55
-  const insideTarget = -orientation * maxOffset
-  const blended = outsideTarget * outsideWeight + insideTarget * apexWeight
-
-  return MathUtils.clamp(blended * intensity, -maxOffset, maxOffset)
+  return {
+    target,
+    intensity,
+    orientation,
+    progression,
+    phases: {
+      entry: entryTarget,
+      apex: apexTarget,
+      exit: exitTarget,
+    },
+  }
 }
 
 export function constrainOffsetWithinRate(
@@ -433,6 +555,7 @@ export interface OffsetCandidateEvaluationParams {
   referenceStep: number
   lateralGapInfluence?: number
   desiredOffset?: number
+  desiredSequence?: Array<{ offset: number; weight: number }>
   desiredWeight?: number
 }
 
@@ -493,18 +616,32 @@ export function evaluateOffsetCandidates(
     referenceStep,
     lateralGapInfluence = 0.25,
     desiredOffset,
+    desiredSequence,
     desiredWeight = 0,
   } = params
 
   const safeWallComfort = Math.max(0.05, Math.abs(wallComfort))
   const safeStep = Math.max(0.05, Math.abs(referenceStep))
   const safeDesiredWeight = Math.max(0, desiredWeight)
-  const hasDesired =
-    safeDesiredWeight > 1e-6 && Number.isFinite(desiredOffset ?? NaN)
-  const preferredOffset = hasDesired ? (desiredOffset as number) : 0
   const normalizationRadius = Number.isFinite(maxOffset) && Math.abs(maxOffset) > 1e-3
     ? Math.abs(maxOffset)
     : Math.max(1, Math.abs(minBound), Math.abs(maxBound))
+  const desiredTargets =
+    safeDesiredWeight > 1e-6
+      ? (desiredSequence?.filter((entry) => Number.isFinite(entry.offset)) ?? [])
+      : []
+  const fallbackTargets =
+    desiredTargets.length > 0
+      ? desiredTargets
+      : Number.isFinite(desiredOffset ?? NaN)
+        ? [{ offset: desiredOffset as number, weight: 1 }]
+        : []
+  const normalizedTargets = fallbackTargets.filter((entry) => (entry.weight ?? 0) >= 0)
+  const totalTargetWeight = normalizedTargets.reduce(
+    (sum, entry) => sum + Math.max(0, entry.weight ?? 0),
+    0,
+  )
+  const targetWeightNormalizer = totalTargetWeight > 1e-6 ? totalTargetWeight : 1
 
   let bestIndex = 0
   let bestCost = Infinity
@@ -529,14 +666,17 @@ export function evaluateOffsetCandidates(
     const gapPenalty = normalizedGapShortage ** 2
 
     let trajectoryPenalty = 0
-    if (hasDesired) {
-      const normalizedError = normalizationRadius > 1e-6
-        ? Math.min(
-            1,
-            Math.abs(candidate - preferredOffset) / normalizationRadius,
-          )
-        : Math.abs(candidate - preferredOffset)
-      trajectoryPenalty = safeDesiredWeight * normalizedError * normalizedError
+    if (safeDesiredWeight > 1e-6 && normalizedTargets.length > 0) {
+      for (const entry of normalizedTargets) {
+        const entryWeight = Math.max(0, entry.weight ?? 0) / targetWeightNormalizer
+        if (entryWeight <= 0) continue
+        const desiredValue = clampOffset(entry.offset, minBound, maxBound, maxOffset)
+        const normalizedError = normalizationRadius > 1e-6
+          ? Math.min(1, Math.abs(candidate - desiredValue) / normalizationRadius)
+          : Math.abs(candidate - desiredValue)
+        trajectoryPenalty +=
+          safeDesiredWeight * entryWeight * normalizedError * normalizedError
+      }
     }
 
     const cost =
