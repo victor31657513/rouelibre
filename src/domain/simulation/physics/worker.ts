@@ -7,36 +7,37 @@
 import * as RAPIER from '@dimforge/rapier3d-compat'
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
+import { computeLengthRatioRange } from './speedControl'
+import { computeNeighborBounds } from './riderPathing'
+import type { PathBoundaryMode } from './riderPathing'
 import {
-  adjustTargetSpeedForSlope,
-  computeCorneringSpeedFromEnvelope,
-  computeLengthRatioRange,
-  computeOffsetSegmentLength,
-  computeTargetSpeedCompensation,
-  projectWorldDistanceOntoCenterline,
-  wrapDistance,
-} from './speedControl'
-import {
-  computeCurvatureEnvelope,
-  computeDesiredOffsetProfile,
-  computeNeighborBounds,
-  computeSignedCurvature,
-  constrainOffsetWithinRate,
-  evaluateOffsetCandidates,
-  generateOffsetCandidates,
-  steerOffsetTowardTarget,
-} from './riderPathing'
+  createPose,
+  mulberry32,
+  normalizeWeights,
+  recomputeRoleWeights,
+  sampleClampedNormal,
+  sampleNormal,
+  samplePoseAtDistance,
+  updateBaseWeights,
+  computeRoleWeights,
+  computeLongitudinalGaps,
+} from './planning/riderManagement'
 import type {
-  CurvatureEnvelope,
   OffsetCandidateResult,
-  PathBoundaryMode,
-} from './riderPathing'
-import { draftingFactor, powerDemand, solveVelocityFromPower } from './aero'
-import { computeAheadSampleDistance } from './lookAhead'
+  OffsetPhaseQueueEntry,
+  RiderPose,
+  RiderRoleProfile,
+  WeightTriple,
+} from './planning/types'
+import { planRiderStep, type RiderEnvironment, type RiderProperties } from './planning/riderPlanner'
+import { COMMAND_NOISE_STDDEV } from './planning/speedPlanner'
 import {
   DEFAULT_WORKER_PARAMS,
   type SimulationParameterOverrides,
 } from './workerParams'
+
+export { computeLongitudinalGaps } from './planning/riderManagement'
+export { computeAdaptiveMinSpeed, evaluateHairpinCornering } from './planning/speedPlanner'
 
 let world: RAPIER.World
 let N = 0
@@ -99,38 +100,12 @@ const DEFAULT_DRIVETRAIN_EFFICIENCY = DEFAULT_WORKER_PARAMS.drivetrainEfficiency
 const DEFAULT_SYSTEM_MASS = DEFAULT_WORKER_PARAMS.systemMass
 const DEFAULT_POWER_AVAILABLE = DEFAULT_WORKER_PARAMS.powerAvailable
 const DEFAULT_LATERAL_ACCEL = DEFAULT_WORKER_PARAMS.aLatMax
-const MAX_DRAFTING_LOOKAHEAD = 12
-const MIN_DRAFTING_LOOKAHEAD = 2
-const LONGITUDINAL_EPSILON = 1e-3
-
-const SOCIAL_TAU = 0.6
-const GAP_MIN_LONG = 1.1
-const HEADWAY_TIME = 0.4
-const LONGITUDINAL_REPULSION_GAIN = 3.0
-const COMMAND_NOISE_STDDEV = 0.1
-const OFFSET_CANDIDATE_STEP = 0.65
-const WALL_COMFORT_MARGIN = 0.75
-const LATERAL_GAP_INFLUENCE = 0.35
-const LATERAL_FORCE_DRAG = 0.45
-const TRAJECTORY_PREFERENCE_FACTOR = 0.65
-
 const MIN_STEP_DT = 1 / 120
 const MAX_STEP_DT = 0.2
 
 const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
 const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
 const FALLBACK_WALL_WEIGHT = DEFAULT_WORKER_PARAMS.wW
-
-const MIN_CURVE_SPEED_MARGIN = 0.35
-const HAIRPIN_RADIUS_TIGHT = 16
-const HAIRPIN_RADIUS_RELAXED = 40
-const HAIRPIN_ACTIVATION_THRESHOLD = 0.35
-
-type WeightTriple = { power: number; gap: number; wall: number }
-
-type RiderRoleProfile = { powerWeight: number; gapWeight: number }
-
-type RiderPose = { position: Vector3; tangent: Vector3 }
 
 const ROLE_PROFILES: RiderRoleProfile[] = [
   { powerWeight: 0.6, gapWeight: 0.25 }, // sprinteur protecteur, cherche l'aspi
@@ -178,21 +153,11 @@ let normalizedBaseWeights = normalizeWeights(
   baseWeightPowerRaw,
   baseWeightGapRaw,
   baseWeightWallRaw,
+  FALLBACK_WEIGHT_TRIPLE,
 )
-
-let warnedLateralAccel = false
-let warnedCdA = false
-let warnedDrafting = false
 
 let diagnosticAccumulator = 0
 let pendingDiagnostics: DiagnosticSnapshot | null = null
-
-const scratchRightVector = new Vector3()
-const scratchRelative = new Vector3()
-
-function createPose(): RiderPose {
-  return { position: new Vector3(), tangent: new Vector3() }
-}
 
 function getCurrentTimestamp(): number {
   if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
@@ -200,200 +165,12 @@ function getCurrentTimestamp(): number {
   }
   return Date.now()
 }
-
-function samplePoseAtDistance(
-  spline: PathSpline,
-  distance: number,
-  offset: number,
-  target: RiderPose,
-): RiderPose {
-  const sample = spline.sampleByDistance(distance)
-  target.position.copy(sample.position)
-  target.tangent.copy(sample.tangent).normalize()
-  scratchRightVector.set(-target.tangent.z, 0, target.tangent.x).normalize()
-  target.position.addScaledVector(scratchRightVector, offset)
-  return target
-}
-
-function alignProjectionToArc(
-  projection: number,
-  arc: number,
-  totalLength: number,
-): number {
-  if (!Number.isFinite(totalLength) || totalLength <= 0 || !Number.isFinite(arc)) {
-    return projection
-  }
-  let best = projection
-  let bestError = Math.abs(projection - arc)
-  for (const step of [-1, 1]) {
-    const candidate = projection + step * totalLength
-    const error = Math.abs(candidate - arc)
-    if (error < bestError) {
-      best = candidate
-      bestError = error
-    }
-  }
-  return best
-}
-
-const scratchReferencePose = createPose()
-const scratchNeighborPose = createPose()
 const scratchNextPose = createPose()
-
-export function computeLongitudinalGaps(
-  index: number,
-  progress: Float32Array,
-  offsets: Float32Array,
-  spline: PathSpline,
-  totalLength: number,
-  poses?: RiderPose[],
-): { gapAhead: number; gapBehind: number } {
-  const count = progress.length
-  if (index < 0 || index >= count) {
-    return { gapAhead: Infinity, gapBehind: Infinity }
-  }
-
-  const referencePose =
-    poses?.[index] ??
-    samplePoseAtDistance(spline, progress[index], offsets[index], scratchReferencePose)
-  const referencePosition = referencePose.position
-  const referenceTangent = referencePose.tangent
-
-  let gapAhead = Infinity
-  let gapBehind = Infinity
-
-  for (let j = 0; j < count; j++) {
-    if (j === index) continue
-
-    const neighborPose =
-      poses?.[j] ??
-      samplePoseAtDistance(spline, progress[j], offsets[j], scratchNeighborPose)
-    scratchRelative.subVectors(neighborPose.position, referencePosition)
-    let projection = scratchRelative.dot(referenceTangent)
-
-    if (totalLength > 0) {
-      const rawDiff = progress[j] - progress[index]
-      const forwardArc = wrapDistance(rawDiff, totalLength)
-      const backwardArc = -wrapDistance(-rawDiff, totalLength)
-
-      if (forwardArc > LONGITUDINAL_EPSILON) {
-        const alignedForward = alignProjectionToArc(projection, forwardArc, totalLength)
-        if (alignedForward > LONGITUDINAL_EPSILON && alignedForward < gapAhead) {
-          gapAhead = alignedForward
-        }
-      }
-
-      if (Math.abs(backwardArc) > LONGITUDINAL_EPSILON) {
-        const alignedBackward = alignProjectionToArc(projection, backwardArc, totalLength)
-        if (alignedBackward < -LONGITUDINAL_EPSILON) {
-          const behind = Math.abs(alignedBackward)
-          if (behind < gapBehind) {
-            gapBehind = behind
-          }
-        }
-      }
-    } else {
-      if (projection > LONGITUDINAL_EPSILON && projection < gapAhead) {
-        gapAhead = projection
-      } else if (projection < -LONGITUDINAL_EPSILON) {
-        const behind = -projection
-        if (behind < gapBehind) {
-          gapBehind = behind
-        }
-      }
-    }
-  }
-
-  return { gapAhead, gapBehind }
-}
-
 function refreshRiderPoseCache(): void {
   if (!riderPoses || riderPoses.length !== N) return
   for (let i = 0; i < riderPoses.length; i++) {
     samplePoseAtDistance(spline, progress[i], offsets[i], riderPoses[i])
   }
-}
-
-export function computeAdaptiveMinSpeed(
-  vTargetRaw: number,
-  effectiveMinTargetSpeed: number,
-): number {
-  return Math.max(0, Math.min(vTargetRaw, effectiveMinTargetSpeed))
-}
-
-export function evaluateHairpinCornering(options: {
-  curvatureEnvelope: CurvatureEnvelope
-  localCurvature: number
-  maxTargetSpeed: number
-  candidateSpeed: number
-  minSpeedMargin?: number
-  activationThreshold?: number
-}): { activation: number; cornerSpeed: number } {
-  const {
-    curvatureEnvelope,
-    localCurvature,
-    maxTargetSpeed,
-    candidateSpeed,
-    minSpeedMargin = MIN_CURVE_SPEED_MARGIN,
-    activationThreshold = HAIRPIN_ACTIVATION_THRESHOLD,
-  } = options
-
-  const safeMaxSpeed = Number.isFinite(maxTargetSpeed)
-    ? Math.max(0, maxTargetSpeed)
-    : 0
-
-  if (!(safeMaxSpeed > 0)) {
-    return { activation: 0, cornerSpeed: 0 }
-  }
-
-  const coverage = MathUtils.clamp(
-    curvatureEnvelope.coverageRatio ?? 0,
-    0,
-    1,
-  )
-  const intensity = MathUtils.clamp(curvatureEnvelope.intensity ?? 0, 0, 1)
-  const localCurvatureSafe = Number.isFinite(localCurvature)
-    ? Math.max(0, localCurvature)
-    : 0
-  const localRadius = localCurvatureSafe > 1e-6
-    ? 1 / localCurvatureSafe
-    : Infinity
-
-  const radiusSeverity = Number.isFinite(localRadius)
-    ? 1 - MathUtils.smoothstep(localRadius, HAIRPIN_RADIUS_TIGHT, HAIRPIN_RADIUS_RELAXED)
-    : 0
-  const sustainedSeverity = Math.pow(coverage, 1.2)
-  const curvatureSeverity = Math.pow(intensity, 1.1)
-  const combinedSeed = Math.max(
-    radiusSeverity,
-    curvatureSeverity * (0.6 + 0.4 * sustainedSeverity),
-  )
-
-  const activation = MathUtils.clamp(
-    (combinedSeed - activationThreshold) /
-      Math.max(1 - activationThreshold, 1e-3),
-    0,
-    1,
-  )
-
-  if (activation <= 0) {
-    return { activation: 0, cornerSpeed: safeMaxSpeed }
-  }
-
-  const safeCandidate = Number.isFinite(candidateSpeed) && candidateSpeed > 0
-    ? Math.min(candidateSpeed, safeMaxSpeed)
-    : safeMaxSpeed
-
-  const baseline = MathUtils.lerp(safeMaxSpeed, safeCandidate, activation)
-  const margin = MathUtils.clamp(
-    minSpeedMargin * (1 - activation),
-    0,
-    safeMaxSpeed,
-  )
-  const reduced = baseline - margin
-  const cornerSpeed = Math.max(safeCandidate, Math.min(safeMaxSpeed, reduced))
-
-  return { activation, cornerSpeed }
 }
 
 function detectClosedLoop(points: Vector3[], lane: number): boolean {
@@ -409,149 +186,6 @@ function detectClosedLoop(points: Vector3[], lane: number): boolean {
 }
 
 // Worker Rapier : met à jour les positions et renvoie un Float32Array transférable
-
-function mulberry32(a: number) {
-  return function () {
-    let t = (a += 0x6d2b79f5)
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-function sampleNormal(generator: () => number, mean: number, stdDev: number): number {
-  const u1 = Math.max(generator(), 1e-7)
-  const u2 = Math.max(generator(), 1e-7)
-  const mag = Math.sqrt(-2 * Math.log(u1))
-  const z0 = mag * Math.cos(2 * Math.PI * u2)
-  const value = mean + z0 * stdDev
-  return Number.isFinite(value) ? value : mean
-}
-
-function sampleClampedNormal(
-  generator: () => number,
-  mean: number,
-  stdDev: number,
-  min: number,
-  max: number,
-): number {
-  const value = sampleNormal(generator, mean, stdDev)
-  return MathUtils.clamp(value, min, max)
-}
-
-function computeSlope(current: Vector3, ahead: Vector3, distance: number): number {
-  if (!isFinite(distance) || distance <= 0) {
-    return 0
-  }
-  return (ahead.y - current.y) / distance
-}
-
-function computeDraftingContext(
-  index: number,
-  progress: Float32Array,
-  offsets: Float32Array,
-  spline: PathSpline,
-  totalLength: number,
-  maxDistance: number,
-  poses?: RiderPose[],
-): { gapToLeader: number; leadersAhead: number } {
-  if (!Number.isFinite(maxDistance) || maxDistance <= 0) {
-    return { gapToLeader: Infinity, leadersAhead: 0 }
-  }
-
-  const count = progress.length
-  if (index < 0 || index >= count) {
-    return { gapToLeader: Infinity, leadersAhead: 0 }
-  }
-
-  const referencePose =
-    poses?.[index] ??
-    samplePoseAtDistance(spline, progress[index], offsets[index], scratchReferencePose)
-  const origin = referencePose.position
-  const tangent = referencePose.tangent
-
-  let bestGap = Infinity
-  let leaders = 0
-
-  for (let j = 0; j < count; j++) {
-    if (j === index) continue
-
-    const neighborPose =
-      poses?.[j] ??
-      samplePoseAtDistance(spline, progress[j], offsets[j], scratchNeighborPose)
-    scratchRelative.subVectors(neighborPose.position, origin)
-    let projection = scratchRelative.dot(tangent)
-
-    if (totalLength > 0) {
-      const rawDiff = progress[j] - progress[index]
-      const forwardArc = wrapDistance(rawDiff, totalLength)
-      projection = alignProjectionToArc(projection, forwardArc, totalLength)
-    }
-
-    if (projection > LONGITUDINAL_EPSILON && projection <= maxDistance) {
-      leaders++
-      if (projection < bestGap) {
-        bestGap = projection
-      }
-    }
-  }
-
-  return { gapToLeader: leaders > 0 ? bestGap : Infinity, leadersAhead: leaders }
-}
-
-function normalizeWeights(
-  power: number,
-  gap: number,
-  wall: number,
-  fallback: WeightTriple = FALLBACK_WEIGHT_TRIPLE,
-): WeightTriple {
-  const safePower = Number.isFinite(power) ? Math.max(0, power) : 0
-  const safeGap = Number.isFinite(gap) ? Math.max(0, gap) : 0
-  const safeWall = Number.isFinite(wall) ? Math.max(0, wall) : 0
-  const sum = safePower + safeGap + safeWall
-  if (sum <= 1e-6) {
-    return { ...fallback }
-  }
-  return {
-    power: safePower / sum,
-    gap: safeGap / sum,
-    wall: safeWall / sum,
-  }
-}
-
-function updateBaseWeights(powerRaw: number, gapRaw: number, wallRaw: number): void {
-  const normalized = normalizeWeights(powerRaw, gapRaw, wallRaw)
-  baseWeightPowerRaw = normalized.power
-  baseWeightGapRaw = normalized.gap
-  baseWeightWallRaw = normalized.wall
-  normalizedBaseWeights = normalized
-}
-
-function computeRoleWeights(roleIndex: number): WeightTriple {
-  const base = normalizedBaseWeights
-  if (!Number.isFinite(roleIndex) || roleIndex < 0 || roleIndex >= ROLE_PROFILES.length) {
-    return { ...base }
-  }
-
-  const role = ROLE_PROFILES[roleIndex]
-  const referencePower = FALLBACK_POWER_WEIGHT > 1e-6 ? FALLBACK_POWER_WEIGHT : 1
-  const referenceGap = FALLBACK_GAP_WEIGHT > 1e-6 ? FALLBACK_GAP_WEIGHT : 1
-  const powerScale = MathUtils.clamp(role.powerWeight / referencePower, 0.3, 1.7)
-  const gapScale = MathUtils.clamp(role.gapWeight / referenceGap, 0.3, 1.7)
-  return normalizeWeights(base.power * powerScale, base.gap * gapScale, base.wall)
-}
-
-function recomputeRoleWeights(): void {
-  if (!riderRoles || !riderPowerWeights || !riderGapWeights) {
-    return
-  }
-  const count = Math.min(riderRoles.length, riderPowerWeights.length, riderGapWeights.length)
-  for (let i = 0; i < count; i++) {
-    const weights = computeRoleWeights(riderRoles[i])
-    riderPowerWeights[i] = weights.power
-    riderGapWeights[i] = weights.gap
-  }
-}
 
 function applyParameterOverrides(overrides?: SimulationParameterOverrides | null): void {
   if (!overrides) return
@@ -656,8 +290,23 @@ function applyParameterOverrides(overrides?: SimulationParameterOverrides | null
         nextWall = remainder
       }
     }
-    updateBaseWeights(nextPower, nextGap, nextWall)
-    recomputeRoleWeights()
+    const normalized = updateBaseWeights(nextPower, nextGap, nextWall, FALLBACK_WEIGHT_TRIPLE)
+    baseWeightPowerRaw = normalized.power
+    baseWeightGapRaw = normalized.gap
+    baseWeightWallRaw = normalized.wall
+    normalizedBaseWeights = normalized
+
+    if (riderRoles && riderPowerWeights && riderGapWeights) {
+      const recomputed = recomputeRoleWeights(
+        riderRoles,
+        normalized,
+        ROLE_PROFILES,
+        FALLBACK_POWER_WEIGHT,
+        FALLBACK_GAP_WEIGHT,
+      )
+      riderPowerWeights.set(recomputed.power)
+      riderGapWeights.set(recomputed.gap)
+    }
   }
 }
 
@@ -763,7 +412,13 @@ self.onmessage = async (e: MessageEvent) => {
         roleIndex = Math.min(ROLE_PROFILES.length - 1, Math.max(0, sampled))
       }
       riderRoles[i] = roleIndex
-      const roleWeights = computeRoleWeights(roleIndex)
+      const roleWeights = computeRoleWeights(
+        roleIndex,
+        normalizedBaseWeights,
+        ROLE_PROFILES,
+        FALLBACK_POWER_WEIGHT,
+        FALLBACK_GAP_WEIGHT,
+      )
       riderPowerWeights[i] = roleWeights.power
       riderGapWeights[i] = roleWeights.gap
 
@@ -856,609 +511,81 @@ self.onmessage = async (e: MessageEvent) => {
       lateralGap,
     })
 
-    const effectiveMaxTargetSpeed = Math.max(0, maxTargetSpeed)
-    const effectiveMinTargetSpeed = Math.max(
-      0,
-      Math.min(effectiveMaxTargetSpeed, minTargetSpeed),
-    )
     const lengthRatioRange = computeLengthRatioRange(maxOffset, minRadius)
+
+    const stepEnvironment: RiderEnvironment = {
+      spline,
+      totalLength,
+      lookAhead,
+      laneWidth,
+      maxOffset,
+      minRadius,
+      pathBoundaryMode,
+      maxTargetSpeed,
+      minTargetSpeed,
+      maxAcceleration,
+      maxDeceleration,
+      targetSpeedDamping,
+      targetRiseRateLimit,
+      targetDropRateLimit,
+      maxLateralAcceleration,
+      neighborBounds,
+      airDensity,
+      baseCdA,
+      rollingResistanceCoeff,
+      drivetrainEfficiency,
+      systemMass,
+      availablePower,
+      draftingMinFactor,
+      draftingMaxReduction,
+      draftingCharacteristicDistance,
+      gravity: GRAVITY,
+      normalizedBaseWeights,
+      maxOffsetRate,
+      lengthRatioRange,
+    }
 
     let snapshot: DiagnosticSnapshot | null = null
 
     for (let i = 0; i < N; i++) {
       const rb = bodies[i]
       const previousSpeed = speeds[i]
-      const mass = riderMasses?.[i] ?? systemMass
-      const baseCdAForRider = riderCdA?.[i] ?? baseCdA
-      const maxPowerForRider = riderMaxPower?.[i] ?? availablePower
-      const preferredSpeed = riderPreferredSpeeds?.[i] ??
-        MathUtils.clamp(
-          (effectiveMinTargetSpeed + effectiveMaxTargetSpeed) / 2,
-          effectiveMinTargetSpeed,
-          effectiveMaxTargetSpeed,
-        )
-      const reactionTime = Math.max(riderReactionTimes?.[i] ?? 0.3, 0.05)
-      const noiseSigma = riderNoiseSigma?.[i] ?? COMMAND_NOISE_STDDEV
-      const weightSet = normalizeWeights(
-        riderPowerWeights?.[i] ?? normalizedBaseWeights.power,
-        riderGapWeights?.[i] ?? normalizedBaseWeights.gap,
-        normalizedBaseWeights.wall,
-      )
-      const powerWeight = weightSet.power
-      const gapWeight = weightSet.gap
-      const baseWallWeight = Math.max(0.05, weightSet.wall)
-      const referenceGap = Math.max(normalizedBaseWeights.gap, 1e-3)
-      const referencePower = Math.max(normalizedBaseWeights.power, 1e-3)
-      const gapResponsiveness = MathUtils.clamp(
-        gapWeight / referenceGap,
-        0.6,
-        1.4,
-      )
-      const repulsionGain = LONGITUDINAL_REPULSION_GAIN * MathUtils.clamp(
-        gapWeight / referenceGap,
-        0.7,
-        1.4,
-      )
-      let personalMin = Math.max(effectiveMinTargetSpeed, preferredSpeed - 1.5)
-      let personalMax = Math.min(effectiveMaxTargetSpeed, preferredSpeed + 1.5)
-      if (personalMin > personalMax) {
-        const neutral = MathUtils.clamp(
-          preferredSpeed,
-          effectiveMinTargetSpeed,
-          effectiveMaxTargetSpeed,
-        )
-        personalMin = neutral
-        personalMax = neutral
-      }
-      const currentOffset = MathUtils.clamp(offsets[i], -maxOffset, maxOffset)
-      const currentDistance = progress[i]
-      const {
-        sampleDistance: aheadSampleDistance,
-        travelDistance: lookAheadDistance,
-      } = computeAheadSampleDistance(
-        currentDistance,
-        lookAhead,
-        totalLength,
-        pathBoundaryMode,
-      )
 
-      const minBound = neighborBounds.min[i]
-      const maxBound = neighborBounds.max[i]
-      const hasLateralNeighbor = neighborBounds.hasNeighbor?.[i] ?? false
-      const sequenceQueue = desiredOffsetSequences[i] ?? []
-      const preservedSequence: OffsetPhaseQueueEntry[] = []
-      for (const phase of sequenceQueue) {
-        const nextTtl = (phase.ttl ?? 0) - 1
-        const safeWeight = Math.max(0, Number.isFinite(phase.weight) ? phase.weight : 0)
-        const safeOffset = MathUtils.clamp(
-          Number.isFinite(phase.offset) ? phase.offset : 0,
-          -maxOffset,
-          maxOffset,
-        )
-        const decayedWeight = safeWeight * (hasLateralNeighbor ? 0.97 : 0.99)
-        if (nextTtl > 0 && decayedWeight > 1e-4) {
-          preservedSequence.push({ offset: safeOffset, weight: decayedWeight, ttl: nextTtl })
-        }
-      }
-      desiredOffsetSequences[i] = preservedSequence.slice(-9)
-      const baseWallComfort = Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN)
-      let wallComfort = baseWallComfort
-      if (!hasLateralNeighbor) {
-        if (!Number.isFinite(maxOffset)) {
-          wallComfort = baseWallComfort * 2
-        } else {
-          wallComfort = Math.max(baseWallComfort, Math.abs(maxOffset) * 0.9)
-        }
-      }
-      const offsetWallWeight = hasLateralNeighbor
-        ? baseWallWeight
-        : Math.max(0.02, baseWallWeight * 0.55)
-
-      let slope = 0
-      if (lookAheadDistance > 1e-3) {
-        const travelDistance = Math.max(lookAheadDistance, 1e-3)
-        const currentSample = spline.sampleByDistance(currentDistance)
-        const aheadSample = spline.sampleByDistance(aheadSampleDistance)
-        slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
+      const riderProps: RiderProperties = {
+        index: i,
+        mass: riderMasses?.[i] ?? systemMass,
+        cdA: riderCdA?.[i] ?? baseCdA,
+        maxPower: riderMaxPower?.[i] ?? availablePower,
+        preferredSpeed: riderPreferredSpeeds?.[i] ?? NaN,
+        reactionTime: riderReactionTimes?.[i] ?? 0.3,
+        noiseSigma: riderNoiseSigma?.[i] ?? COMMAND_NOISE_STDDEV,
+        powerWeight: riderPowerWeights?.[i] ?? normalizedBaseWeights.power,
+        gapWeight: riderGapWeights?.[i] ?? normalizedBaseWeights.gap,
+        noiseGenerator: noiseGenerators[i] ?? Math.random,
+        desiredSequence: desiredOffsetSequences[i] ?? [],
+        commandedTargetSpeed: commandedTargetSpeeds[i],
       }
 
-      const curvatureEnvelope = computeCurvatureEnvelope(
-        spline,
-        progress[i],
-        totalLength,
-        lookAheadDistance,
-        minRadius,
-        undefined,
-        pathBoundaryMode,
-      )
-      const rawCurvature = Math.max(
-        curvatureEnvelope.rawMaxAbsCurvature ?? curvatureEnvelope.maxAbsCurvature,
-        0,
-      )
-      const curvatureCap =
-        minRadius > 0 && Number.isFinite(minRadius) ? 1 / minRadius : Infinity
-      const boundedCurvature =
-        Number.isFinite(curvatureCap) && curvatureCap > 0
-          ? Math.min(rawCurvature, curvatureCap)
-          : rawCurvature
-      const kEnv = Math.max(boundedCurvature, 0)
-
-      let cornerCandidate = effectiveMaxTargetSpeed
-      if (!(maxLateralAcceleration > 0)) {
-        if (!warnedLateralAccel) {
-          console.warn('[physics] aLatMax must stay positive to compute corner speeds')
-          warnedLateralAccel = true
-        }
-      } else {
-        const candidate = computeCorneringSpeedFromEnvelope(
-          {
-            ...curvatureEnvelope,
-            maxAbsCurvature: kEnv,
-          },
-          {
-            maxLateralAcceleration,
-            sustainedBlendStart: 0.2,
-            sustainedBlendEnd: 0.8,
-            coverageExponent: 1.35,
-            reliefFactor: 0.25,
-            spikeRetention: 0.35,
-          },
-        )
-        if (Number.isFinite(candidate) && candidate > 0) {
-          cornerCandidate = Math.min(cornerCandidate, candidate)
-        }
-      }
-
-      const { cornerSpeed: vCorner } = evaluateHairpinCornering({
-        curvatureEnvelope,
-        localCurvature: kEnv,
-        maxTargetSpeed: effectiveMaxTargetSpeed,
-        candidateSpeed: cornerCandidate,
-      })
-
-      const slipLookahead = lookAheadDistance > 0
-        ? Math.min(Math.max(lookAheadDistance, MIN_DRAFTING_LOOKAHEAD), MAX_DRAFTING_LOOKAHEAD)
-        : MAX_DRAFTING_LOOKAHEAD
-      const draftingContext = computeDraftingContext(
-        i,
-        progress,
-        offsets,
-        spline,
-        totalLength,
-        slipLookahead,
-        riderPoses,
-      )
-      let S = draftingFactor(draftingContext.gapToLeader, draftingContext.leadersAhead, {
-        minFactor: draftingMinFactor,
-        maxReduction: draftingMaxReduction,
-        characteristicDistance: draftingCharacteristicDistance,
-      })
-      if ((S < 0 || S > 1) && !warnedDrafting) {
-        console.warn('[physics] drafting factor out of bounds, clamping to [0, 1]')
-        warnedDrafting = true
-      }
-      S = MathUtils.clamp(S, 0, 1)
-
-      let CdAeff = baseCdAForRider * S
-      if (CdAeff < 0 && !warnedCdA) {
-        console.warn('[physics] effective CdA fell below zero, clamping to zero')
-        warnedCdA = true
-      }
-      CdAeff = Math.max(0, CdAeff)
-
-      const { gapAhead } = computeLongitudinalGaps(
-        i,
-        progress,
-        offsets,
-        spline,
-        totalLength,
-        riderPoses,
-      )
-      const gapThreshold = GAP_MIN_LONG + HEADWAY_TIME * gapResponsiveness * previousSpeed
-
-      const vPower = solveVelocityFromPower(maxPowerForRider, {
-        airDensity,
-        cdA: CdAeff,
-        crr: rollingResistanceCoeff,
-        mass,
-        slope,
-        gravity: GRAVITY,
-        drivetrainEfficiency,
-      })
-
-      const candidateSpeeds = [vCorner, vPower, effectiveMaxTargetSpeed].filter(
-        (value) => Number.isFinite(value) && value > 0,
-      )
-      const vTargetRaw =
-        candidateSpeeds.length > 0
-          ? Math.min(...candidateSpeeds)
-          : effectiveMaxTargetSpeed
-      const adaptiveMinSpeed = computeAdaptiveMinSpeed(
-        vTargetRaw,
-        effectiveMinTargetSpeed,
-      )
-      const targetSpeed = MathUtils.clamp(
-        vTargetRaw,
-        adaptiveMinSpeed,
-        personalMax,
-      )
-
-      const planningSpeed = Math.max(0.1, effectiveMaxTargetSpeed)
-      const availableTime =
-        lookAheadDistance > 0 ? lookAheadDistance / planningSpeed : 0
-
-      let compensationForBest = 1
-      let offsetPlan: OffsetCandidateResult = lateralDecisions[i]
-
-      if (lookAheadDistance > 0.25) {
-        const horizon = Math.max(lookAheadDistance, laneWidth * 1.5, 3)
-        const startDistance = progress[i]
-        const endDistance = totalLength > 0
-          ? Math.min(startDistance + horizon, totalLength)
-          : startDistance + horizon
-        const referenceLength = computeOffsetSegmentLength(
-          spline,
-          startDistance,
-          endDistance,
-          0,
-          16,
-        )
-
-        const candidateStep = Math.max(laneWidth * 0.5, OFFSET_CANDIDATE_STEP)
-        const baseCandidates = generateOffsetCandidates(
-          currentOffset,
-          candidateStep,
-          minBound,
-          maxBound,
-          maxOffset,
-        )
-
-        const desiredProfile = computeDesiredOffsetProfile(spline, startDistance, {
-          lookAhead: horizon,
-          maxOffset,
-          totalLength,
-          minRadius,
-          boundaryMode: pathBoundaryMode,
-          hasNeighbor: hasLateralNeighbor,
-        })
-        const activeSequence = desiredOffsetSequences[i] ?? []
-        let sequenceForEvaluation: OffsetPhaseQueueEntry[] = activeSequence
-        if (desiredProfile.intensity > 1e-3) {
-          const entryStrength = Math.pow(
-            MathUtils.clamp(1 - desiredProfile.progression, 0, 1),
-            0.9,
-          )
-          const exitStrength = Math.pow(
-            MathUtils.clamp(desiredProfile.progression, 0, 1),
-            0.9,
-          )
-          const apexStrength = Math.max(
-            0.2,
-            Math.pow(1 - Math.abs(desiredProfile.progression - 0.5) * 2, 0.75),
-          )
-          const strengthSum = entryStrength + apexStrength + exitStrength || 1
-          const neighborBoost = hasLateralNeighbor ? 1 : 1.35
-          const baseSequenceWeight = Math.min(
-            1.25,
-            desiredProfile.intensity * neighborBoost + (hasLateralNeighbor ? 0 : 0.12),
-          )
-          const baseTtl = Math.max(3, Math.round(MathUtils.lerp(3, 5, desiredProfile.intensity)))
-          const newPhases: OffsetPhaseQueueEntry[] = [
-            {
-              offset: MathUtils.clamp(desiredProfile.phases.entry, -maxOffset, maxOffset),
-              weight: (entryStrength / strengthSum) * baseSequenceWeight,
-              ttl: baseTtl + 3,
-            },
-            {
-              offset: MathUtils.clamp(desiredProfile.phases.apex, -maxOffset, maxOffset),
-              weight: (apexStrength / strengthSum) * baseSequenceWeight,
-              ttl: baseTtl + 2,
-            },
-            {
-              offset: MathUtils.clamp(desiredProfile.phases.exit, -maxOffset, maxOffset),
-              weight: (exitStrength / strengthSum) * baseSequenceWeight,
-              ttl: baseTtl + 1,
-            },
-          ]
-          const merged = [...activeSequence, ...newPhases].filter(
-            (phase) => phase.weight > 1e-4 && Number.isFinite(phase.offset),
-          )
-          merged.sort((a, b) => (b.ttl ?? 0) - (a.ttl ?? 0))
-          desiredOffsetSequences[i] = merged.slice(0, 9)
-          sequenceForEvaluation = desiredOffsetSequences[i]
-        } else {
-          desiredOffsetSequences[i] = activeSequence
-          sequenceForEvaluation = activeSequence
-        }
-
-        const sequenceWeightSum = sequenceForEvaluation.reduce((sum, phase) => {
-          const ttlInfluence = Math.max(1, Math.min(3, phase.ttl ?? 1))
-          return sum + Math.max(0, phase.weight) * ttlInfluence
-        }, 0)
-        let preferredOffset: number | null = null
-        if (sequenceForEvaluation.length > 0) {
-          let bestScore = -Infinity
-          for (const phase of sequenceForEvaluation) {
-            const phaseWeight = Math.max(0, phase.weight)
-            if (phaseWeight <= 1e-6) continue
-            const phaseScore = phaseWeight * ((phase.ttl ?? 1) + 0.5)
-            if (phaseScore > bestScore) {
-              bestScore = phaseScore
-              preferredOffset = MathUtils.clamp(phase.offset, -maxOffset, maxOffset)
-            }
-          }
-        }
-        if (preferredOffset === null && desiredProfile.intensity > 1e-3) {
-          preferredOffset = MathUtils.clamp(desiredProfile.target, -maxOffset, maxOffset)
-        }
-
-        let trajectoryWeight = 0
-        if (preferredOffset !== null || sequenceForEvaluation.length > 0) {
-          const baseWeight =
-            TRAJECTORY_PREFERENCE_FACTOR *
-            MathUtils.clamp((gapWeight + baseWallWeight) * 0.5, 0.1, 1.4)
-          const effectiveIntensity = MathUtils.clamp(
-            sequenceWeightSum > 0 ? sequenceWeightSum : desiredProfile.intensity,
-            0,
-            1,
-          )
-          const intensityFactor = MathUtils.lerp(
-            0.45,
-            hasLateralNeighbor ? 1.1 : 1.25,
-            effectiveIntensity,
-          )
-          const neighborFactor = hasLateralNeighbor ? 1 : 1.65
-          trajectoryWeight = baseWeight * intensityFactor * neighborFactor
-        }
-
-        const candidateSet = new Set(baseCandidates)
-        if (preferredOffset !== null) {
-          candidateSet.add(preferredOffset)
-        }
-        for (const phase of sequenceForEvaluation) {
-          candidateSet.add(MathUtils.clamp(phase.offset, -maxOffset, maxOffset))
-        }
-        const candidates = Array.from(candidateSet)
-
-        const candidateCompensations: number[] = []
-        const candidatePowerRatios: number[] = []
-
-        for (const candidate of candidates) {
-          const clampedCandidate = MathUtils.clamp(candidate, -maxOffset, maxOffset)
-          let compensation = 1
-          if (referenceLength > 1e-3) {
-            const segmentLength = computeOffsetSegmentLength(
-              spline,
-              startDistance,
-              endDistance,
-              clampedCandidate,
-              16,
-            )
-            if (segmentLength > 1e-3) {
-              const rawRatio = segmentLength / referenceLength
-              const clampedRatio = MathUtils.clamp(
-                rawRatio,
-                lengthRatioRange.min,
-                lengthRatioRange.max,
-              )
-              compensation = computeTargetSpeedCompensation(clampedRatio)
-            }
-          }
-          candidateCompensations.push(compensation)
-
-          const candidateSpeed = MathUtils.clamp(
-            targetSpeed * compensation,
-            adaptiveMinSpeed,
-            personalMax,
-          )
-          const slopeAdjustedCandidate = adjustTargetSpeedForSlope(
-            candidateSpeed,
-            slope,
-            {
-              maxSlope: 0.25,
-              maxUphillPenalty: 2,
-              maxDownhillBoost: 1,
-              minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
-              maxSpeed: personalMax + 0.5,
-            },
-          )
-          const candidatePower = powerDemand(slopeAdjustedCandidate, {
-            airDensity,
-            cdA: CdAeff,
-            crr: rollingResistanceCoeff,
-            mass,
-            slope,
-            gravity: GRAVITY,
-            drivetrainEfficiency,
-          })
-          const normalizedPower =
-            maxPowerForRider > 1e-3 ? candidatePower / maxPowerForRider : 0
-          candidatePowerRatios.push(Math.max(0, normalizedPower))
-        }
-
-        const desiredSequence = sequenceForEvaluation
-          .filter((phase) => phase.weight > 1e-4)
-          .map((phase) => ({ offset: phase.offset, weight: phase.weight }))
-
-        offsetPlan = evaluateOffsetCandidates({
-          currentOffset,
-          candidates,
-          powerRatios: candidatePowerRatios,
-          minBound,
-          maxBound,
-          maxOffset,
-          gapAhead,
-          gapThreshold,
-          weights: { power: powerWeight, gap: gapWeight, wall: offsetWallWeight },
-          wallComfort,
-          referenceStep: candidateStep,
-          lateralGapInfluence: LATERAL_GAP_INFLUENCE,
-          desiredOffset: preferredOffset ?? undefined,
-          desiredSequence: desiredSequence,
-          desiredWeight: trajectoryWeight,
-        })
-        compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
-        lateralDecisions[i] = offsetPlan
-      } else {
-        offsetPlan = {
-          targetOffset: currentOffset,
-          bestIndex: 0,
-          lateralForce: 0,
-          cost: 0,
-        }
-        compensationForBest = 1
-        lateralDecisions[i] = offsetPlan
-      }
-
-      const plannedOffset = constrainOffsetWithinRate(
-        currentOffset,
-        offsetPlan.targetOffset,
-        minBound,
-        maxBound,
-        maxOffsetRate,
-        availableTime,
-      )
-
-      const compensatedTarget = MathUtils.clamp(
-        targetSpeed * compensationForBest,
-        adaptiveMinSpeed,
-        personalMax,
-      )
-
-      const noiseSource = noiseGenerators[i]
-      const commandNoise = sampleNormal(noiseSource ?? Math.random, 0, noiseSigma)
-      const baseTarget = MathUtils.clamp(
-        compensatedTarget + commandNoise,
-        adaptiveMinSpeed,
-        personalMax,
-      )
-      const preferenceBias = MathUtils.clamp(
-        preferredSpeed - baseTarget,
-        -0.6,
-        0.6,
-      )
-      const biasedTarget = MathUtils.clamp(
-        baseTarget + preferenceBias * 0.2,
-        adaptiveMinSpeed,
-        personalMax,
-      )
-
-      // (B) Rate limit sur la consigne (borne les crans de montée/descente)
-      const prevCmd = commandedTargetSpeeds[i]
-      const maxRise = targetRiseRateLimit * dt
-      const maxDrop = targetDropRateLimit * dt
-      let bounded = biasedTarget
-      if (bounded > prevCmd + maxRise) bounded = prevCmd + maxRise
-      if (bounded < prevCmd - maxDrop) bounded = prevCmd - maxDrop
-
-      // (C) Passe-bas 1er ordre sur la consigne
-      const dampingAlpha = 1 - Math.exp(-targetSpeedDamping * dt)
-      const reactionAlpha = 1 - Math.exp(-dt / reactionTime)
-      const combinedAlpha = MathUtils.clamp(
-        1 - (1 - dampingAlpha) * (1 - reactionAlpha),
-        0,
-        1,
-      )
-      commandedTargetSpeeds[i] = prevCmd + (bounded - prevCmd) * combinedAlpha
-
-      const slopeAdjustedTarget = adjustTargetSpeedForSlope(commandedTargetSpeeds[i], slope, {
-        maxSlope: 0.25,
-        maxUphillPenalty: 2,
-        maxDownhillBoost: 1,
-        minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
-        maxSpeed: personalMax + 0.5,
-      })
-
-      const gapShortage = Math.max(0, gapThreshold - gapAhead)
-      const repulsionRatio =
-        gapThreshold > 1e-3 ? MathUtils.clamp(gapShortage / gapThreshold, 0, 1) : 0
-      const longitudinalRepulsion =
-        repulsionRatio > 0
-          ? -repulsionGain * repulsionRatio * repulsionRatio
-          : 0
-
-      const desiredAccel =
-        (slopeAdjustedTarget - previousSpeed) /
-          Math.max(
-            SOCIAL_TAU * MathUtils.clamp(
-              referencePower / Math.max(powerWeight, 1e-3),
-              0.7,
-              1.3,
-            ),
-            1e-3,
-          ) -
-        LATERAL_FORCE_DRAG * Math.abs(offsetPlan.lateralForce)
-      const accelInput = desiredAccel + longitudinalRepulsion
-      const clampedAccel = MathUtils.clamp(
-        accelInput,
-        -Math.abs(maxDeceleration),
-        Math.abs(maxAcceleration),
-      )
-      let newSpeed = previousSpeed + clampedAccel * dt
-      if (!Number.isFinite(newSpeed) || newSpeed < 0) {
-        newSpeed = 0
-      }
-      newSpeed = MathUtils.clamp(
-        newSpeed,
-        Math.max(0, adaptiveMinSpeed - 0.5),
-        personalMax + 0.5,
-      )
-      speeds[i] = newSpeed
-
-      if (i === referenceRiderIndex) {
-        const acceleration = dt > 0 ? (newSpeed - previousSpeed) / dt : 0
-        const power = powerDemand(newSpeed, {
-          airDensity,
-          cdA: CdAeff,
-          crr: rollingResistanceCoeff,
-          mass,
-          slope,
-          gravity: GRAVITY,
-          drivetrainEfficiency,
-        })
-        snapshot = {
-          speed: newSpeed,
-          targetRaw: biasedTarget,
-          targetFiltered: commandedTargetSpeeds[i],
-          acceleration,
-          kEnv,
-          vCorner,
-          draftFactor: S,
-          powerDemand: power,
-        }
-      }
-
-      const updatedOffset = steerOffsetTowardTarget(
-        currentOffset,
-        plannedOffset,
-        minBound,
-        maxBound,
+      const result = planRiderStep(stepEnvironment, riderProps, {
         dt,
-        maxOffsetRate
-      )
-      offsets[i] = MathUtils.clamp(updatedOffset, -maxOffset, maxOffset)
+        progress,
+        offsets,
+        speeds,
+        poses: riderPoses,
+      })
 
-      const travel = ((previousSpeed + newSpeed) / 2) * dt
+      speeds[i] = result.newSpeed
+      commandedTargetSpeeds[i] = result.commandedTargetSpeed
+      offsets[i] = result.offset
+      desiredOffsetSequences[i] = result.sequence
+      lateralDecisions[i] = result.lateralDecision
+
       if (arcProgress) {
+        const travel = ((previousSpeed + result.newSpeed) / 2) * dt
         arcProgress[i] += Math.max(0, travel)
       }
-      const curvature = computeSignedCurvature(
-        spline,
-        progress[i],
-        totalLength,
-        undefined,
-        pathBoundaryMode,
-      )
-      const centerlineTravel = projectWorldDistanceOntoCenterline(
-        travel,
-        curvature,
-        updatedOffset,
-        {
-          minRatio: lengthRatioRange.min,
-          maxRatio: lengthRatioRange.max,
-        },
-      )
-      let s = progress[i] + centerlineTravel
+
+      let s = progress[i] + result.centerlineTravel
       if (totalLength > 0) {
         if (pathBoundaryMode === 'loop') {
           s = MathUtils.euclideanModulo(s, totalLength)
@@ -1467,19 +594,11 @@ self.onmessage = async (e: MessageEvent) => {
         }
       }
       progress[i] = s
-      const { sampleDistance: yawAheadDistance } = computeAheadSampleDistance(
-        s,
-        lookAhead,
-        totalLength,
-        pathBoundaryMode,
-      )
 
-      const lateralOffset = offsets[i]
-      const pose = samplePoseAtDistance(spline, s, lateralOffset, scratchNextPose)
+      const pose = samplePoseAtDistance(spline, s, result.offset, scratchNextPose)
       const pos = pose.position
-      const tangent = pose.tangent
 
-      const look = spline.sampleByDistance(yawAheadDistance)
+      const look = spline.sampleByDistance(result.yawAheadDistance)
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
       const currentYaw = state[i * 4 + 3]
       const yawState: YawState = { yawRate: yawRates[i] }
@@ -1493,9 +612,23 @@ self.onmessage = async (e: MessageEvent) => {
 
       const base4 = i * 4
       state[base4 + 0] = s
-      state[base4 + 1] = lateralOffset
+      state[base4 + 1] = result.offset
       state[base4 + 2] = 1
       state[base4 + 3] = yaw
+
+      if (i === referenceRiderIndex) {
+        const acceleration = dt > 0 ? (result.newSpeed - previousSpeed) / dt : 0
+        snapshot = {
+          speed: result.newSpeed,
+          targetRaw: result.biasedTarget,
+          targetFiltered: commandedTargetSpeeds[i],
+          acceleration,
+          kEnv: result.curvature,
+          vCorner: result.cornerSpeed,
+          draftFactor: result.draftFactor,
+          powerDemand: result.power,
+        }
+      }
     }
 
     refreshRiderPoseCache()
