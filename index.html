@@ -15,8 +15,8 @@
       }
     })()
   </script>
-  <script type="module" crossorigin src="/assets/index-BzcdErnj.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-Dv4IlfqR.css">
+  <script type="module" crossorigin src="/assets/index-C0rNyn3R.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DhbORYFX.css">
 </head>
 <body class="m-0 min-h-screen overflow-hidden bg-base-100 text-base-content font-sans supports-[height:100dvh]:min-h-[100dvh]">
 <canvas id="app" class="block h-screen w-screen supports-[height:100dvh]:h-[100dvh]"></canvas>
@@ -33,10 +33,19 @@
   <span id="distance-travelled" class="block">Parcourus : -- km</span>
   <span id="distance-remaining" class="block">Restants : -- km</span>
 </div>
-  <ul
-    id="route-list"
-    class="menu fixed inset-x-5 top-1/2 z-10 -translate-y-1/2 rounded-box bg-base-100 p-3 text-sm font-sans shadow box-border max-h-[calc(100vh-12rem)] overflow-y-auto supports-[height:100dvh]:max-h-[calc(100dvh-12rem)] sm:left-1/2 sm:right-auto sm:max-h-none sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:p-4 sm:overflow-visible"
-  ></ul>
+  <div
+    id="home-panel"
+    class="hidden fixed inset-x-5 top-1/2 z-10 -translate-y-1/2 flex flex-col gap-3 sm:left-1/2 sm:right-auto sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2"
+  >
+    <div
+      id="mode-selector"
+      class="rounded-box bg-base-100 p-3 text-sm font-sans shadow flex flex-wrap gap-2 supports-[height:100dvh]:w-full sm:flex-nowrap sm:p-4"
+    ></div>
+    <ul
+      id="route-list"
+      class="menu rounded-box bg-base-100 p-3 text-sm font-sans shadow box-border max-h-[calc(100vh-12rem)] overflow-y-auto supports-[height:100dvh]:max-h-[calc(100dvh-12rem)] sm:max-h-none sm:p-4 sm:overflow-visible"
+    ></ul>
+  </div>
 <div id="loader" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
   <progress
     id="loader-progress"
