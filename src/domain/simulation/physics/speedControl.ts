@@ -176,6 +176,59 @@ export type OffsetSegmentSampler = (
   options?: SegmentSamplingOptions,
 ) => number[]
 
+function normalizeYawFromTangent(tangent: Vector3): number {
+  return Math.atan2(tangent.x, tangent.z)
+}
+
+function shortestAngleDelta(from: number, to: number): number {
+  const raw = to - from
+  return Math.atan2(Math.sin(raw), Math.cos(raw))
+}
+
+function estimateSegmentCurvature(
+  spline: PathSpline,
+  startDistance: number,
+  endDistance: number,
+): number {
+  const travel = endDistance - startDistance
+  if (!Number.isFinite(travel) || travel <= 1e-6) {
+    return 0
+  }
+
+  const startSample = spline.sampleByDistance(startDistance)
+  const endSample = spline.sampleByDistance(endDistance)
+  const yawStart = normalizeYawFromTangent(startSample.tangent)
+  const yawEnd = normalizeYawFromTangent(endSample.tangent)
+  let curvature = shortestAngleDelta(yawStart, yawEnd) / travel
+
+  const midDistance = startDistance + travel / 2
+  if (travel > 0.5 && midDistance < spline.totalLength) {
+    const midSample = spline.sampleByDistance(midDistance)
+    const yawMid = normalizeYawFromTangent(midSample.tangent)
+    const firstSpan = midDistance - startDistance
+    const secondSpan = endDistance - midDistance
+    const firstCurvature =
+      firstSpan > 1e-6
+        ? shortestAngleDelta(yawStart, yawMid) / firstSpan
+        : curvature
+    const secondCurvature =
+      secondSpan > 1e-6
+        ? shortestAngleDelta(yawMid, yawEnd) / secondSpan
+        : curvature
+    const weighted =
+      (firstCurvature * firstSpan + secondCurvature * secondSpan) / travel
+    if (Number.isFinite(weighted)) {
+      curvature = weighted
+    }
+  }
+
+  if (!Number.isFinite(curvature)) {
+    return 0
+  }
+
+  return curvature
+}
+
 export function computeOffsetSegmentLengths(
   spline: PathSpline,
   startDistance: number,
@@ -202,72 +255,19 @@ export function computeOffsetSegmentLengths(
     return safeOffsets.map(() => 0)
   }
 
-  const {
-    sampleCount = 12,
-    minOffsetForSampling = DEFAULT_MIN_OFFSET_FOR_SAMPLING,
-    adaptiveStep = true,
-  } = options
+  const { minOffsetForSampling = DEFAULT_MIN_OFFSET_FOR_SAMPLING } = options
+  const minOffset = Math.max(0, minOffsetForSampling)
+  const centerlineLength = travel
+  const curvature = estimateSegmentCurvature(spline, clampedStart, clampedEnd)
 
-  const baseSteps = Math.max(1, Math.floor(sampleCount))
-  let segmentCount = Math.max(1, baseSteps)
-  if (adaptiveStep) {
-    const desiredSegmentLength = 1.25
-    const adaptiveSegments = Math.max(
-      1,
-      Math.ceil(travel / Math.max(0.5, desiredSegmentLength)),
-    )
-    segmentCount = Math.max(1, Math.min(baseSteps, adaptiveSegments))
-  }
-
-  const stepSize = travel / segmentCount
-  const right = new Vector3()
-  const scratch = new Vector3()
-  const previousPositions = safeOffsets.map(() => new Vector3())
-  const totals = safeOffsets.map(() => 0)
-  const needsSampling = safeOffsets.map(
-    (offset) => Math.abs(offset) > minOffsetForSampling,
-  )
-
-  const centerPrevious = new Vector3()
-  let centerlineLength = 0
-  let hasPrevious = false
-
-  for (let i = 0; i <= segmentCount; i++) {
-    const distance = Math.min(clampedStart + stepSize * i, spline.totalLength)
-    const sample = spline.sampleByDistance(distance)
-    right.set(-sample.tangent.z, 0, sample.tangent.x).normalize()
-
-    if (hasPrevious) {
-      centerlineLength += sample.position.distanceTo(centerPrevious)
+  return safeOffsets.map((offset) => {
+    const magnitude = Math.abs(offset)
+    if (!Number.isFinite(magnitude) || magnitude <= minOffset) {
+      return centerlineLength
     }
-    centerPrevious.copy(sample.position)
-
-    for (let j = 0; j < safeOffsets.length; j++) {
-      if (!needsSampling[j]) {
-        continue
-      }
-      const offset = safeOffsets[j]
-      scratch.copy(sample.position).addScaledVector(right, offset)
-      if (hasPrevious) {
-        totals[j] += scratch.distanceTo(previousPositions[j])
-      }
-      previousPositions[j].copy(scratch)
-    }
-
-    if (!hasPrevious) {
-      for (let j = 0; j < safeOffsets.length; j++) {
-        if (!needsSampling[j]) {
-          previousPositions[j].copy(sample.position)
-        }
-      }
-    }
-
-    hasPrevious = true
-  }
-
-  return totals.map((length, index) =>
-    needsSampling[index] ? length : centerlineLength,
-  )
+    const ratio = computeOffsetArcLengthRatio(curvature, offset)
+    return centerlineLength * ratio
+  })
 }
 
 export function computeOffsetSegmentLength(
