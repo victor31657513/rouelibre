@@ -10,6 +10,7 @@ import {
   computeTargetSpeedFromSegmentLength,
   computeTargetSpeedCompensation,
   computeCorneringSpeedFromEnvelope,
+  computeHairpinSeverityFromEnvelope,
   estimateSafeTargetSpeed,
   SafeSpeedDiagnostics,
   projectWorldDistanceOntoCenterline,
@@ -574,6 +575,14 @@ describe('speed control helpers', () => {
       intensity: 0.4,
     }
 
+    const severity = computeHairpinSeverityFromEnvelope(envelope, {
+      classificationOptions: {
+        hairpinIntensityThreshold: 0.7,
+        hairpinCoverageThreshold: 0.55,
+        hairpinRadiusThreshold: 20,
+      },
+    }).severity
+
     const vCorner = computeCorneringSpeedFromEnvelope(envelope, {
       maxLateralAcceleration: 4.5,
       sustainedBlendStart: 0.2,
@@ -585,10 +594,11 @@ describe('speed control helpers', () => {
       classificationOptions: {
         hairpinIntensityThreshold: 0.7,
         hairpinCoverageThreshold: 0.55,
-        hairpinRadiusThreshold: 20,
-      },
-    })
+      hairpinRadiusThreshold: 20,
+    },
+  })
 
+    expect(severity).toBeLessThan(0.4)
     expect(vCorner).toBe(Number.POSITIVE_INFINITY)
   })
 
@@ -617,12 +627,16 @@ describe('speed control helpers', () => {
       },
     }
 
+    const severity = computeHairpinSeverityFromEnvelope(envelope, {
+      classificationOptions: options.classificationOptions,
+    }).severity
     const vCorner = computeCorneringSpeedFromEnvelope(envelope, options)
     const theoretical = Math.sqrt(options.hairpinLateralAcceleration / envelope.maxAbsCurvature)
 
     expect(Number.isFinite(vCorner)).toBe(true)
     expect(vCorner).toBeLessThan(theoretical)
     expect(vCorner).toBeGreaterThan(theoretical * 0.4)
+    expect(severity).toBeGreaterThan(0.75)
   })
 
   it('keeps curvature low at open route endpoints when clamping sampling', () => {

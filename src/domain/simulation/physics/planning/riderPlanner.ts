@@ -7,6 +7,7 @@ import {
 } from '../riderPathing'
 import {
   computeCorneringSpeedFromEnvelope,
+  computeHairpinSeverityFromEnvelope,
   projectWorldDistanceOntoCenterline,
   type SegmentSamplingOptions,
 } from '../speedControl'
@@ -63,6 +64,7 @@ export interface RiderEnvironment {
     coverageThreshold: number
     radiusThreshold: number
     lateralAcceleration: number
+    severityThreshold: number
   }
   neighborBounds: {
     min: Float32Array
@@ -124,6 +126,7 @@ export interface RiderStepResult {
   targetSpeed: number
   adaptiveMinSpeed: number
   cornerSpeed: number
+  hairpinSeverity: number
   slope: number
   curvature: number
   draftFactor: number
@@ -255,6 +258,13 @@ export function planRiderStep(
           hairpinCoverageThreshold: cornering.coverageThreshold,
           hairpinRadiusThreshold: cornering.radiusThreshold,
         },
+        severityOptions: {
+          classificationOptions: {
+            hairpinIntensityThreshold: cornering.intensityThreshold,
+            hairpinCoverageThreshold: cornering.coverageThreshold,
+            hairpinRadiusThreshold: cornering.radiusThreshold,
+          },
+        },
       },
     )
     if (Number.isFinite(candidate) && candidate > 0) {
@@ -262,12 +272,37 @@ export function planRiderStep(
     }
   }
 
-  const { cornerSpeed: vCorner } = evaluateHairpinCornering({
+  const { severity: hairpinSeverity } = computeHairpinSeverityFromEnvelope(
+    { ...curvatureEnvelope, maxAbsCurvature: kEnv },
+    {
+      classificationOptions: {
+        hairpinIntensityThreshold: cornering.intensityThreshold,
+        hairpinCoverageThreshold: cornering.coverageThreshold,
+        hairpinRadiusThreshold: cornering.radiusThreshold,
+      },
+    },
+  )
+
+  const hairpinCornering = evaluateHairpinCornering({
     curvatureEnvelope,
     localCurvature: kEnv,
     maxTargetSpeed: effectiveMaxTargetSpeed,
     candidateSpeed: cornerCandidate,
   })
+
+  const severityThreshold = MathUtils.clamp(cornering.severityThreshold, 0, 1)
+  const severityActivation = severityThreshold < 1
+    ? MathUtils.clamp(
+        (hairpinSeverity - severityThreshold) / Math.max(1 - severityThreshold, 1e-3),
+        0,
+        1,
+      )
+    : MathUtils.clamp(hairpinSeverity, 0, 1)
+
+  const vCorner = Math.min(
+    effectiveMaxTargetSpeed,
+    MathUtils.lerp(effectiveMaxTargetSpeed, hairpinCornering.cornerSpeed, severityActivation),
+  )
 
   const slipLookahead = lookAheadDistance > 0
     ? Math.min(Math.max(lookAheadDistance, 2), 12)
@@ -437,6 +472,7 @@ export function planRiderStep(
     targetSpeed: baselinePlan.targetSpeed,
     adaptiveMinSpeed: baselinePlan.adaptiveMinSpeed,
     cornerSpeed: vCorner,
+    hairpinSeverity,
     slope,
     curvature: kEnv,
     draftFactor,

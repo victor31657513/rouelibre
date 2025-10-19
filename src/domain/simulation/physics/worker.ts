@@ -185,6 +185,7 @@ let corneringIntensityThreshold = DEFAULT_WORKER_PARAMS.corneringIntensityThresh
 let corneringCoverageThreshold = DEFAULT_WORKER_PARAMS.corneringCoverageThreshold
 let corneringRadiusThreshold = DEFAULT_WORKER_PARAMS.corneringRadiusThreshold
 let corneringLateralAcceleration = DEFAULT_WORKER_PARAMS.corneringLateralAcceleration
+let corneringSeverityThreshold = DEFAULT_WORKER_PARAMS.corneringSeverityThreshold
 
 const GRAVITY = 9.80665
 const DEFAULT_AIR_DENSITY = DEFAULT_WORKER_PARAMS.rho
@@ -218,6 +219,7 @@ type DiagnosticSnapshot = {
   acceleration: number
   kEnv: number
   vCorner: number
+  hairpinSeverity: number
   draftFactor: number
   powerDemand: number
 }
@@ -349,6 +351,12 @@ function applyParameterOverrides(overrides?: SimulationParameterOverrides | null
     Number.isFinite(overrides.corneringLateralAcceleration)
   ) {
     corneringLateralAcceleration = Math.max(0, overrides.corneringLateralAcceleration)
+  }
+  if (
+    overrides.corneringSeverityThreshold !== undefined &&
+    Number.isFinite(overrides.corneringSeverityThreshold)
+  ) {
+    corneringSeverityThreshold = MathUtils.clamp(overrides.corneringSeverityThreshold, 0, 1)
   }
   if (overrides.Crr !== undefined && Number.isFinite(overrides.Crr)) {
     rollingResistanceCoeff = Math.max(0, overrides.Crr)
@@ -656,6 +664,7 @@ self.onmessage = async (e: MessageEvent) => {
         coverageThreshold: MathUtils.clamp(corneringCoverageThreshold, 0, 1),
         radiusThreshold: Math.max(1, corneringRadiusThreshold),
         lateralAcceleration: resolvedCorneringAcceleration,
+        severityThreshold: MathUtils.clamp(corneringSeverityThreshold, 0, 1),
       },
       neighborBounds,
       airDensity,
@@ -755,6 +764,7 @@ self.onmessage = async (e: MessageEvent) => {
           acceleration,
           kEnv: result.curvature,
           vCorner: result.cornerSpeed,
+          hairpinSeverity: result.hairpinSeverity,
           draftFactor: result.draftFactor,
           powerDemand: result.power,
         }
