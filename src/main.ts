@@ -16,6 +16,8 @@ const startBtn = document.getElementById('start-btn') as HTMLButtonElement | nul
 const pauseBtn = document.getElementById('pause-btn') as HTMLButtonElement | null
 const resetBtn = document.getElementById('reset-btn') as HTMLButtonElement | null
 const controls = document.getElementById('controls') as HTMLDivElement | null
+const homePanel = document.getElementById('home-panel') as HTMLDivElement | null
+const modeSelector = document.getElementById('mode-selector') as HTMLDivElement | null
 const routeList = document.getElementById('route-list') as HTMLElement | null
 const speedIndicator = document.getElementById('speed-indicator') as HTMLDivElement | null
 const distanceIndicator = document.getElementById('distance-indicator') as HTMLDivElement | null
@@ -31,6 +33,8 @@ if (
   !pauseBtn ||
   !resetBtn ||
   !controls ||
+  !homePanel ||
+  !modeSelector ||
   !routeList ||
   !speedIndicator ||
   !distanceIndicator ||
@@ -49,6 +53,8 @@ const controller = new AppController({
   pauseBtn,
   resetBtn,
   controls,
+  homePanel,
+  modeSelector,
   routeList,
   speedIndicator,
   distanceIndicator,
