@@ -5,6 +5,8 @@
  * persists the preferred colours in local storage before instantiating the
  * application controller.
  */
+import type { SimulationParameterOverrides } from '../domain/simulation/physics/workerParams'
+
 export type SimulationModeId = 'solo' | 'team' | 'peloton'
 
 export interface SimulationMode {
@@ -26,6 +28,8 @@ export interface SimulationMode {
    * {@link teamColors} is provided.
    */
   teamSize?: number
+  /** Optional worker parameter overrides tailored for the mode. */
+  workerParams?: SimulationParameterOverrides
 }
 
 /** Preferred default mode shown on startup. */
@@ -59,7 +63,18 @@ const PELOTON_TEAM_COLOURS: readonly string[] = [
 
 /** List of supported simulation modes. */
 export const SIMULATION_MODES: readonly SimulationMode[] = [
-  { id: 'solo', label: 'Solo', riderCount: 1, description: '1 coureur' },
+  {
+    id: 'solo',
+    label: 'Solo',
+    riderCount: 1,
+    description: '1 coureur',
+    workerParams: {
+      corneringIntensityThreshold: 0.88,
+      corneringCoverageThreshold: 0.68,
+      corneringRadiusThreshold: 16,
+      corneringSeverityThreshold: 0.7,
+    },
+  },
   { id: 'team', label: 'Équipe', riderCount: 8, description: '8 coureurs' },
   {
     id: 'peloton',
