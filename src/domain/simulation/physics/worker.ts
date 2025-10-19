@@ -49,6 +49,8 @@ let offsets: Float32Array
 let yawRates: Float32Array
 let commandedTargetSpeeds: Float32Array
 let lateralDecisions: OffsetCandidateResult[] = []
+type OffsetPhaseQueueEntry = { offset: number; weight: number; ttl: number }
+let desiredOffsetSequences: OffsetPhaseQueueEntry[][] = []
 let noiseGenerators: Array<() => number> = []
 let riderMasses: Float32Array
 let riderCdA: Float32Array
@@ -700,6 +702,7 @@ self.onmessage = async (e: MessageEvent) => {
     yawRates = new Float32Array(N)
     commandedTargetSpeeds = new Float32Array(N)
     lateralDecisions = new Array(N)
+    desiredOffsetSequences = new Array(N)
     noiseGenerators = new Array(N)
     riderMasses = new Float32Array(N)
     riderCdA = new Float32Array(N)
@@ -809,6 +812,7 @@ self.onmessage = async (e: MessageEvent) => {
         lateralForce: 0,
         cost: 0,
       }
+      desiredOffsetSequences[i] = []
     }
 
     refreshRiderPoseCache()
@@ -921,6 +925,22 @@ self.onmessage = async (e: MessageEvent) => {
       const minBound = neighborBounds.min[i]
       const maxBound = neighborBounds.max[i]
       const hasLateralNeighbor = neighborBounds.hasNeighbor?.[i] ?? false
+      const sequenceQueue = desiredOffsetSequences[i] ?? []
+      const preservedSequence: OffsetPhaseQueueEntry[] = []
+      for (const phase of sequenceQueue) {
+        const nextTtl = (phase.ttl ?? 0) - 1
+        const safeWeight = Math.max(0, Number.isFinite(phase.weight) ? phase.weight : 0)
+        const safeOffset = MathUtils.clamp(
+          Number.isFinite(phase.offset) ? phase.offset : 0,
+          -maxOffset,
+          maxOffset,
+        )
+        const decayedWeight = safeWeight * (hasLateralNeighbor ? 0.97 : 0.99)
+        if (nextTtl > 0 && decayedWeight > 1e-4) {
+          preservedSequence.push({ offset: safeOffset, weight: decayedWeight, ttl: nextTtl })
+        }
+      }
+      desiredOffsetSequences[i] = preservedSequence.slice(-9)
       const baseWallComfort = Math.max(laneWidth * 0.5, WALL_COMFORT_MARGIN)
       let wallComfort = baseWallComfort
       if (!hasLateralNeighbor) {
@@ -1093,38 +1113,110 @@ self.onmessage = async (e: MessageEvent) => {
           maxOffset,
         )
 
-        const desiredOffsetRaw = computeDesiredOffsetProfile(spline, startDistance, {
+        const desiredProfile = computeDesiredOffsetProfile(spline, startDistance, {
           lookAhead: horizon,
           maxOffset,
           totalLength,
           minRadius,
           boundaryMode: pathBoundaryMode,
+          hasNeighbor: hasLateralNeighbor,
         })
-        let preferredOffset: number | null = null
-        if (Number.isFinite(desiredOffsetRaw)) {
-          const lowerBound = Math.min(minBound, maxBound, -Math.abs(maxOffset))
-          const upperBound = Math.max(maxBound, minBound, Math.abs(maxOffset))
-          const clamped = MathUtils.clamp(
-            desiredOffsetRaw as number,
-            lowerBound,
-            upperBound,
+        const activeSequence = desiredOffsetSequences[i] ?? []
+        let sequenceForEvaluation: OffsetPhaseQueueEntry[] = activeSequence
+        if (desiredProfile.intensity > 1e-3) {
+          const entryStrength = Math.pow(
+            MathUtils.clamp(1 - desiredProfile.progression, 0, 1),
+            0.9,
           )
-          if (Number.isFinite(clamped)) {
-            preferredOffset = clamped
+          const exitStrength = Math.pow(
+            MathUtils.clamp(desiredProfile.progression, 0, 1),
+            0.9,
+          )
+          const apexStrength = Math.max(
+            0.2,
+            Math.pow(1 - Math.abs(desiredProfile.progression - 0.5) * 2, 0.75),
+          )
+          const strengthSum = entryStrength + apexStrength + exitStrength || 1
+          const neighborBoost = hasLateralNeighbor ? 1 : 1.35
+          const baseSequenceWeight = Math.min(
+            1.25,
+            desiredProfile.intensity * neighborBoost + (hasLateralNeighbor ? 0 : 0.12),
+          )
+          const baseTtl = Math.max(3, Math.round(MathUtils.lerp(3, 5, desiredProfile.intensity)))
+          const newPhases: OffsetPhaseQueueEntry[] = [
+            {
+              offset: MathUtils.clamp(desiredProfile.phases.entry, -maxOffset, maxOffset),
+              weight: (entryStrength / strengthSum) * baseSequenceWeight,
+              ttl: baseTtl + 3,
+            },
+            {
+              offset: MathUtils.clamp(desiredProfile.phases.apex, -maxOffset, maxOffset),
+              weight: (apexStrength / strengthSum) * baseSequenceWeight,
+              ttl: baseTtl + 2,
+            },
+            {
+              offset: MathUtils.clamp(desiredProfile.phases.exit, -maxOffset, maxOffset),
+              weight: (exitStrength / strengthSum) * baseSequenceWeight,
+              ttl: baseTtl + 1,
+            },
+          ]
+          const merged = [...activeSequence, ...newPhases].filter(
+            (phase) => phase.weight > 1e-4 && Number.isFinite(phase.offset),
+          )
+          merged.sort((a, b) => (b.ttl ?? 0) - (a.ttl ?? 0))
+          desiredOffsetSequences[i] = merged.slice(0, 9)
+          sequenceForEvaluation = desiredOffsetSequences[i]
+        } else {
+          desiredOffsetSequences[i] = activeSequence
+          sequenceForEvaluation = activeSequence
+        }
+
+        const sequenceWeightSum = sequenceForEvaluation.reduce((sum, phase) => {
+          const ttlInfluence = Math.max(1, Math.min(3, phase.ttl ?? 1))
+          return sum + Math.max(0, phase.weight) * ttlInfluence
+        }, 0)
+        let preferredOffset: number | null = null
+        if (sequenceForEvaluation.length > 0) {
+          let bestScore = -Infinity
+          for (const phase of sequenceForEvaluation) {
+            const phaseWeight = Math.max(0, phase.weight)
+            if (phaseWeight <= 1e-6) continue
+            const phaseScore = phaseWeight * ((phase.ttl ?? 1) + 0.5)
+            if (phaseScore > bestScore) {
+              bestScore = phaseScore
+              preferredOffset = MathUtils.clamp(phase.offset, -maxOffset, maxOffset)
+            }
           }
+        }
+        if (preferredOffset === null && desiredProfile.intensity > 1e-3) {
+          preferredOffset = MathUtils.clamp(desiredProfile.target, -maxOffset, maxOffset)
         }
 
         let trajectoryWeight = 0
-        if (preferredOffset !== null) {
+        if (preferredOffset !== null || sequenceForEvaluation.length > 0) {
           const baseWeight =
             TRAJECTORY_PREFERENCE_FACTOR *
             MathUtils.clamp((gapWeight + baseWallWeight) * 0.5, 0.1, 1.4)
-          trajectoryWeight = hasLateralNeighbor ? baseWeight : baseWeight * 1.35
+          const effectiveIntensity = MathUtils.clamp(
+            sequenceWeightSum > 0 ? sequenceWeightSum : desiredProfile.intensity,
+            0,
+            1,
+          )
+          const intensityFactor = MathUtils.lerp(
+            0.45,
+            hasLateralNeighbor ? 1.1 : 1.25,
+            effectiveIntensity,
+          )
+          const neighborFactor = hasLateralNeighbor ? 1 : 1.65
+          trajectoryWeight = baseWeight * intensityFactor * neighborFactor
         }
 
         const candidateSet = new Set(baseCandidates)
         if (preferredOffset !== null) {
           candidateSet.add(preferredOffset)
+        }
+        for (const phase of sequenceForEvaluation) {
+          candidateSet.add(MathUtils.clamp(phase.offset, -maxOffset, maxOffset))
         }
         const candidates = Array.from(candidateSet)
 
@@ -1184,6 +1276,10 @@ self.onmessage = async (e: MessageEvent) => {
           candidatePowerRatios.push(Math.max(0, normalizedPower))
         }
 
+        const desiredSequence = sequenceForEvaluation
+          .filter((phase) => phase.weight > 1e-4)
+          .map((phase) => ({ offset: phase.offset, weight: phase.weight }))
+
         offsetPlan = evaluateOffsetCandidates({
           currentOffset,
           candidates,
@@ -1198,6 +1294,7 @@ self.onmessage = async (e: MessageEvent) => {
           referenceStep: candidateStep,
           lateralGapInfluence: LATERAL_GAP_INFLUENCE,
           desiredOffset: preferredOffset ?? undefined,
+          desiredSequence: desiredSequence,
           desiredWeight: trajectoryWeight,
         })
         compensationForBest = candidateCompensations[offsetPlan.bestIndex] ?? 1
