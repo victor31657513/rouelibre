@@ -14,6 +14,7 @@ import {
 } from './riderPathing'
 import {
   assessCorneringProfile,
+  type CorneringAssessmentResult,
   type CorneringClassificationOptions,
 } from './cornering'
 
@@ -461,6 +462,58 @@ export interface CorneringSpeedOptions {
   spikeRetention?: number
   hairpinLateralAcceleration?: number
   classificationOptions?: CorneringClassificationOptions
+  severityOptions?: HairpinSeverityOptions
+}
+
+export interface HairpinSeverityOptions {
+  coverageExponent?: number
+  intensityExponent?: number
+  radiusTight?: number
+  radiusRelaxed?: number
+  standardCornerPenalty?: number
+  classificationOptions?: CorneringClassificationOptions
+}
+
+export interface HairpinSeverityResult {
+  severity: number
+  classification: CorneringAssessmentResult
+}
+
+export function computeHairpinSeverityFromEnvelope(
+  envelope: CurvatureEnvelope,
+  options: HairpinSeverityOptions = {},
+): HairpinSeverityResult {
+  const {
+    coverageExponent = 1.15,
+    intensityExponent = 1.05,
+    radiusTight = 18,
+    radiusRelaxed = 48,
+    standardCornerPenalty = 0.35,
+    classificationOptions,
+  } = options
+
+  const classification = assessCorneringProfile(envelope, classificationOptions)
+  const coverage = MathUtils.clamp(envelope.coverageRatio ?? 0, 0, 1)
+  const intensity = MathUtils.clamp(envelope.intensity ?? 0, 0, 1)
+  const effectiveRadius = classification.effectiveRadius
+
+  const sustainedSeverity = Math.pow(coverage, Math.max(coverageExponent, 1e-3))
+  const intensitySeverity = Math.pow(intensity, Math.max(intensityExponent, 1e-3))
+  const blendedProfile = Math.max(intensitySeverity, (intensitySeverity + sustainedSeverity) * 0.5)
+
+  const radiusSeverity = Number.isFinite(effectiveRadius)
+    ? 1 - MathUtils.smoothstep(effectiveRadius, radiusTight, radiusRelaxed)
+    : 0
+
+  const combined = Math.max(blendedProfile, radiusSeverity)
+  const severity = classification.category === 'hairpin'
+    ? Math.max(combined, MathUtils.clamp(classification.activation, 0, 1))
+    : combined * MathUtils.clamp(standardCornerPenalty, 0, 1)
+
+  return {
+    severity: MathUtils.clamp(severity, 0, 1),
+    classification,
+  }
 }
 
 export function computeCorneringSpeedFromEnvelope(
@@ -476,11 +529,18 @@ export function computeCorneringSpeedFromEnvelope(
     spikeRetention = 0.35,
     hairpinLateralAcceleration,
     classificationOptions,
+    severityOptions,
   } = options
 
-  const classification = assessCorneringProfile(envelope, classificationOptions)
+  const { severity: hairpinSeverity, classification } = computeHairpinSeverityFromEnvelope(
+    envelope,
+    {
+      classificationOptions,
+      ...severityOptions,
+    },
+  )
 
-  if (classification.category !== 'hairpin') {
+  if (classification.category !== 'hairpin' || hairpinSeverity <= 0) {
     return Infinity
   }
 

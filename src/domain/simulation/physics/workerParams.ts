@@ -55,6 +55,8 @@ export interface SimulationParameterOverrides {
   corneringRadiusThreshold?: number
   /** Target lateral acceleration enforced specifically for hairpins. */
   corneringLateralAcceleration?: number
+  /** Severity threshold above which the cornering limit becomes active. */
+  corneringSeverityThreshold?: number
 }
 
 export type SimulationParameterDefaults = Required<SimulationParameterOverrides>
@@ -88,4 +90,5 @@ export const DEFAULT_WORKER_PARAMS: SimulationParameterDefaults = {
   corneringCoverageThreshold: 0.55,
   corneringRadiusThreshold: 22,
   corneringLateralAcceleration: 4.6,
+  corneringSeverityThreshold: 0.58,
 }
