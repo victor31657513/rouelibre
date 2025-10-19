@@ -564,87 +564,65 @@ describe('speed control helpers', () => {
     expect(speed).toBeCloseTo(9, 5)
   })
 
-  it('caps curvature spikes to keep corner speeds realistic', () => {
-    const spline = new PathSpline([
-      new Vector3(0, 0, 0),
-      new Vector3(6, 0, 0),
-      new Vector3(12, 0, 1.2),
-      new Vector3(18, 0, 0.2),
-      new Vector3(24, 0, 0),
-    ])
-    const totalLength = spline.totalLength
-    const probeDistance = totalLength * 0.4
-    const lookAhead = 12
-    const minRadius = 60
-
-    const envelope = computeCurvatureEnvelope(
-      spline,
-      probeDistance,
-      totalLength,
-      lookAhead,
-      minRadius,
-      8,
-    )
-
-    const curvatureCap = 1 / minRadius
-    expect(envelope.rawMaxAbsCurvature).toBeGreaterThan(curvatureCap)
-    expect(envelope.maxAbsCurvature).toBeLessThanOrEqual(curvatureCap + 1e-6)
-
-    const maxLateralAcceleration = 4.5
-    const cappedEnvelope = {
-      ...envelope,
-      maxAbsCurvature: Math.min(envelope.maxAbsCurvature, curvatureCap),
+  it('maintains the available top speed on sweeping corners', () => {
+    const envelope: CurvatureEnvelope = {
+      averageAbsCurvature: 0.018,
+      rootMeanSquareAbsCurvature: 0.022,
+      maxAbsCurvature: 0.025,
+      rawMaxAbsCurvature: 0.028,
+      coverageRatio: 0.32,
+      intensity: 0.4,
     }
-    const vCorner = computeCorneringSpeedFromEnvelope(cappedEnvelope, {
-      maxLateralAcceleration,
+
+    const vCorner = computeCorneringSpeedFromEnvelope(envelope, {
+      maxLateralAcceleration: 4.5,
       sustainedBlendStart: 0.2,
       sustainedBlendEnd: 0.8,
       coverageExponent: 1.35,
       reliefFactor: 0.25,
       spikeRetention: 0.35,
+      hairpinLateralAcceleration: 4.2,
+      classificationOptions: {
+        hairpinIntensityThreshold: 0.7,
+        hairpinCoverageThreshold: 0.55,
+        hairpinRadiusThreshold: 20,
+      },
     })
-    const theoreticalMinimum = Math.sqrt(maxLateralAcceleration * minRadius)
 
-    expect(vCorner).toBeGreaterThanOrEqual(theoreticalMinimum * 0.98)
-    expect(vCorner).toBeLessThanOrEqual(theoreticalMinimum * 1.3)
+    expect(vCorner).toBe(Number.POSITIVE_INFINITY)
   })
 
-  it('keeps extra speed in check when curvature dominates the horizon', () => {
+  it('applies a braking factor when a hairpin is detected', () => {
+    const envelope: CurvatureEnvelope = {
+      averageAbsCurvature: 0.072,
+      rootMeanSquareAbsCurvature: 0.078,
+      maxAbsCurvature: 0.09,
+      rawMaxAbsCurvature: 0.095,
+      coverageRatio: 0.86,
+      intensity: 0.92,
+    }
+
     const options = {
-      maxLateralAcceleration: 4.2,
+      maxLateralAcceleration: 5.2,
       sustainedBlendStart: 0.2,
       sustainedBlendEnd: 0.8,
       coverageExponent: 1.35,
       reliefFactor: 0.25,
       spikeRetention: 0.35,
+      hairpinLateralAcceleration: 4.6,
+      classificationOptions: {
+        hairpinIntensityThreshold: 0.7,
+        hairpinCoverageThreshold: 0.55,
+        hairpinRadiusThreshold: 18,
+      },
     }
 
-    const sustained: CurvatureEnvelope = {
-      averageAbsCurvature: 0.065,
-      rootMeanSquareAbsCurvature: 0.071,
-      maxAbsCurvature: 0.08,
-      rawMaxAbsCurvature: 0.08,
-      coverageRatio: 0.92,
-      intensity: 0.8,
-    }
+    const vCorner = computeCorneringSpeedFromEnvelope(envelope, options)
+    const theoretical = Math.sqrt(options.hairpinLateralAcceleration / envelope.maxAbsCurvature)
 
-    const spiky: CurvatureEnvelope = {
-      averageAbsCurvature: 0.018,
-      rootMeanSquareAbsCurvature: 0.032,
-      maxAbsCurvature: 0.08,
-      rawMaxAbsCurvature: 0.08,
-      coverageRatio: 0.18,
-      intensity: 0.2,
-    }
-
-    const sustainedSpeed = computeCorneringSpeedFromEnvelope(sustained, options)
-    const spikySpeed = computeCorneringSpeedFromEnvelope(spiky, options)
-
-    const theoretical = Math.sqrt(options.maxLateralAcceleration / sustained.maxAbsCurvature)
-
-    expect(sustainedSpeed).toBeCloseTo(theoretical, 5)
-    expect(spikySpeed).toBeGreaterThan(sustainedSpeed)
-    expect(spikySpeed).toBeLessThanOrEqual(sustainedSpeed * 1.4)
+    expect(Number.isFinite(vCorner)).toBe(true)
+    expect(vCorner).toBeLessThan(theoretical)
+    expect(vCorner).toBeGreaterThan(theoretical * 0.4)
   })
 
   it('keeps curvature low at open route endpoints when clamping sampling', () => {

@@ -47,6 +47,14 @@ export interface SimulationParameterOverrides {
   wG?: number
   /** Weight applied to the wall proximity term in lateral cost evaluation. */
   wW?: number
+  /** Intensity threshold above which a bend is considered a hairpin. */
+  corneringIntensityThreshold?: number
+  /** Coverage threshold complementing the hairpin detection. */
+  corneringCoverageThreshold?: number
+  /** Effective radius threshold (in metres) below which a hairpin is assumed. */
+  corneringRadiusThreshold?: number
+  /** Target lateral acceleration enforced specifically for hairpins. */
+  corneringLateralAcceleration?: number
 }
 
 export type SimulationParameterDefaults = Required<SimulationParameterOverrides>
@@ -76,4 +84,8 @@ export const DEFAULT_WORKER_PARAMS: SimulationParameterDefaults = {
   wP: 0.55,
   wG: 0.3,
   wW: 0.15,
+  corneringIntensityThreshold: 0.7,
+  corneringCoverageThreshold: 0.55,
+  corneringRadiusThreshold: 22,
+  corneringLateralAcceleration: 4.6,
 }

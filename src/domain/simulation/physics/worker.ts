@@ -181,6 +181,11 @@ let targetRiseRateLimit = DEFAULT_WORKER_PARAMS.targetRiseRateLimit // m/s par s
 let targetDropRateLimit = DEFAULT_WORKER_PARAMS.targetDropRateLimit // m/s par seconde
 const maxOffsetRate = 2.5
 
+let corneringIntensityThreshold = DEFAULT_WORKER_PARAMS.corneringIntensityThreshold
+let corneringCoverageThreshold = DEFAULT_WORKER_PARAMS.corneringCoverageThreshold
+let corneringRadiusThreshold = DEFAULT_WORKER_PARAMS.corneringRadiusThreshold
+let corneringLateralAcceleration = DEFAULT_WORKER_PARAMS.corneringLateralAcceleration
+
 const GRAVITY = 9.80665
 const DEFAULT_AIR_DENSITY = DEFAULT_WORKER_PARAMS.rho
 const BASE_CDA = DEFAULT_WORKER_PARAMS.CdA0
@@ -320,6 +325,30 @@ function applyParameterOverrides(overrides?: SimulationParameterOverrides | null
   }
   if (overrides.aLatMax !== undefined && Number.isFinite(overrides.aLatMax)) {
     maxLateralAcceleration = Math.max(0.1, overrides.aLatMax)
+  }
+  if (
+    overrides.corneringIntensityThreshold !== undefined &&
+    Number.isFinite(overrides.corneringIntensityThreshold)
+  ) {
+    corneringIntensityThreshold = MathUtils.clamp(overrides.corneringIntensityThreshold, 0, 1)
+  }
+  if (
+    overrides.corneringCoverageThreshold !== undefined &&
+    Number.isFinite(overrides.corneringCoverageThreshold)
+  ) {
+    corneringCoverageThreshold = MathUtils.clamp(overrides.corneringCoverageThreshold, 0, 1)
+  }
+  if (
+    overrides.corneringRadiusThreshold !== undefined &&
+    Number.isFinite(overrides.corneringRadiusThreshold)
+  ) {
+    corneringRadiusThreshold = Math.max(1, overrides.corneringRadiusThreshold)
+  }
+  if (
+    overrides.corneringLateralAcceleration !== undefined &&
+    Number.isFinite(overrides.corneringLateralAcceleration)
+  ) {
+    corneringLateralAcceleration = Math.max(0, overrides.corneringLateralAcceleration)
   }
   if (overrides.Crr !== undefined && Number.isFinite(overrides.Crr)) {
     rollingResistanceCoeff = Math.max(0, overrides.Crr)
@@ -602,6 +631,9 @@ self.onmessage = async (e: MessageEvent) => {
     })
 
     const lengthRatioRange = computeLengthRatioRange(maxOffset, minRadius)
+    const resolvedCorneringAcceleration = Number.isFinite(corneringLateralAcceleration)
+      ? Math.max(0, corneringLateralAcceleration)
+      : maxLateralAcceleration
 
     const stepEnvironment: RiderEnvironment = {
       spline,
@@ -619,6 +651,12 @@ self.onmessage = async (e: MessageEvent) => {
       targetRiseRateLimit,
       targetDropRateLimit,
       maxLateralAcceleration,
+      cornering: {
+        intensityThreshold: MathUtils.clamp(corneringIntensityThreshold, 0, 1),
+        coverageThreshold: MathUtils.clamp(corneringCoverageThreshold, 0, 1),
+        radiusThreshold: Math.max(1, corneringRadiusThreshold),
+        lateralAcceleration: resolvedCorneringAcceleration,
+      },
       neighborBounds,
       airDensity,
       baseCdA,
