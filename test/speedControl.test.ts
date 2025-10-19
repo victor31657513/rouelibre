@@ -602,6 +602,29 @@ describe('speed control helpers', () => {
     expect(vCorner).toBe(Number.POSITIVE_INFINITY)
   })
 
+  it('classifies sustained but wide bends as standard corners', () => {
+    const envelope: CurvatureEnvelope = {
+      averageAbsCurvature: 0.028,
+      rootMeanSquareAbsCurvature: 0.031,
+      maxAbsCurvature: 0.034,
+      rawMaxAbsCurvature: 0.036,
+      coverageRatio: 0.78,
+      intensity: 0.82,
+    }
+
+    const { severity, classification } = computeHairpinSeverityFromEnvelope(envelope, {
+      classificationOptions: {
+        hairpinIntensityThreshold: 0.7,
+        hairpinCoverageThreshold: 0.55,
+        hairpinRadiusThreshold: 20,
+      },
+    })
+
+    expect(classification.category).toBe('standard')
+    expect(classification.brakingFactor).toBe(1)
+    expect(severity).toBeLessThan(0.5)
+  })
+
   it('applies a braking factor when a hairpin is detected', () => {
     const envelope: CurvatureEnvelope = {
       averageAbsCurvature: 0.072,

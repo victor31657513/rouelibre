@@ -78,10 +78,14 @@ export function assessCorneringProfile(
   )
 
   const activation = Math.max(radiusActivation, Math.max(intensityActivation, coverageActivation))
+  const meetsIntensity = intensity >= hairpinIntensityThreshold
+  const meetsCoverage = coverage >= hairpinCoverageThreshold
+  const meetsRadius = radiusActivation > 0
+  const dominantRadius = radiusActivation >= Math.max(intensityActivation, coverageActivation)
   const isHairpin =
-    activation > 0 &&
-    intensity >= hairpinIntensityThreshold &&
-    (coverage >= hairpinCoverageThreshold || effectiveRadius <= hairpinRadiusThreshold)
+    meetsRadius &&
+    meetsIntensity &&
+    (meetsCoverage || dominantRadius)
 
   if (!isHairpin) {
     return {
