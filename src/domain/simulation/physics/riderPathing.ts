@@ -447,28 +447,63 @@ export function computeDesiredOffsetProfile(
   const entryWeight = entryBlend / safeBlend
   const apexWeight = apexBlend / safeBlend
   const exitWeight = exitBlend / safeBlend
-  const outsideTarget = orientation * maxOffset * (hasNeighbor ? 0.55 : 0.62)
-  const insideTarget = -orientation * maxOffset * (hasNeighbor ? 1 : 1.05)
+  const outsideTarget = orientation * maxOffset * (hasNeighbor ? 0.55 : 0.68)
+  const insideTarget = -orientation * maxOffset * (hasNeighbor ? 1 : 1.08)
   const flankIntensity = hasNeighbor
     ? Math.min(1, intensity * 0.92)
-    : Math.min(1, intensity * 1.3 + 0.1)
+    : Math.min(1, intensity * 1.38 + 0.12)
   const apexIntensity = hasNeighbor
     ? Math.min(1, intensity * 1.08)
-    : Math.min(1, intensity * 1.75 + 0.18)
-  const entryTarget = MathUtils.clamp(outsideTarget * flankIntensity, -maxOffset, maxOffset)
-  const apexTarget = MathUtils.clamp(insideTarget * apexIntensity, -maxOffset, maxOffset)
-  const exitTarget = MathUtils.clamp(outsideTarget * flankIntensity, -maxOffset, maxOffset)
+    : Math.min(1, intensity * 1.82 + 0.2)
+  let entryTarget = MathUtils.clamp(outsideTarget * flankIntensity, -maxOffset, maxOffset)
+  let apexTarget = MathUtils.clamp(insideTarget * apexIntensity, -maxOffset, maxOffset)
+  let exitTarget = MathUtils.clamp(outsideTarget * flankIntensity, -maxOffset, maxOffset)
+
+  let minOutside = 0
+  let minInside = 0
+  if (!hasNeighbor && intensity > 1e-3) {
+    const isolationScale = Math.pow(intensity, 0.6)
+    minOutside = maxOffset * MathUtils.lerp(0.18, 0.32, isolationScale)
+    minInside = maxOffset * MathUtils.lerp(0.24, 0.38, Math.pow(intensity, 0.75))
+    const enforcedEntry = orientation * Math.min(
+      maxOffset,
+      Math.max(Math.abs(entryTarget * orientation), minOutside),
+    )
+    const enforcedExit = orientation * Math.min(
+      maxOffset,
+      Math.max(Math.abs(exitTarget * orientation), minOutside),
+    )
+    const enforcedApex = -orientation * Math.min(
+      maxOffset,
+      Math.max(Math.abs(apexTarget * orientation), minInside),
+    )
+    entryTarget = enforcedEntry
+    exitTarget = enforcedExit
+    apexTarget = enforcedApex
+  }
   const exitDominance = Math.pow(
     MathUtils.clamp((hasNeighbor ? 0.4 : 0.55) - progression, 0, 1),
     hasNeighbor ? 1.2 : 0.9,
   )
-  const target = MathUtils.clamp(
+  let target = MathUtils.clamp(
     entryTarget * entryWeight +
       apexTarget * apexWeight * (1 - exitDominance) +
       exitTarget * (exitWeight + exitDominance * 0.5),
     -maxOffset,
     maxOffset,
   )
+
+  if (!hasNeighbor && intensity > 1e-3) {
+    const orientedTarget = target * orientation
+    const outsideWindow = progression >= 0.7 || progression <= 0.3
+    if (outsideWindow && orientedTarget > -1e-5) {
+      const desiredOutside = Math.min(maxOffset, Math.max(orientedTarget, minOutside * 0.85))
+      target = orientation * desiredOutside
+    } else if (!outsideWindow && orientedTarget < 0) {
+      const desiredInside = Math.min(maxOffset, Math.max(Math.abs(orientedTarget), minInside))
+      target = -orientation * desiredInside
+    }
+  }
 
   return {
     target,
