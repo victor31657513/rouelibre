@@ -6,12 +6,27 @@ import {
   computeNeighborBounds,
   steerOffsetTowardTarget,
 } from '../src/domain/simulation/physics/riderPathing'
+import { planOffset } from '../src/domain/simulation/physics/planning/offsetPlanner'
 
 function createCurvedSpline(): PathSpline {
   const radius = 40
   const points: Vector3[] = []
   for (let i = 0; i <= 24; i++) {
     const angle = (Math.PI * i) / 24
+    const x = radius * Math.cos(angle)
+    const z = radius * Math.sin(angle)
+    points.push(new Vector3(x, 0, z))
+  }
+  return new PathSpline(points)
+}
+
+function createShallowSpline(): PathSpline {
+  const radius = 120
+  const span = Math.PI / 2
+  const segments = 36
+  const points: Vector3[] = []
+  for (let i = 0; i <= segments; i++) {
+    const angle = (span * i) / segments
     const x = radius * Math.cos(angle)
     const z = radius * Math.sin(angle)
     points.push(new Vector3(x, 0, z))
@@ -271,6 +286,69 @@ describe('rider pathing helpers', () => {
 
     expect(parameters).not.toBeNull()
     expect(weakestOutside).toBeGreaterThanOrEqual(0.25 * maxOffset)
+  })
+
+  it('keeps isolated riders committed to the apex on gentle bends', () => {
+    const spline = createShallowSpline()
+    const totalLength = spline.totalLength
+    const laneWidth = 1
+    const maxOffset = 2.6
+    const lookAhead = 4.5
+    const minRadius = 85
+    const currentDistance = totalLength * 0.42
+
+    const desiredProfile = computeDesiredOffsetProfile(spline, currentDistance, {
+      lookAhead,
+      maxOffset,
+      totalLength,
+      minRadius,
+      hasNeighbor: false,
+    })
+
+    expect(desiredProfile.intensity).toBeGreaterThan(0)
+    expect(desiredProfile.progression).toBeGreaterThan(0.3)
+    expect(desiredProfile.progression).toBeLessThan(0.7)
+
+    const orientation = Math.sign(desiredProfile.orientation) || 1
+
+    const plan = planOffset({
+      currentOffset: 0,
+      currentDistance,
+      minBound: -maxOffset,
+      maxBound: maxOffset,
+      hasLateralNeighbor: false,
+      laneWidth,
+      maxOffset,
+      lookAheadDistance: lookAhead,
+      lookAhead,
+      totalLength,
+      spline,
+      minRadius,
+      pathBoundaryMode: 'loop',
+      targetSpeed: 11,
+      adaptiveMinSpeed: 8.5,
+      personalMax: 12,
+      slope: 0,
+      lengthRatioRange: { min: 0.92, max: 1.08 },
+      availableTime: lookAhead / 11,
+      maxOffsetRate: 3,
+      sequence: [],
+      powerWeight: 0.55,
+      gapWeight: 0.3,
+      baseWallWeight: 0.15,
+      gapAhead: 18,
+      gapThreshold: 6,
+      mass: 80,
+      cdA: 0.32,
+      airDensity: 1.2,
+      rollingResistanceCoeff: 0.004,
+      gravity: 9.81,
+      drivetrainEfficiency: 0.97,
+      maxPower: 380,
+    })
+
+    const insideComponent = plan.lateralDecision.targetOffset * -orientation
+    expect(insideComponent).toBeGreaterThan(0.12 * maxOffset)
   })
 })
 

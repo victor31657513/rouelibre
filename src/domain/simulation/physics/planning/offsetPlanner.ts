@@ -194,11 +194,6 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
     sequenceForEvaluation = merged.slice(0, 9)
   }
 
-  const sequenceWeightSum = sequenceForEvaluation.reduce((sum, phase) => {
-    const ttlInfluence = Math.max(1, Math.min(3, phase.ttl ?? 1))
-    return sum + Math.max(0, phase.weight) * ttlInfluence
-  }, 0)
-
   let preferredOffset: number | null = null
   if (sequenceForEvaluation.length > 0) {
     let bestScore = -Infinity
@@ -216,6 +211,23 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
     preferredOffset = MathUtils.clamp(desiredProfile.target, -maxOffset, maxOffset)
   }
 
+  if (!hasLateralNeighbor && preferredOffset !== null && desiredProfile.intensity > 1e-3) {
+    const focusTtl = Math.max(3, Math.round(MathUtils.lerp(4, 6, desiredProfile.intensity)))
+    const focusWeight = Math.max(
+      0.45,
+      MathUtils.lerp(0.6, 1.05, Math.pow(desiredProfile.intensity, 0.65)),
+    )
+    sequenceForEvaluation = [
+      { offset: preferredOffset, weight: focusWeight, ttl: focusTtl },
+      ...sequenceForEvaluation,
+    ]
+  }
+
+  const sequenceWeightSum = sequenceForEvaluation.reduce((sum, phase) => {
+    const ttlInfluence = Math.max(1, Math.min(3, phase.ttl ?? 1))
+    return sum + Math.max(0, phase.weight) * ttlInfluence
+  }, 0)
+
   let trajectoryWeight = 0
   if (preferredOffset !== null || sequenceForEvaluation.length > 0) {
     const baseWeight =
@@ -228,6 +240,12 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
     const intensityFactor = MathUtils.lerp(0.45, hasLateralNeighbor ? 1.1 : 1.25, effectiveIntensity)
     const neighborFactor = hasLateralNeighbor ? 1 : 1.65
     trajectoryWeight = baseWeight * intensityFactor * neighborFactor
+
+    if (!hasLateralNeighbor && desiredProfile.intensity > 1e-3) {
+      const isolationScale = Math.pow(MathUtils.clamp(desiredProfile.intensity, 0, 1), 0.7)
+      const minimumIsolationWeight = MathUtils.lerp(0.24, 0.46, isolationScale)
+      trajectoryWeight = Math.max(trajectoryWeight, minimumIsolationWeight)
+    }
   }
 
   const candidateSet = new Set(baseCandidates)
