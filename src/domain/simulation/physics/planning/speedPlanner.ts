@@ -1,5 +1,4 @@
 import { MathUtils } from 'three'
-import { adjustTargetSpeedForSlope } from '../speedControl'
 import type { BaselineSpeedPlan, SpeedPlanResult } from './types'
 import { sampleNormal } from './riderManagement'
 
@@ -101,15 +100,9 @@ export interface BaselineSpeedInput {
 }
 
 export function computeBaselineSpeedPlan(input: BaselineSpeedInput): BaselineSpeedPlan {
-  const {
-    vCorner,
-    vPower,
-    effectiveMaxTargetSpeed,
-    effectiveMinTargetSpeed,
-    personalMax,
-  } = input
+  const { vCorner, effectiveMaxTargetSpeed, effectiveMinTargetSpeed, personalMax } = input
 
-  const candidateSpeeds = [vCorner, vPower, effectiveMaxTargetSpeed].filter(
+  const candidateSpeeds = [vCorner, effectiveMaxTargetSpeed].filter(
     (value) => Number.isFinite(value) && value > 0,
   )
   const rawTarget =
@@ -170,10 +163,6 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
     targetDropRateLimit,
     targetSpeedDamping,
     reactionTime,
-    slope,
-    gapAhead,
-    gapThreshold,
-    repulsionGain,
     referencePower,
     powerWeight,
     maxAcceleration,
@@ -216,18 +205,9 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
 
   const nextCommand = commandedTargetSpeed + (bounded - commandedTargetSpeed) * combinedAlpha
 
-  const slopeAdjustedTarget = adjustTargetSpeedForSlope(nextCommand, slope, {
-    maxSlope: 0.25,
-    maxUphillPenalty: 2,
-    maxDownhillBoost: 1,
-    minSpeed: Math.max(0, adaptiveMinSpeed - 0.5),
-    maxSpeed: personalMax + 0.5,
-  })
+  const slopeAdjustedTarget = nextCommand
 
-  const gapShortage = Math.max(0, gapThreshold - gapAhead)
-  const repulsionRatio = gapThreshold > 1e-3 ? MathUtils.clamp(gapShortage / gapThreshold, 0, 1) : 0
-  const longitudinalRepulsion =
-    repulsionRatio > 0 ? -repulsionGain * repulsionRatio * repulsionRatio : 0
+  const longitudinalRepulsion = 0
 
   const desiredAccel =
     (slopeAdjustedTarget - previousSpeed) /
