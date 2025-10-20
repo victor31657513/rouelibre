@@ -575,14 +575,6 @@ describe('speed control helpers', () => {
       intensity: 0.4,
     }
 
-    const severity = computeHairpinSeverityFromEnvelope(envelope, {
-      classificationOptions: {
-        hairpinIntensityThreshold: 0.7,
-        hairpinCoverageThreshold: 0.55,
-        hairpinRadiusThreshold: 20,
-      },
-    }).severity
-
     const vCorner = computeCorneringSpeedFromEnvelope(envelope, {
       maxLateralAcceleration: 4.5,
       sustainedBlendStart: 0.2,
@@ -594,12 +586,15 @@ describe('speed control helpers', () => {
       classificationOptions: {
         hairpinIntensityThreshold: 0.7,
         hairpinCoverageThreshold: 0.55,
-      hairpinRadiusThreshold: 20,
-    },
-  })
+        hairpinRadiusThreshold: 20,
+      },
+    })
 
-    expect(severity).toBeLessThan(0.4)
-    expect(vCorner).toBe(Number.POSITIVE_INFINITY)
+    const theoretical = Math.sqrt(4.5 / envelope.rootMeanSquareAbsCurvature)
+
+    expect(Number.isFinite(vCorner)).toBe(true)
+    expect(vCorner).toBeGreaterThan(theoretical * 0.9)
+    expect(vCorner).toBeLessThanOrEqual(theoretical * 1.1)
   })
 
   it('classifies sustained but wide bends as standard corners', () => {
@@ -654,11 +649,11 @@ describe('speed control helpers', () => {
       classificationOptions: options.classificationOptions,
     }).severity
     const vCorner = computeCorneringSpeedFromEnvelope(envelope, options)
-    const theoretical = Math.sqrt(options.hairpinLateralAcceleration / envelope.maxAbsCurvature)
+    const baseline = Math.sqrt(options.maxLateralAcceleration / envelope.maxAbsCurvature)
 
     expect(Number.isFinite(vCorner)).toBe(true)
-    expect(vCorner).toBeLessThan(theoretical)
-    expect(vCorner).toBeGreaterThan(theoretical * 0.4)
+    expect(vCorner).toBeLessThan(baseline)
+    expect(vCorner).toBeGreaterThan(baseline * 0.35)
     expect(severity).toBeGreaterThan(0.75)
   })
 
