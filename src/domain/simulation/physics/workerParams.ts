@@ -63,8 +63,8 @@ export type SimulationParameterDefaults = Required<SimulationParameterOverrides>
 
 export const DEFAULT_WORKER_PARAMS: SimulationParameterDefaults = {
   lookAhead: 5,
-  maxYawRate: 120,
-  maxYawAccel: 480,
+  maxYawRate: 360,
+  maxYawAccel: 1440,
   minRadius: 12,
   maxTargetSpeed: 9,
   minTargetSpeed: 5,

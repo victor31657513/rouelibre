@@ -55,8 +55,8 @@ export function smoothLimitAngle(
   currentYaw: number,
   targetYaw: number,
   state: YawState,
-  maxRateDeg = 120,
-  maxAccelDeg = 480,
+  maxRateDeg = 360,
+  maxAccelDeg = 1440,
   dt: number
 ): number {
   const maxRate = MathUtils.degToRad(maxRateDeg)
