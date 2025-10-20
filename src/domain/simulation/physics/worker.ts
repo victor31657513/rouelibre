@@ -198,6 +198,7 @@ const DEFAULT_AIR_DENSITY = DEFAULT_WORKER_PARAMS.rho
 const BASE_CDA = DEFAULT_WORKER_PARAMS.CdA0
 const DEFAULT_CRR = DEFAULT_WORKER_PARAMS.Crr
 const DEFAULT_DRIVETRAIN_EFFICIENCY = DEFAULT_WORKER_PARAMS.drivetrainEfficiency
+const MAX_SHORTEST_PATH_POINTS = 1000
 const DEFAULT_SYSTEM_MASS = DEFAULT_WORKER_PARAMS.systemMass
 const DEFAULT_POWER_AVAILABLE = DEFAULT_WORKER_PARAMS.powerAvailable
 const DEFAULT_LATERAL_ACCEL = DEFAULT_WORKER_PARAMS.aLatMax
@@ -443,13 +444,28 @@ function applyParameterOverrides(overrides?: SimulationParameterOverrides | null
 }
 
 
+const rapierWasmUrl = new URL(
+  '@dimforge/rapier3d-compat/rapier_wasm3d_bg.wasm',
+  import.meta.url,
+).href
+
+let rapierInitPromise: Promise<void> | null = null
+
+async function ensureRapier(): Promise<void> {
+  if (!rapierInitPromise) {
+    rapierInitPromise = RAPIER.init(rapierWasmUrl)
+  }
+  await rapierInitPromise
+}
+
 self.onmessage = async (e: MessageEvent) => {
   const { type, payload }: { type: string; payload: any } = e.data || {}
 
   if (type === 'init') {
-    if (!world) await RAPIER.init() // charge le WASM
-    // réinitialise le monde à chaque nouvelle préparation de parcours
-    world = new RAPIER.World({ x: 0, y: 0, z: 0 })
+    try {
+      if (!world) await ensureRapier() // charge le WASM
+      // réinitialise le monde à chaque nouvelle préparation de parcours
+      world = new RAPIER.World({ x: 0, y: 0, z: 0 })
     lastStepTimestamp = getCurrentTimestamp()
 
     N = payload.N as number
@@ -484,9 +500,21 @@ self.onmessage = async (e: MessageEvent) => {
         bestPoints.push(new Vector3(shortestRaw[i], shortestRaw[i + 1], shortestRaw[i + 2]))
       }
       if (bestPoints.length > 0) {
+        let lookupPoints = bestPoints
+        if (bestPoints.length > MAX_SHORTEST_PATH_POINTS) {
+          const decimated: Vector3[] = []
+          const step = Math.ceil(bestPoints.length / MAX_SHORTEST_PATH_POINTS)
+          for (let i = 0; i < bestPoints.length; i += step) {
+            decimated.push(bestPoints[i])
+          }
+          if (decimated[decimated.length - 1] !== bestPoints[bestPoints.length - 1]) {
+            decimated.push(bestPoints[bestPoints.length - 1])
+          }
+          lookupPoints = decimated
+        }
         bestLineLookup = precomputeBestLineLookup(
           spline,
-          bestPoints,
+          lookupPoints,
           totalLength,
           maxOffset,
           Math.max(0.4, laneWidth * 0.5),
@@ -623,16 +651,20 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     refreshRiderPoseCache()
-
     ;(self as unknown as Worker).postMessage(
       { type: 'state', data: state.buffer },
       [state.buffer]
     )
-    state = new Float32Array(N * 4)
+      state = new Float32Array(N * 4)
+    } catch (error) {
+      console.error('[worker] init failed', error)
+    }
   }
 
   if (type === 'step') {
     if (!world) return // ignore steps before initialization
+
+    try {
 
     const requestedDt = Number.isFinite(payload?.dt)
       ? MathUtils.clamp(payload.dt, MIN_STEP_DT, MAX_STEP_DT)
@@ -829,6 +861,9 @@ self.onmessage = async (e: MessageEvent) => {
       [state.buffer]
     )
     state = new Float32Array(N * 4)
+    } catch (error) {
+      console.error('[worker] step failed', error)
+    }
   }
 
   if (type === 'params') {
