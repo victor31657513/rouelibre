@@ -12,6 +12,7 @@ import {
   type SegmentSamplingOptions,
 } from '../speedControl'
 import { draftingFactor, powerDemand, solveVelocityFromPower } from '../aero'
+import type { BestLineLookup } from '../bestLine'
 import type {
   OffsetPhaseQueueEntry,
   OffsetPlanResult,
@@ -90,6 +91,7 @@ export interface RiderEnvironment {
     offsets: readonly number[],
     options?: SegmentSamplingOptions,
   ) => number[]
+  bestLine?: BestLineLookup | null
 }
 
 export interface RiderProperties {
@@ -174,6 +176,7 @@ export function planRiderStep(
     normalizedBaseWeights,
     maxOffsetRate,
     segmentSampler,
+    bestLine,
   } = env
 
   const previousSpeed = speeds[index]
@@ -399,6 +402,7 @@ export function planRiderStep(
     gravity,
     drivetrainEfficiency,
     maxPower: riderMaxPower,
+    bestLine,
   })
 
   const speedResult: SpeedPlanResult = finalizeSpeedPlan({

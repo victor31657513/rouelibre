@@ -15,6 +15,11 @@ import {
 import { computeNeighborBounds } from './riderPathing'
 import type { PathBoundaryMode } from './riderPathing'
 import {
+  precomputeBestLineLookup,
+  sampleBestLineProfile,
+  type BestLineLookup,
+} from './bestLine'
+import {
   createPose,
   mulberry32,
   normalizeWeights,
@@ -69,6 +74,7 @@ let riderRoles: Int16Array
 let riderPoses: RiderPose[] = []
 let arcProgress: Float32Array
 let lastStepTimestamp: number | null = null
+let bestLineLookup: BestLineLookup | null = null
 
 let laneWidth = 1
 let roadWidth = 8
@@ -469,6 +475,25 @@ self.onmessage = async (e: MessageEvent) => {
         : detectClosedLoop(waypoints, laneWidth)
     pathBoundaryMode = isClosed ? 'loop' : 'clamp'
 
+    bestLineLookup = null
+    const shortestBuffer: ArrayBuffer | undefined = payload.shortestPath
+    if (shortestBuffer) {
+      const shortestRaw = new Float32Array(shortestBuffer)
+      const bestPoints: Vector3[] = []
+      for (let i = 0; i < shortestRaw.length; i += 3) {
+        bestPoints.push(new Vector3(shortestRaw[i], shortestRaw[i + 1], shortestRaw[i + 2]))
+      }
+      if (bestPoints.length > 0) {
+        bestLineLookup = precomputeBestLineLookup(
+          spline,
+          bestPoints,
+          totalLength,
+          maxOffset,
+          Math.max(0.4, laneWidth * 0.5),
+        )
+      }
+    }
+
     // buffers pour le calcul
     state = new Float32Array(N * 4)
     bodies = new Array(N)
@@ -682,6 +707,7 @@ self.onmessage = async (e: MessageEvent) => {
       lengthRatioRange,
       segmentSampler: (startDistance, endDistance, offsets, options) =>
         sampleOffsetSegmentLengths(startDistance, endDistance, offsets, options),
+      bestLine: bestLineLookup,
     }
 
     let snapshot: DiagnosticSnapshot | null = null

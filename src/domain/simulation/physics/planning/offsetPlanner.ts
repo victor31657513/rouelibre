@@ -8,6 +8,7 @@ import {
 import { type SegmentSamplingOptions } from '../speedControl'
 import { powerDemand } from '../aero'
 import { pruneOffsetSequence } from './riderManagement'
+import { sampleBestLineProfile, type BestLineLookup } from '../bestLine'
 import type {
   OffsetPhaseQueueEntry,
   OffsetPlanResult,
@@ -68,6 +69,7 @@ interface OffsetPlanInput {
     offsets: readonly number[],
     options?: SegmentSamplingOptions,
   ) => number[]
+  bestLine?: BestLineLookup | null
 }
 
 export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
@@ -104,6 +106,7 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
     gravity,
     drivetrainEfficiency,
     maxPower,
+    bestLine,
   } = input
 
   if (lookAheadDistance <= 0.25) {
@@ -221,6 +224,68 @@ export function planOffset(input: OffsetPlanInput): OffsetPlanResult {
       { offset: preferredOffset, weight: focusWeight, ttl: focusTtl },
       ...sequenceForEvaluation,
     ]
+  }
+
+  if (bestLine) {
+    const bestProfile = sampleBestLineProfile(
+      bestLine,
+      startDistance,
+      horizon,
+      totalLength,
+      desiredProfile.progression,
+      maxOffset,
+      pathBoundaryMode,
+    )
+    if (bestProfile) {
+      const clampedBestTarget = MathUtils.clamp(bestProfile.target, -maxOffset, maxOffset)
+      if (Number.isFinite(clampedBestTarget)) {
+        if (preferredOffset === null) {
+          preferredOffset = clampedBestTarget
+        } else {
+          const blend = hasLateralNeighbor ? 0.35 : 0.65
+          preferredOffset = MathUtils.clamp(
+            MathUtils.lerp(preferredOffset, clampedBestTarget, blend),
+            -maxOffset,
+            maxOffset,
+          )
+        }
+
+        const bestIntensity = Math.max(
+          bestProfile.intensity,
+          Math.min(1, Math.abs(clampedBestTarget) / Math.max(Math.abs(maxOffset), 1e-3)),
+        )
+
+        if (bestIntensity > 1e-3 || Math.abs(clampedBestTarget) > 1e-3) {
+          const neighborFactor = hasLateralNeighbor ? 0.7 : 1.12
+          const baseWeight = MathUtils.lerp(0.28, hasLateralNeighbor ? 0.68 : 0.95, bestIntensity)
+          const ttlBase = Math.max(3, Math.round(MathUtils.lerp(4, 6, bestIntensity)))
+          const clampOffsetValue = (value: number) => MathUtils.clamp(value, -maxOffset, maxOffset)
+          const bestPhases: OffsetPhaseQueueEntry[] = [
+            {
+              offset: clampOffsetValue(bestProfile.entry),
+              weight: baseWeight * neighborFactor * 0.6,
+              ttl: ttlBase + 2,
+            },
+            {
+              offset: clampOffsetValue(bestProfile.apex),
+              weight: baseWeight * neighborFactor,
+              ttl: ttlBase + 3,
+            },
+            {
+              offset: clampOffsetValue(bestProfile.exit),
+              weight: baseWeight * neighborFactor * 0.6,
+              ttl: ttlBase + 1,
+            },
+          ]
+
+          sequenceForEvaluation = [...sequenceForEvaluation, ...bestPhases].filter(
+            (phase) => Number.isFinite(phase.offset) && (phase.weight ?? 0) > 1e-4,
+          )
+          sequenceForEvaluation.sort((a, b) => (b.ttl ?? 0) - (a.ttl ?? 0))
+          sequenceForEvaluation = sequenceForEvaluation.slice(0, 9)
+        }
+      }
+    }
   }
 
   const sequenceWeightSum = sequenceForEvaluation.reduce((sum, phase) => {

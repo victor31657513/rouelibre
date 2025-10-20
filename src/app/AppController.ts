@@ -25,6 +25,7 @@ import {
   buildShortestPathLine,
   buildStartLine,
 } from '../domain/route/roadGeometry'
+import { computeShortestPath } from '../domain/route/shortestPath'
 import { loadGPX } from '../domain/route/routeLoader'
 import type { GPXPoint, Vec3 } from '../domain/route/gpx'
 import { changeSelectedIndex, selectedIndex, setSelectedIndex } from '../domain/state/selection'
@@ -76,6 +77,8 @@ export class AppController {
   private simplifiedPath: Vec3[] | null = null
   private spline: PathSpline | null = null
   private pathData: Float32Array | null = null
+  private shortestPathPoints: Vec3[] | null = null
+  private shortestPathData: Float32Array | null = null
   private positions: Float32Array
   private roadReady = false
   private roadAssets: RoadAssets = {}
@@ -536,6 +539,8 @@ export class AppController {
     }
     this.pathData = pathArray.slice()
 
+    const shortestArray = this.shortestPathData ? this.shortestPathData.slice() : null
+
     this.simulation.initialize({
       riderCount,
       positions: pelotonPositions.buffer,
@@ -546,6 +551,7 @@ export class AppController {
       margin: APP_CONFIG.roadMargin,
       params: this.resolveWorkerParams(),
       closedLoop: this.routeClosed,
+      shortestPath: shortestArray?.buffer,
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -607,6 +613,7 @@ export class AppController {
     }
 
     const pathCopy = this.pathData.slice()
+    const shortestCopy = this.shortestPathData ? this.shortestPathData.slice() : null
     this.simulation.initialize({
       riderCount,
       positions: pelotonPositions.buffer,
@@ -617,6 +624,7 @@ export class AppController {
       margin: APP_CONFIG.roadMargin,
       params: this.resolveWorkerParams(),
       closedLoop: this.routeClosed,
+      shortestPath: shortestCopy?.buffer,
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -645,7 +653,11 @@ export class AppController {
   }
 
   private rebuildRoute(): void {
-    if (!this.currentPath) return
+    if (!this.currentPath) {
+      this.shortestPathPoints = null
+      this.shortestPathData = null
+      return
+    }
 
     const { scene } = this.scene
     if (this.roadAssets.road) scene.remove(this.roadAssets.road)
@@ -668,10 +680,29 @@ export class AppController {
       startLineOffset,
     )
     const bounds = buildRoadBounds(this.currentPath, APP_CONFIG.roadWidth)
+    const shortestPoints = computeShortestPath(
+      this.currentPath,
+      APP_CONFIG.roadWidth,
+      APP_CONFIG.roadMargin,
+    )
+    this.shortestPathPoints = shortestPoints
+    if (shortestPoints.length > 0) {
+      const shortestData = new Float32Array(shortestPoints.length * 3)
+      for (let i = 0; i < shortestPoints.length; i++) {
+        const point = shortestPoints[i]
+        shortestData[i * 3 + 0] = point.x
+        shortestData[i * 3 + 1] = point.y
+        shortestData[i * 3 + 2] = point.z
+      }
+      this.shortestPathData = shortestData
+    } else {
+      this.shortestPathData = null
+    }
     const shortestPath = buildShortestPathLine(
       this.currentPath,
       APP_CONFIG.roadWidth,
       APP_CONFIG.roadMargin,
+      shortestPoints,
     )
 
     road.name = 'routeMesh'
@@ -702,6 +733,7 @@ export class AppController {
           this.currentPath,
           APP_CONFIG.roadWidth,
           APP_CONFIG.roadMargin,
+          this.shortestPathPoints ?? undefined,
         )
         newLine.name = 'shortestPath'
         newLine.visible = true

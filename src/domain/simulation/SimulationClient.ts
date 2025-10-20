@@ -16,6 +16,7 @@ export interface SimulationInitConfig {
   margin: number
   params?: SimulationParameterOverrides
   closedLoop?: boolean
+  shortestPath?: ArrayBuffer
 }
 
 export type SimulationStateListener = (state: Float32Array) => void
@@ -37,22 +38,32 @@ export class SimulationClient {
 
   /** Sends initial conditions to the worker. */
   initialize(config: SimulationInitConfig): void {
+    const payload: Record<string, unknown> = {
+      N: config.riderCount,
+      positions: config.positions,
+      yaw: config.yaw,
+      path: config.path,
+      laneWidth: config.laneWidth,
+      roadWidth: config.roadWidth,
+      margin: config.margin,
+      params: config.params,
+      closedLoop: config.closedLoop,
+    }
+    if (config.shortestPath) {
+      payload.shortestPath = config.shortestPath
+    }
+
+    const transfers: ArrayBuffer[] = [config.positions, config.yaw, config.path]
+    if (config.shortestPath) {
+      transfers.push(config.shortestPath)
+    }
+
     this.worker.postMessage(
       {
         type: 'init',
-        payload: {
-          N: config.riderCount,
-          positions: config.positions,
-          yaw: config.yaw,
-          path: config.path,
-          laneWidth: config.laneWidth,
-          roadWidth: config.roadWidth,
-          margin: config.margin,
-          params: config.params,
-          closedLoop: config.closedLoop,
-        },
+        payload,
       },
-      [config.positions, config.yaw, config.path],
+      transfers,
     )
   }
 

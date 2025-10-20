@@ -7,6 +7,7 @@
  */
 import * as THREE from 'three'
 import type { Vec3 } from './gpx'
+import { computeShortestPath } from './shortestPath'
 
 /**
  * Builds a strip of asphalt mesh following the provided centre line.
@@ -213,7 +214,12 @@ export function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSe
  * Builds a thin line representing the geometric shortest path between the
  * start and end of the route while staying inside the road boundaries.
  */
-export function buildShortestPathLine(centerLine: Vec3[], roadWidth: number, margin: number): THREE.Line {
+export function buildShortestPathLine(
+  centerLine: Vec3[],
+  roadWidth: number,
+  margin: number,
+  shortestPath?: Vec3[],
+): THREE.Line {
   const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
   const geom = new THREE.BufferGeometry()
   const line = new THREE.Line(geom, mat)
@@ -221,119 +227,19 @@ export function buildShortestPathLine(centerLine: Vec3[], roadWidth: number, mar
 
   if (centerLine.length === 0) {
     line.userData.segments = 0
+    line.userData.pathPoints = []
     return line
   }
 
-  const halfWidth = Math.max(0, roadWidth / 2 - margin)
-  const up = new THREE.Vector3(0, 1, 0)
-
-  if (halfWidth <= 1e-6 || centerLine.length === 1) {
-    const positions: number[] = []
-    for (const point of centerLine) {
-      positions.push(point.x, point.y + 0.05, point.z)
-    }
-    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    line.userData.segments = centerLine.length
-    return line
-  }
-
-  const leftEdge: THREE.Vector3[] = []
-  const rightEdge: THREE.Vector3[] = []
-  let lastRight = new THREE.Vector3(1, 0, 0)
-
-  for (let i = 0; i < centerLine.length; i++) {
-    const curr = centerLine[i]
-    const prev = centerLine[Math.max(0, i - 1)]
-    const next = centerLine[Math.min(centerLine.length - 1, i + 1)]
-
-    const tangent = next.clone().sub(prev).setY(0)
-    if (tangent.lengthSq() <= 1e-6) {
-      tangent.copy(new THREE.Vector3(-lastRight.z, 0, lastRight.x))
-    }
-    tangent.normalize()
-
-    const right = new THREE.Vector3().crossVectors(tangent, up)
-    if (right.lengthSq() <= 1e-6) {
-      right.copy(lastRight)
-    } else {
-      right.normalize()
-      lastRight = right.clone()
-    }
-
-    const left = right.clone().multiplyScalar(-1)
-    leftEdge.push(curr.clone().addScaledVector(left, halfWidth))
-    rightEdge.push(curr.clone().addScaledVector(right, halfWidth))
-  }
-
-  type Portal = { left: THREE.Vector3; right: THREE.Vector3 }
-  const portals: Portal[] = []
-  for (let i = 0; i < centerLine.length; i++) {
-    portals.push({ left: leftEdge[i], right: rightEdge[i] })
-  }
-  const endPoint = centerLine[centerLine.length - 1].clone()
-  portals.push({ left: endPoint, right: endPoint })
-
-  const triarea2 = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number => {
-    return (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)
-  }
-
-  const startPoint = centerLine[0].clone()
-  const path: THREE.Vector3[] = [startPoint.clone()]
-  let apex = startPoint.clone()
-  let left = portals[0].left.clone()
-  let right = portals[0].right.clone()
-  let apexIndex = 0
-  let leftIndex = 0
-  let rightIndex = 0
-
-  for (let i = 1; i < portals.length; i++) {
-    const portal = portals[i]
-    const leftPoint = portal.left
-    const rightPoint = portal.right
-
-    if (triarea2(apex, right, rightPoint) <= 0) {
-      if (apex.equals(right) || triarea2(apex, left, rightPoint) > 0) {
-        right = rightPoint.clone()
-        rightIndex = i
-      } else {
-        apex = left.clone()
-        path.push(apex.clone())
-        apexIndex = leftIndex
-        right = apex.clone()
-        rightIndex = apexIndex
-        left = apex.clone()
-        leftIndex = apexIndex
-        i = apexIndex
-        continue
-      }
-    }
-
-    if (triarea2(apex, left, leftPoint) >= 0) {
-      if (apex.equals(left) || triarea2(apex, right, leftPoint) < 0) {
-        left = leftPoint.clone()
-        leftIndex = i
-      } else {
-        apex = right.clone()
-        path.push(apex.clone())
-        apexIndex = rightIndex
-        left = apex.clone()
-        leftIndex = apexIndex
-        right = apex.clone()
-        rightIndex = apexIndex
-        i = apexIndex
-        continue
-      }
-    }
-  }
-
-  path.push(endPoint.clone())
+  const pathPoints = shortestPath ?? computeShortestPath(centerLine, roadWidth, margin)
 
   const positions: number[] = []
-  for (const point of path) {
+  for (const point of pathPoints) {
     positions.push(point.x, point.y + 0.05, point.z)
   }
 
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  line.userData.segments = path.length
+  line.userData.segments = pathPoints.length
+  line.userData.pathPoints = pathPoints
   return line
 }
