@@ -210,144 +210,130 @@ export function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSe
 }
 
 /**
- * Builds a thin line following the route centre used to visualise the optimal path.
+ * Builds a thin line representing the geometric shortest path between the
+ * start and end of the route while staying inside the road boundaries.
  */
 export function buildShortestPathLine(centerLine: Vec3[], roadWidth: number, margin: number): THREE.Line {
+  const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
+  const geom = new THREE.BufferGeometry()
+  const line = new THREE.Line(geom, mat)
+  line.frustumCulled = false
+
   if (centerLine.length === 0) {
-    const geom = new THREE.BufferGeometry()
-    const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
-    const line = new THREE.Line(geom, mat)
     line.userData.segments = 0
-    line.frustumCulled = false
     return line
   }
 
   const halfWidth = Math.max(0, roadWidth / 2 - margin)
-  const isClosed = centerLine.length > 2 && centerLine[0].distanceTo(centerLine[centerLine.length - 1]) < 1
-  const targetAngle = Math.PI / 4
-  const rawOffsets: number[] = []
-  const windowDistance = Math.max(roadWidth * 1.5, 10)
-
-  const pickSamplePoint = (startIndex: number, direction: 1 | -1): Vec3 => {
-    if (centerLine.length === 1) {
-      return centerLine[0]
-    }
-
-    let travelled = 0
-    let currentIndex = startIndex
-    let currentPoint = centerLine[currentIndex]
-    while (travelled < windowDistance) {
-      let nextIndex = currentIndex + direction
-      if (isClosed) {
-        nextIndex = (nextIndex % centerLine.length + centerLine.length) % centerLine.length
-        if (nextIndex === currentIndex) {
-          break
-        }
-      } else if (nextIndex < 0 || nextIndex >= centerLine.length) {
-        break
-      }
-
-      const nextPoint = centerLine[nextIndex]
-      travelled += nextPoint.distanceTo(currentPoint)
-      currentIndex = nextIndex
-      currentPoint = nextPoint
-
-      if (!isClosed && (currentIndex === 0 || currentIndex === centerLine.length - 1)) {
-        break
-      }
-      if (isClosed && currentIndex === startIndex) {
-        break
-      }
-    }
-
-    return currentPoint
-  }
-
-  for (let i = 0; i < centerLine.length; i++) {
-    const curr = centerLine[i]
-    const prev = pickSamplePoint(i, -1)
-    const next = pickSamplePoint(i, 1)
-
-    const dirPrev = prev === curr ? new THREE.Vector3(0, 0, 0) : curr.clone().sub(prev).setY(0)
-    const dirNext = next === curr ? new THREE.Vector3(0, 0, 0) : next.clone().sub(curr).setY(0)
-
-    if (dirPrev.lengthSq() === 0 || dirNext.lengthSq() === 0) {
-      rawOffsets.push(0)
-      continue
-    }
-
-    dirPrev.normalize()
-    dirNext.normalize()
-    const cross = dirPrev.x * dirNext.z - dirPrev.z * dirNext.x
-    const dot = THREE.MathUtils.clamp(dirPrev.x * dirNext.x + dirPrev.z * dirNext.z, -1, 1)
-    const angle = Math.atan2(cross, dot)
-    const intensity = THREE.MathUtils.clamp(Math.abs(angle) / targetAngle, 0, 1)
-    const offset = Math.sign(angle) * intensity * halfWidth
-    rawOffsets.push(offset)
-  }
-
-  if (!isClosed) {
-    rawOffsets[0] = 0
-    rawOffsets[rawOffsets.length - 1] = 0
-  }
-
-  const radius = Math.min(12, Math.max(2, Math.floor(centerLine.length / 12)))
-  const sigma = Math.max(1, radius / 2)
-  const kernelSize = radius * 2 + 1
-  const kernel: number[] = []
-  let kernelSum = 0
-  for (let i = 0; i < kernelSize; i++) {
-    const distance = i - radius
-    const weight = Math.exp(-(distance * distance) / (2 * sigma * sigma))
-    kernel.push(weight)
-    kernelSum += weight
-  }
-  const normalisedKernel = kernel.map((w) => w / kernelSum)
-
-  const smoothedOffsets: number[] = new Array(centerLine.length).fill(0)
-  for (let i = 0; i < centerLine.length; i++) {
-    let acc = 0
-    for (let k = -radius; k <= radius; k++) {
-      const kernelIndex = k + radius
-      let sampleIndex = i + k
-      if (isClosed) {
-        sampleIndex = (sampleIndex % centerLine.length + centerLine.length) % centerLine.length
-      } else if (sampleIndex < 0 || sampleIndex >= centerLine.length) {
-        sampleIndex = Math.max(0, Math.min(centerLine.length - 1, sampleIndex))
-      }
-      acc += rawOffsets[sampleIndex] * normalisedKernel[kernelIndex]
-    }
-    smoothedOffsets[i] = THREE.MathUtils.clamp(acc, -halfWidth, halfWidth)
-  }
-
-  if (!isClosed) {
-    smoothedOffsets[0] = 0
-    smoothedOffsets[smoothedOffsets.length - 1] = 0
-  }
-
   const up = new THREE.Vector3(0, 1, 0)
-  const positions: number[] = []
+
+  if (halfWidth <= 1e-6 || centerLine.length === 1) {
+    const positions: number[] = []
+    for (const point of centerLine) {
+      positions.push(point.x, point.y + 0.05, point.z)
+    }
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    line.userData.segments = centerLine.length
+    return line
+  }
+
+  const leftEdge: THREE.Vector3[] = []
+  const rightEdge: THREE.Vector3[] = []
+  let lastRight = new THREE.Vector3(1, 0, 0)
 
   for (let i = 0; i < centerLine.length; i++) {
     const curr = centerLine[i]
-    const prev = centerLine[isClosed ? (i - 1 + centerLine.length) % centerLine.length : Math.max(0, i - 1)]
-    const next = centerLine[isClosed ? (i + 1) % centerLine.length : Math.min(centerLine.length - 1, i + 1)]
-    const dir = next.clone().sub(prev).setY(0)
-    if (dir.lengthSq() === 0) {
-      positions.push(curr.x, curr.y + 0.05, curr.z)
-      continue
+    const prev = centerLine[Math.max(0, i - 1)]
+    const next = centerLine[Math.min(centerLine.length - 1, i + 1)]
+
+    const tangent = next.clone().sub(prev).setY(0)
+    if (tangent.lengthSq() <= 1e-6) {
+      tangent.copy(new THREE.Vector3(-lastRight.z, 0, lastRight.x))
     }
-    dir.normalize()
-    const normal = new THREE.Vector3().crossVectors(up, dir).normalize()
-    const offsetPoint = curr.clone().addScaledVector(normal, smoothedOffsets[i])
-    positions.push(offsetPoint.x, offsetPoint.y + 0.05, offsetPoint.z)
+    tangent.normalize()
+
+    const right = new THREE.Vector3().crossVectors(tangent, up)
+    if (right.lengthSq() <= 1e-6) {
+      right.copy(lastRight)
+    } else {
+      right.normalize()
+      lastRight = right.clone()
+    }
+
+    const left = right.clone().multiplyScalar(-1)
+    leftEdge.push(curr.clone().addScaledVector(left, halfWidth))
+    rightEdge.push(curr.clone().addScaledVector(right, halfWidth))
   }
 
-  const geom = new THREE.BufferGeometry()
+  type Portal = { left: THREE.Vector3; right: THREE.Vector3 }
+  const portals: Portal[] = []
+  for (let i = 0; i < centerLine.length; i++) {
+    portals.push({ left: leftEdge[i], right: rightEdge[i] })
+  }
+  const endPoint = centerLine[centerLine.length - 1].clone()
+  portals.push({ left: endPoint, right: endPoint })
+
+  const triarea2 = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number => {
+    return (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)
+  }
+
+  const startPoint = centerLine[0].clone()
+  const path: THREE.Vector3[] = [startPoint.clone()]
+  let apex = startPoint.clone()
+  let left = portals[0].left.clone()
+  let right = portals[0].right.clone()
+  let apexIndex = 0
+  let leftIndex = 0
+  let rightIndex = 0
+
+  for (let i = 1; i < portals.length; i++) {
+    const portal = portals[i]
+    const leftPoint = portal.left
+    const rightPoint = portal.right
+
+    if (triarea2(apex, right, rightPoint) <= 0) {
+      if (apex.equals(right) || triarea2(apex, left, rightPoint) > 0) {
+        right = rightPoint.clone()
+        rightIndex = i
+      } else {
+        apex = left.clone()
+        path.push(apex.clone())
+        apexIndex = leftIndex
+        right = apex.clone()
+        rightIndex = apexIndex
+        left = apex.clone()
+        leftIndex = apexIndex
+        i = apexIndex
+        continue
+      }
+    }
+
+    if (triarea2(apex, left, leftPoint) >= 0) {
+      if (apex.equals(left) || triarea2(apex, right, leftPoint) < 0) {
+        left = leftPoint.clone()
+        leftIndex = i
+      } else {
+        apex = right.clone()
+        path.push(apex.clone())
+        apexIndex = rightIndex
+        left = apex.clone()
+        leftIndex = apexIndex
+        right = apex.clone()
+        rightIndex = apexIndex
+        i = apexIndex
+        continue
+      }
+    }
+  }
+
+  path.push(endPoint.clone())
+
+  const positions: number[] = []
+  for (const point of path) {
+    positions.push(point.x, point.y + 0.05, point.z)
+  }
+
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
-  const line = new THREE.Line(geom, mat)
-  line.userData.segments = centerLine.length
-  line.frustumCulled = false
+  line.userData.segments = path.length
   return line
 }
