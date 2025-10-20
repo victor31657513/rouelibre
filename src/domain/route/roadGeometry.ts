@@ -212,12 +212,100 @@ export function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSe
 /**
  * Builds a thin line following the route centre used to visualise the optimal path.
  */
-export function buildShortestPathLine(centerLine: Vec3[]): THREE.Line {
+export function buildShortestPathLine(centerLine: Vec3[], roadWidth: number, margin: number): THREE.Line {
+  if (centerLine.length === 0) {
+    const geom = new THREE.BufferGeometry()
+    const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
+    const line = new THREE.Line(geom, mat)
+    line.userData.segments = 0
+    line.frustumCulled = false
+    return line
+  }
+
+  const halfWidth = Math.max(0, roadWidth / 2 - margin)
+  const isClosed = centerLine.length > 2 && centerLine[0].distanceTo(centerLine[centerLine.length - 1]) < 1
+  const targetAngle = Math.PI / 3
+  const rawOffsets: number[] = []
+
+  for (let i = 0; i < centerLine.length; i++) {
+    const curr = centerLine[i]
+    const prev = centerLine[isClosed ? (i - 1 + centerLine.length) % centerLine.length : Math.max(0, i - 1)]
+    const next = centerLine[isClosed ? (i + 1) % centerLine.length : Math.min(centerLine.length - 1, i + 1)]
+
+    const dirPrev = prev === curr ? new THREE.Vector3(0, 0, 0) : curr.clone().sub(prev).setY(0)
+    const dirNext = next === curr ? new THREE.Vector3(0, 0, 0) : next.clone().sub(curr).setY(0)
+
+    if (dirPrev.lengthSq() === 0 || dirNext.lengthSq() === 0) {
+      rawOffsets.push(0)
+      continue
+    }
+
+    dirPrev.normalize()
+    dirNext.normalize()
+    const cross = dirPrev.x * dirNext.z - dirPrev.z * dirNext.x
+    const dot = THREE.MathUtils.clamp(dirPrev.x * dirNext.x + dirPrev.z * dirNext.z, -1, 1)
+    const angle = Math.atan2(cross, dot)
+    const intensity = THREE.MathUtils.clamp(Math.abs(angle) / targetAngle, 0, 1)
+    const offset = Math.sign(angle) * intensity * halfWidth
+    rawOffsets.push(offset)
+  }
+
+  if (!isClosed) {
+    rawOffsets[0] = 0
+    rawOffsets[rawOffsets.length - 1] = 0
+  }
+
+  const radius = Math.min(12, Math.max(2, Math.floor(centerLine.length / 12)))
+  const sigma = Math.max(1, radius / 2)
+  const kernelSize = radius * 2 + 1
+  const kernel: number[] = []
+  let kernelSum = 0
+  for (let i = 0; i < kernelSize; i++) {
+    const distance = i - radius
+    const weight = Math.exp(-(distance * distance) / (2 * sigma * sigma))
+    kernel.push(weight)
+    kernelSum += weight
+  }
+  const normalisedKernel = kernel.map((w) => w / kernelSum)
+
+  const smoothedOffsets: number[] = new Array(centerLine.length).fill(0)
+  for (let i = 0; i < centerLine.length; i++) {
+    let acc = 0
+    for (let k = -radius; k <= radius; k++) {
+      const kernelIndex = k + radius
+      let sampleIndex = i + k
+      if (isClosed) {
+        sampleIndex = (sampleIndex % centerLine.length + centerLine.length) % centerLine.length
+      } else if (sampleIndex < 0 || sampleIndex >= centerLine.length) {
+        sampleIndex = Math.max(0, Math.min(centerLine.length - 1, sampleIndex))
+      }
+      acc += rawOffsets[sampleIndex] * normalisedKernel[kernelIndex]
+    }
+    smoothedOffsets[i] = THREE.MathUtils.clamp(acc, -halfWidth, halfWidth)
+  }
+
+  if (!isClosed) {
+    smoothedOffsets[0] = 0
+    smoothedOffsets[smoothedOffsets.length - 1] = 0
+  }
+
+  const up = new THREE.Vector3(0, 1, 0)
   const positions: number[] = []
 
-  centerLine.forEach((point) => {
-    positions.push(point.x, point.y + 0.05, point.z)
-  })
+  for (let i = 0; i < centerLine.length; i++) {
+    const curr = centerLine[i]
+    const prev = centerLine[isClosed ? (i - 1 + centerLine.length) % centerLine.length : Math.max(0, i - 1)]
+    const next = centerLine[isClosed ? (i + 1) % centerLine.length : Math.min(centerLine.length - 1, i + 1)]
+    const dir = next.clone().sub(prev).setY(0)
+    if (dir.lengthSq() === 0) {
+      positions.push(curr.x, curr.y + 0.05, curr.z)
+      continue
+    }
+    dir.normalize()
+    const normal = new THREE.Vector3().crossVectors(up, dir).normalize()
+    const offsetPoint = curr.clone().addScaledVector(normal, smoothedOffsets[i])
+    positions.push(offsetPoint.x, offsetPoint.y + 0.05, offsetPoint.z)
+  }
 
   const geom = new THREE.BufferGeometry()
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
