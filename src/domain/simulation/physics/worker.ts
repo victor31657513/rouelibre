@@ -452,10 +452,19 @@ const rapierWasmUrl = new URL(
 let rapierInitPromise: Promise<void> | null = null
 
 async function ensureRapier(): Promise<void> {
-  if (!rapierInitPromise) {
-    rapierInitPromise = RAPIER.init(rapierWasmUrl)
+  let initPromise = rapierInitPromise
+  if (!initPromise) {
+    initPromise = RAPIER.init(rapierWasmUrl)
+    rapierInitPromise = initPromise
   }
-  await rapierInitPromise
+  try {
+    await initPromise
+  } catch (error) {
+    if (rapierInitPromise === initPromise) {
+      rapierInitPromise = null
+    }
+    throw error
+  }
 }
 
 self.onmessage = async (e: MessageEvent) => {
