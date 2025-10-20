@@ -208,3 +208,22 @@ export function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSe
   const mat = new THREE.LineBasicMaterial({ color: 0xff0000 })
   return new THREE.LineSegments(geom, mat)
 }
+
+/**
+ * Builds a thin line following the route centre used to visualise the optimal path.
+ */
+export function buildShortestPathLine(centerLine: Vec3[]): THREE.Line {
+  const positions: number[] = []
+
+  centerLine.forEach((point) => {
+    positions.push(point.x, point.y + 0.05, point.z)
+  })
+
+  const geom = new THREE.BufferGeometry()
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
+  const line = new THREE.Line(geom, mat)
+  line.userData.segments = centerLine.length
+  line.frustumCulled = false
+  return line
+}

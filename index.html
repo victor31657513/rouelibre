@@ -35,10 +35,27 @@
     id="home-panel"
     class="hidden fixed inset-x-5 top-1/2 z-10 -translate-y-1/2 flex flex-col gap-3 sm:left-1/2 sm:right-auto sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2"
   >
-    <div
-      id="mode-selector"
-      class="rounded-box bg-base-100 p-3 text-sm font-sans shadow flex flex-wrap gap-2 supports-[height:100dvh]:w-full sm:flex-nowrap sm:p-4"
-    ></div>
+    <section
+      id="parameters-panel"
+      class="rounded-box bg-base-100 p-3 text-sm font-sans shadow flex flex-col gap-3 supports-[height:100dvh]:w-full sm:p-4"
+    >
+      <header class="flex items-center justify-between gap-2">
+        <h2 class="text-base font-semibold tracking-tight">Paramètres</h2>
+      </header>
+      <div
+        id="mode-selector"
+        class="flex flex-wrap gap-2 supports-[height:100dvh]:w-full sm:flex-nowrap"
+      ></div>
+      <label class="flex items-center justify-between gap-3 rounded-lg bg-base-200 px-3 py-2 text-sm">
+        <span class="flex-1">Afficher le chemin le plus court</span>
+        <input
+          id="shortest-path-toggle"
+          type="checkbox"
+          class="toggle toggle-primary"
+          checked
+        />
+      </label>
+    </section>
     <ul
       id="route-list"
       class="menu rounded-box bg-base-100 p-3 text-sm font-sans shadow box-border max-h-[calc(100vh-12rem)] overflow-y-auto supports-[height:100dvh]:max-h-[calc(100dvh-12rem)] sm:max-h-none sm:p-4 sm:overflow-visible"
