@@ -18,7 +18,13 @@ import { SimulationClient } from '../domain/simulation/SimulationClient'
 import { initPeloton } from '../domain/simulation/peloton'
 import { PathSpline, resamplePath } from '../domain/route/pathSpline'
 import { elevationStats, ensureProgressivePath, simplifyPath } from '../domain/route/pathProcessing'
-import { buildCenterDashes, buildRoadBounds, buildRoadMesh, buildStartLine } from '../domain/route/roadGeometry'
+import {
+  buildCenterDashes,
+  buildRoadBounds,
+  buildRoadMesh,
+  buildShortestPathLine,
+  buildStartLine,
+} from '../domain/route/roadGeometry'
 import { loadGPX } from '../domain/route/routeLoader'
 import type { GPXPoint, Vec3 } from '../domain/route/gpx'
 import { changeSelectedIndex, selectedIndex, setSelectedIndex } from '../domain/state/selection'
@@ -42,6 +48,7 @@ interface DomRefs {
   distanceIndicator: HTMLDivElement
   distanceTravelled: HTMLSpanElement
   distanceRemaining: HTMLSpanElement
+  shortestPathToggle: HTMLInputElement
 }
 
 type RoadAssets = {
@@ -49,6 +56,7 @@ type RoadAssets = {
   markings?: THREE.Mesh
   startLine?: THREE.Mesh
   bounds?: THREE.LineSegments
+  shortestPath?: THREE.Line
 }
 
 export class AppController {
@@ -62,6 +70,7 @@ export class AppController {
   private mode: SimulationMode
   private riderCount: number
   private modeSelectorHandle: ModeSelectorHandle | null = null
+  private showShortestPath: boolean
 
   private currentPath: Vec3[] | null = null
   private simplifiedPath: Vec3[] | null = null
@@ -103,6 +112,7 @@ export class AppController {
   constructor(dom: DomRefs) {
     this.dom = dom
     this.mode = getModeById(DEFAULT_MODE_ID)
+    this.showShortestPath = dom.shortestPathToggle.checked
     this.riderCount = Math.max(1, Math.min(this.mode.riderCount, this.maxRiderCount))
 
     this.scene = createSceneContext(this.dom.canvas, {
@@ -122,6 +132,7 @@ export class AppController {
     this.simulation = new SimulationClient((state) => this.onSimulationState(state))
     this.positions = new Float32Array(this.riderCount * 4)
     setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
+    this.dom.shortestPathToggle.checked = this.showShortestPath
     this.applyModeColors()
     this.attachEventListeners()
     this.hideControls()
@@ -174,7 +185,7 @@ export class AppController {
   }
 
   private attachEventListeners(): void {
-    const { canvas, homeBtn, startBtn, pauseBtn, resetBtn } = this.dom
+    const { canvas, homeBtn, startBtn, pauseBtn, resetBtn, shortestPathToggle } = this.dom
 
     homeBtn.addEventListener('click', () => {
       this.stopAnimation()
@@ -211,6 +222,11 @@ export class AppController {
       startBtn.textContent = 'Start'
       pauseBtn.disabled = true
       this.hideTelemetry()
+    })
+
+    shortestPathToggle.addEventListener('change', () => {
+      this.showShortestPath = shortestPathToggle.checked
+      this.updateShortestPathVisibility()
     })
 
     canvas.addEventListener('mousedown', (event: MouseEvent) => {
@@ -636,6 +652,7 @@ export class AppController {
     if (this.roadAssets.markings) scene.remove(this.roadAssets.markings)
     if (this.roadAssets.startLine) scene.remove(this.roadAssets.startLine)
     if (this.roadAssets.bounds) scene.remove(this.roadAssets.bounds)
+    if (this.roadAssets.shortestPath) scene.remove(this.roadAssets.shortestPath)
 
     const road = buildRoadMesh(this.currentPath, APP_CONFIG.roadWidth)
     const markings = buildCenterDashes(
@@ -651,21 +668,42 @@ export class AppController {
       startLineOffset,
     )
     const bounds = buildRoadBounds(this.currentPath, APP_CONFIG.roadWidth)
+    const shortestPath = buildShortestPathLine(this.currentPath)
 
     road.name = 'routeMesh'
     markings.name = 'centerMarkings'
     startLine.name = 'startLine'
     bounds.name = 'roadBounds'
+    shortestPath.name = 'shortestPath'
+    shortestPath.visible = this.showShortestPath
 
     scene.add(road)
     scene.add(markings)
     scene.add(startLine)
     scene.add(bounds)
+    scene.add(shortestPath)
 
-    this.roadAssets = { road, markings, startLine, bounds }
+    this.roadAssets = { road, markings, startLine, bounds, shortestPath }
     this.pelotonScene.setRoadMesh(road)
     this.roadReady = true
     this.pelotonScene.applyState(this.positions)
+    this.updateShortestPathVisibility()
+  }
+
+  private updateShortestPathVisibility(): void {
+    const pathLine = this.roadAssets.shortestPath
+    if (!pathLine) {
+      if (this.showShortestPath && this.currentPath) {
+        const newLine = buildShortestPathLine(this.currentPath)
+        newLine.name = 'shortestPath'
+        newLine.visible = true
+        this.scene.scene.add(newLine)
+        this.roadAssets.shortestPath = newLine
+      }
+      return
+    }
+
+    pathLine.visible = this.showShortestPath
   }
 
   private computeStartLineOffset(): number {

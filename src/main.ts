@@ -19,6 +19,9 @@ const controls = document.getElementById('controls') as HTMLDivElement | null
 const homePanel = document.getElementById('home-panel') as HTMLDivElement | null
 const modeSelector = document.getElementById('mode-selector') as HTMLDivElement | null
 const routeList = document.getElementById('route-list') as HTMLElement | null
+const shortestPathToggle = document.getElementById(
+  'shortest-path-toggle',
+) as HTMLInputElement | null
 const speedIndicator = document.getElementById('speed-indicator') as HTMLDivElement | null
 const distanceIndicator = document.getElementById('distance-indicator') as HTMLDivElement | null
 const distanceTravelled = document.getElementById('distance-travelled') as HTMLSpanElement | null
@@ -36,6 +39,7 @@ if (
   !homePanel ||
   !modeSelector ||
   !routeList ||
+  !shortestPathToggle ||
   !speedIndicator ||
   !distanceIndicator ||
   !distanceTravelled ||
@@ -56,6 +60,7 @@ const controller = new AppController({
   homePanel,
   modeSelector,
   routeList,
+  shortestPathToggle,
   speedIndicator,
   distanceIndicator,
   distanceTravelled,
