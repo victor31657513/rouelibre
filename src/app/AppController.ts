@@ -668,7 +668,11 @@ export class AppController {
       startLineOffset,
     )
     const bounds = buildRoadBounds(this.currentPath, APP_CONFIG.roadWidth)
-    const shortestPath = buildShortestPathLine(this.currentPath)
+    const shortestPath = buildShortestPathLine(
+      this.currentPath,
+      APP_CONFIG.roadWidth,
+      APP_CONFIG.roadMargin,
+    )
 
     road.name = 'routeMesh'
     markings.name = 'centerMarkings'
@@ -694,7 +698,11 @@ export class AppController {
     const pathLine = this.roadAssets.shortestPath
     if (!pathLine) {
       if (this.showShortestPath && this.currentPath) {
-        const newLine = buildShortestPathLine(this.currentPath)
+        const newLine = buildShortestPathLine(
+          this.currentPath,
+          APP_CONFIG.roadWidth,
+          APP_CONFIG.roadMargin,
+        )
         newLine.name = 'shortestPath'
         newLine.visible = true
         this.scene.scene.add(newLine)
