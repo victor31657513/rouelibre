@@ -224,13 +224,49 @@ export function buildShortestPathLine(centerLine: Vec3[], roadWidth: number, mar
 
   const halfWidth = Math.max(0, roadWidth / 2 - margin)
   const isClosed = centerLine.length > 2 && centerLine[0].distanceTo(centerLine[centerLine.length - 1]) < 1
-  const targetAngle = Math.PI / 3
+  const targetAngle = Math.PI / 4
   const rawOffsets: number[] = []
+  const windowDistance = Math.max(roadWidth * 1.5, 10)
+
+  const pickSamplePoint = (startIndex: number, direction: 1 | -1): Vec3 => {
+    if (centerLine.length === 1) {
+      return centerLine[0]
+    }
+
+    let travelled = 0
+    let currentIndex = startIndex
+    let currentPoint = centerLine[currentIndex]
+    while (travelled < windowDistance) {
+      let nextIndex = currentIndex + direction
+      if (isClosed) {
+        nextIndex = (nextIndex % centerLine.length + centerLine.length) % centerLine.length
+        if (nextIndex === currentIndex) {
+          break
+        }
+      } else if (nextIndex < 0 || nextIndex >= centerLine.length) {
+        break
+      }
+
+      const nextPoint = centerLine[nextIndex]
+      travelled += nextPoint.distanceTo(currentPoint)
+      currentIndex = nextIndex
+      currentPoint = nextPoint
+
+      if (!isClosed && (currentIndex === 0 || currentIndex === centerLine.length - 1)) {
+        break
+      }
+      if (isClosed && currentIndex === startIndex) {
+        break
+      }
+    }
+
+    return currentPoint
+  }
 
   for (let i = 0; i < centerLine.length; i++) {
     const curr = centerLine[i]
-    const prev = centerLine[isClosed ? (i - 1 + centerLine.length) % centerLine.length : Math.max(0, i - 1)]
-    const next = centerLine[isClosed ? (i + 1) % centerLine.length : Math.min(centerLine.length - 1, i + 1)]
+    const prev = pickSamplePoint(i, -1)
+    const next = pickSamplePoint(i, 1)
 
     const dirPrev = prev === curr ? new THREE.Vector3(0, 0, 0) : curr.clone().sub(prev).setY(0)
     const dirNext = next === curr ? new THREE.Vector3(0, 0, 0) : next.clone().sub(curr).setY(0)
