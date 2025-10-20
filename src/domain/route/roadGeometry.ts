@@ -210,13 +210,104 @@ export function buildRoadBounds(centerLine: Vec3[], width: number): THREE.LineSe
 }
 
 /**
- * Builds a thin line following the route centre used to visualise the optimal path.
+ * Builds a thin line that approximates the shortest path a rider could take while staying within
+ * the road limits. The path hugs the inside of corners instead of sticking to the centre line.
  */
-export function buildShortestPathLine(centerLine: Vec3[]): THREE.Line {
+export function buildShortestPathLine(centerLine: Vec3[], width: number, margin: number): THREE.Line {
   const positions: number[] = []
+  const up = new THREE.Vector3(0, 1, 0)
+  const safeMargin = Math.max(0, margin)
+  const maxOffset = Math.max(0, width * 0.5 - safeMargin)
 
-  centerLine.forEach((point) => {
-    positions.push(point.x, point.y + 0.05, point.z)
+  if (centerLine.length === 0) {
+    const geom = new THREE.BufferGeometry()
+    const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
+    const line = new THREE.Line(geom, mat)
+    line.userData.segments = 0
+    line.frustumCulled = false
+    return line
+  }
+
+  if (maxOffset <= 1e-6) {
+    centerLine.forEach((point) => {
+      positions.push(point.x, point.y + 0.05, point.z)
+    })
+    const geom = new THREE.BufferGeometry()
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    const mat = new THREE.LineBasicMaterial({ color: 0x00ff88 })
+    const line = new THREE.Line(geom, mat)
+    line.userData.segments = centerLine.length
+    line.frustumCulled = false
+    return line
+  }
+
+  const clamp = (value: number, min: number, max: number): number => Math.min(Math.max(value, min), max)
+
+  const targets: number[] = new Array(centerLine.length).fill(0)
+
+  for (let i = 1; i < centerLine.length - 1; i++) {
+    const prev = centerLine[i - 1]
+    const curr = centerLine[i]
+    const next = centerLine[i + 1]
+
+    const prevVec = curr.clone().sub(prev).setY(0)
+    const nextVec = next.clone().sub(curr).setY(0)
+    const prevLen = prevVec.length()
+    const nextLen = nextVec.length()
+
+    if (prevLen < 1e-6 || nextLen < 1e-6) {
+      targets[i] = targets[i - 1]
+      continue
+    }
+
+    const prevDir = prevVec.multiplyScalar(1 / prevLen)
+    const nextDir = nextVec.multiplyScalar(1 / nextLen)
+    const cross = prevDir.x * nextDir.z - prevDir.z * nextDir.x
+    const dot = clamp(prevDir.x * nextDir.x + prevDir.z * nextDir.z, -1, 1)
+    const angle = Math.atan2(Math.abs(cross), dot)
+    const intensity = clamp(angle / (Math.PI / 2), 0, 1)
+    const sign = Math.sign(cross)
+    targets[i] = sign * intensity * maxOffset
+  }
+
+  const offsets = targets.slice()
+  const smoothingDistance = Math.max(2, width * 1.5)
+
+  for (let i = 1; i < offsets.length; i++) {
+    const segLen = centerLine[i].distanceTo(centerLine[i - 1])
+    const t = 1 - Math.exp(-segLen / smoothingDistance)
+    offsets[i] = offsets[i] * (1 - t) + offsets[i - 1] * t
+  }
+
+  for (let i = offsets.length - 2; i >= 0; i--) {
+    const segLen = centerLine[i].distanceTo(centerLine[i + 1])
+    const t = 1 - Math.exp(-segLen / smoothingDistance)
+    offsets[i] = offsets[i] * (1 - t) + offsets[i + 1] * t
+  }
+
+  const clampOffset = (value: number): number => clamp(value, -maxOffset, maxOffset)
+
+  let lastRight: THREE.Vector3 | null = null
+
+  centerLine.forEach((point, index) => {
+    const prev = centerLine[index - 1] ?? point
+    const next = centerLine[index + 1] ?? point
+    const dir = next.clone().sub(prev).setY(0)
+
+    let right: THREE.Vector3
+    if (dir.lengthSq() > 1e-12) {
+      dir.normalize()
+      right = new THREE.Vector3().crossVectors(dir, up).normalize()
+      lastRight = right
+    } else if (lastRight) {
+      right = lastRight
+    } else {
+      right = new THREE.Vector3(1, 0, 0)
+    }
+
+    const offset = clampOffset(offsets[index] ?? 0)
+    const displaced = point.clone().addScaledVector(right, offset)
+    positions.push(displaced.x, displaced.y + 0.05, displaced.z)
   })
 
   const geom = new THREE.BufferGeometry()
