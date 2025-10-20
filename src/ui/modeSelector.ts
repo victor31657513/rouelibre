@@ -20,7 +20,6 @@ interface InitOptions {
 
 const BASE_BUTTON_CLASSES = [
   'btn',
-  'btn-sm',
   'btn-outline',
   'min-w-[6rem]',
   'flex-1',
