@@ -524,8 +524,8 @@ export function computeCorneringSpeedFromEnvelope(
     maxLateralAcceleration,
     sustainedBlendStart = 0.25,
     sustainedBlendEnd = 0.85,
-    coverageExponent = 1.2,
-    reliefFactor = 0.25,
+    coverageExponent = 1.1,
+    reliefFactor = 0.2,
     spikeRetention = 0.35,
     hairpinLateralAcceleration,
     classificationOptions,
@@ -540,35 +540,24 @@ export function computeCorneringSpeedFromEnvelope(
     },
   )
 
-  if (classification.category !== 'hairpin' || hairpinSeverity <= 0) {
+  const baseAcceleration = Number.isFinite(maxLateralAcceleration)
+    ? Math.max(0, maxLateralAcceleration)
+    : 0
+
+  if (baseAcceleration <= 0) {
     return Infinity
   }
 
-  const resolvedAcceleration = Number.isFinite(hairpinLateralAcceleration)
-    ? Math.max(0, hairpinLateralAcceleration)
-    : Number.isFinite(maxLateralAcceleration)
-      ? Math.max(0, maxLateralAcceleration)
-      : 0
-  const safeAccel = resolvedAcceleration
-  if (safeAccel <= 0) {
-    return Infinity
-  }
+  const baseCurvature = Math.max(
+    envelope.rootMeanSquareAbsCurvature,
+    envelope.averageAbsCurvature,
+    0,
+  )
+  const peakCurvature = Math.max(baseCurvature, envelope.maxAbsCurvature)
 
-  const peakCurvature = Math.max(0, envelope.maxAbsCurvature)
   if (peakCurvature <= 1e-9) {
     return Infinity
   }
-
-  const baseCurvatureRaw = Math.max(
-    envelope.rootMeanSquareAbsCurvature,
-    envelope.averageAbsCurvature,
-    1e-9,
-  )
-  const baseCurvature = peakCurvature > 0
-    ? Math.min(baseCurvatureRaw, peakCurvature)
-    : baseCurvatureRaw
-  const boundedPeak = Math.max(peakCurvature, baseCurvature)
-  const headroom = Math.max(0, boundedPeak - baseCurvature)
 
   const rawCoverage = MathUtils.clamp(envelope.coverageRatio ?? 0, 0, 1)
   const blendedCoverage = MathUtils.clamp(
@@ -580,24 +569,44 @@ export function computeCorneringSpeedFromEnvelope(
     blendedCoverage,
     Math.max(coverageExponent, 1e-3),
   )
-
   const retention = MathUtils.clamp(spikeRetention, 0, 1)
-  const coverageBlend = weightedCoverage + (1 - weightedCoverage) * retention
-
-  const effectiveCurvature = baseCurvature + headroom * coverageBlend
-  const relief = 1 + Math.max(0, reliefFactor) * (1 - coverageBlend)
-  const softenedCurvature = effectiveCurvature / relief
-  const minimumCurvature = baseCurvature * MathUtils.lerp(0.7, 1, coverageBlend)
-  const normalizedCurvature = Math.max(
-    softenedCurvature,
-    minimumCurvature,
+  const curvatureBlend = MathUtils.lerp(
+    retention,
+    1,
+    weightedCoverage,
+  )
+  const curvatureForLimit = Math.max(
     1e-9,
+    MathUtils.lerp(baseCurvature || peakCurvature, peakCurvature, curvatureBlend),
   )
 
-  const baseCorneringSpeed = Math.sqrt(safeAccel / normalizedCurvature)
-  const brakingFactor = MathUtils.clamp(classification.brakingFactor, 0, 1)
+  const relief = 1 + Math.max(0, reliefFactor) * (1 - weightedCoverage)
+  const softenedCurvature = Math.max(curvatureForLimit / relief, 1e-9)
 
-  return baseCorneringSpeed * brakingFactor
+  const severity = Math.max(
+    MathUtils.clamp(hairpinSeverity, 0, 1),
+    MathUtils.clamp(classification.activation, 0, 1),
+  )
+
+  const resolvedHairpinAcceleration = Number.isFinite(hairpinLateralAcceleration)
+    ? Math.max(0, hairpinLateralAcceleration)
+    : baseAcceleration
+  const effectiveAcceleration = classification.category === 'hairpin'
+    ? MathUtils.lerp(baseAcceleration, resolvedHairpinAcceleration, severity)
+    : baseAcceleration
+
+  if (effectiveAcceleration <= 0) {
+    return Infinity
+  }
+
+  const baseCorneringSpeed = Math.sqrt(effectiveAcceleration / softenedCurvature)
+  const brakingFactor = MathUtils.lerp(
+    1,
+    MathUtils.clamp(classification.brakingFactor, 0, 1),
+    severity,
+  )
+
+  return baseCorneringSpeed * Math.max(brakingFactor, 0)
 }
 
 const scratchRight = new Vector3()
