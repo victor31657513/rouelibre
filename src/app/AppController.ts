@@ -68,6 +68,7 @@ export class AppController {
   private readonly simulation: SimulationClient
 
   private readonly maxRiderCount = APP_CONFIG.riderCount
+  private readonly idealFrameIntervalMs = 1000 / 60
   private mode: SimulationMode
   private riderCount: number
   private modeSelectorHandle: ModeSelectorHandle | null = null
@@ -767,11 +768,14 @@ export class AppController {
   }
 
   private startAnimation(): void {
-    if (!this.animating) {
-      this.animating = true
-      this.lastTick = performance.now()
-      requestAnimationFrame(() => this.tick())
+    if (this.animating) {
+      return
     }
+
+    this.animating = true
+    const now = performance.now()
+    this.lastTick = now - this.idealFrameIntervalMs
+    this.tick()
   }
 
   private stopAnimation(): void {
