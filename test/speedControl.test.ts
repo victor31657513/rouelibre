@@ -565,7 +565,7 @@ describe('speed control helpers', () => {
     expect(speed).toBeCloseTo(9, 5)
   })
 
-  it('maintains the available top speed on sweeping corners', () => {
+  it('does not impose a curvature-based speed cap', () => {
     const envelope: CurvatureEnvelope = {
       averageAbsCurvature: 0.018,
       rootMeanSquareAbsCurvature: 0.022,
@@ -590,11 +590,7 @@ describe('speed control helpers', () => {
       },
     })
 
-    const theoretical = Math.sqrt(4.5 / envelope.rootMeanSquareAbsCurvature)
-
-    expect(Number.isFinite(vCorner)).toBe(true)
-    expect(vCorner).toBeGreaterThan(theoretical * 0.9)
-    expect(vCorner).toBeLessThanOrEqual(theoretical * 1.1)
+    expect(vCorner).toBe(Number.POSITIVE_INFINITY)
   })
 
   it('classifies sustained but wide bends as standard corners', () => {
@@ -620,7 +616,7 @@ describe('speed control helpers', () => {
     expect(severity).toBeLessThan(0.5)
   })
 
-  it('applies a braking factor when a hairpin is detected', () => {
+  it('keeps cornering speeds unchanged even when a hairpin is detected', () => {
     const envelope: CurvatureEnvelope = {
       averageAbsCurvature: 0.072,
       rootMeanSquareAbsCurvature: 0.078,
@@ -649,11 +645,8 @@ describe('speed control helpers', () => {
       classificationOptions: options.classificationOptions,
     }).severity
     const vCorner = computeCorneringSpeedFromEnvelope(envelope, options)
-    const baseline = Math.sqrt(options.maxLateralAcceleration / envelope.maxAbsCurvature)
 
-    expect(Number.isFinite(vCorner)).toBe(true)
-    expect(vCorner).toBeLessThan(baseline)
-    expect(vCorner).toBeGreaterThan(baseline * 0.35)
+    expect(vCorner).toBe(Number.POSITIVE_INFINITY)
     expect(severity).toBeGreaterThan(0.75)
   })
 
