@@ -209,13 +209,15 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
 
   const longitudinalRepulsion = 0
 
-  const desiredAccel =
+  const baseAccel =
     (slopeAdjustedTarget - previousSpeed) /
-      Math.max(
-        SOCIAL_TAU * MathUtils.clamp(referencePower / Math.max(powerWeight, 1e-3), 0.7, 1.3),
-        1e-3,
-      ) -
-    LATERAL_FORCE_DRAG * Math.abs(lateralForce)
+    Math.max(
+      SOCIAL_TAU * MathUtils.clamp(referencePower / Math.max(powerWeight, 1e-3), 0.7, 1.3),
+      1e-3,
+    )
+  const lateralPenalty = LATERAL_FORCE_DRAG * Math.abs(lateralForce)
+  const desiredAccel =
+    baseAccel >= 0 ? Math.max(0, baseAccel - lateralPenalty) : baseAccel - lateralPenalty
   const accelInput = desiredAccel + longitudinalRepulsion
   const clampedAccel = MathUtils.clamp(
     accelInput,
