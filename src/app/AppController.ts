@@ -453,7 +453,7 @@ export class AppController {
     this.currentPath = smoothed
     this.simplifiedPath = simplified
     this.routeClosed = this.detectClosedLoop(simplified)
-    this.spline = new PathSpline(simplified)
+    this.spline = new PathSpline(smoothed)
     this.pelotonScene.setSpline(this.spline)
 
     this.rebuildRoute()
@@ -531,9 +531,10 @@ export class AppController {
     const median = Math.floor(riderCount / 2)
     setSelectedIndex(median, riderCount)
 
-    const pathArray = new Float32Array(this.simplifiedPath.length * 3)
-    for (let i = 0; i < this.simplifiedPath.length; i++) {
-      const p = this.simplifiedPath[i]
+    const path = this.currentPath
+    const pathArray = new Float32Array(path.length * 3)
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i]
       pathArray[i * 3 + 0] = p.x
       pathArray[i * 3 + 1] = p.y
       pathArray[i * 3 + 2] = p.z
