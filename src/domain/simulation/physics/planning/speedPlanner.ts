@@ -6,6 +6,7 @@ export const SOCIAL_TAU = 0.6
 export const GAP_MIN_LONG = 1.1
 export const HEADWAY_TIME = 0.4
 export const LONGITUDINAL_REPULSION_GAIN = 3.0
+export const LATERAL_FORCE_DRAG = 0.45
 export const COMMAND_NOISE_STDDEV = 0.1
 
 const MIN_CURVE_SPEED_MARGIN = 0.35
@@ -166,6 +167,7 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
     powerWeight,
     maxAcceleration,
     maxDeceleration,
+    lateralForce,
   } = input
 
   const compensatedTarget = MathUtils.clamp(
@@ -213,9 +215,9 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
       SOCIAL_TAU * MathUtils.clamp(referencePower / Math.max(powerWeight, 1e-3), 0.7, 1.3),
       1e-3,
     )
-  // Preserve the longitudinal command even when riders adjust their line in a
-  // corner so that lateral motion alone does not introduce artificial drag.
-  const desiredAccel = baseAccel
+  const lateralPenalty = LATERAL_FORCE_DRAG * Math.abs(lateralForce)
+  const desiredAccel =
+    baseAccel >= 0 ? Math.max(0, baseAccel - lateralPenalty) : baseAccel - lateralPenalty
   const accelInput = desiredAccel + longitudinalRepulsion
   const clampedAccel = MathUtils.clamp(
     accelInput,

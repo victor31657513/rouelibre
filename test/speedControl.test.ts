@@ -16,10 +16,6 @@ import {
   projectWorldDistanceOntoCenterline,
 } from '../src/domain/simulation/physics/speedControl'
 import {
-  finalizeSpeedPlan,
-  type FinalizeSpeedPlanInput,
-} from '../src/domain/simulation/physics/planning/speedPlanner'
-import {
   computeCurvatureEnvelope,
   computeSignedCurvature,
   type CurvatureEnvelope,
@@ -261,40 +257,6 @@ describe('speed control helpers', () => {
     expect(downhillSpeed).toBeGreaterThan(baseSpeed)
     expect(uphillSpeed).toBeGreaterThanOrEqual(options.minSpeed)
     expect(downhillSpeed).toBeLessThanOrEqual(options.maxSpeed)
-  })
-
-  it('keeps acceleration identical regardless of lateral steering effort', () => {
-    const baseInput: FinalizeSpeedPlanInput = {
-      previousSpeed: 8,
-      commandedTargetSpeed: 8,
-      targetSpeed: 9.2,
-      compensation: 1,
-      adaptiveMinSpeed: 5,
-      personalMax: 11,
-      preferredSpeed: 9.2,
-      noiseSigma: 0,
-      noiseGenerator: () => 0,
-      dt: 0.4,
-      targetRiseRateLimit: 4,
-      targetDropRateLimit: 4,
-      targetSpeedDamping: 2.6,
-      reactionTime: 0.35,
-      slope: 0,
-      gapAhead: 12,
-      gapThreshold: 6,
-      repulsionGain: 0,
-      referencePower: 420,
-      powerWeight: 1,
-      maxAcceleration: 3.5,
-      maxDeceleration: 3.5,
-      lateralForce: 0,
-    }
-
-    const straight = finalizeSpeedPlan(baseInput)
-    const corner = finalizeSpeedPlan({ ...baseInput, lateralForce: 1 })
-
-    expect(corner.newSpeed).toBeCloseTo(straight.newSpeed, 6)
-    expect(corner.commandedTargetSpeed).toBeCloseTo(straight.commandedTargetSpeed, 6)
   })
 
   it('keeps inside riders near top speed on the same corner', () => {
