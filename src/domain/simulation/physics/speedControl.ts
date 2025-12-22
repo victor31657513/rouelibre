@@ -465,6 +465,73 @@ export interface CorneringSpeedOptions {
   severityOptions?: HairpinSeverityOptions
   cornerSpeedFloor?: number
   minRadius?: number
+  smoothingWindow?: number
+  smoothingState?: CurvatureSmoothingState
+}
+
+export interface CurvatureSmoothingState {
+  averageAbsCurvature: number[]
+  rootMeanSquareAbsCurvature: number[]
+  maxAbsCurvature: number[]
+  rawMaxAbsCurvature: number[]
+}
+
+function pushAndAverage(history: number[], value: number, windowSize: number): number {
+  const safeWindow = Math.max(1, Math.floor(windowSize))
+  const safeValue = Number.isFinite(value) ? value : 0
+
+  history.push(safeValue)
+  if (history.length > safeWindow) {
+    history.shift()
+  }
+
+  const sum = history.reduce((acc, v) => acc + v, 0)
+  return history.length > 0 ? sum / history.length : safeValue
+}
+
+const defaultSmoothingState: CurvatureSmoothingState = {
+  averageAbsCurvature: [],
+  rootMeanSquareAbsCurvature: [],
+  maxAbsCurvature: [],
+  rawMaxAbsCurvature: [],
+}
+
+export function smoothCurvatureEnvelope(
+  envelope: CurvatureEnvelope,
+  windowSize = 5,
+  state: CurvatureSmoothingState = defaultSmoothingState,
+): CurvatureEnvelope {
+  const smoothedAverage = pushAndAverage(
+    state.averageAbsCurvature,
+    envelope.averageAbsCurvature,
+    windowSize,
+  )
+  const smoothedRms = pushAndAverage(
+    state.rootMeanSquareAbsCurvature,
+    envelope.rootMeanSquareAbsCurvature,
+    windowSize,
+  )
+  const smoothedMax = pushAndAverage(state.maxAbsCurvature, envelope.maxAbsCurvature, windowSize)
+  const smoothedRawMax = pushAndAverage(
+    state.rawMaxAbsCurvature,
+    envelope.rawMaxAbsCurvature,
+    windowSize,
+  )
+
+  return {
+    ...envelope,
+    averageAbsCurvature: smoothedAverage,
+    rootMeanSquareAbsCurvature: smoothedRms,
+    maxAbsCurvature: smoothedMax,
+    rawMaxAbsCurvature: smoothedRawMax,
+  }
+}
+
+export function resetCurvatureSmoothing(state: CurvatureSmoothingState = defaultSmoothingState): void {
+  state.averageAbsCurvature.length = 0
+  state.rootMeanSquareAbsCurvature.length = 0
+  state.maxAbsCurvature.length = 0
+  state.rawMaxAbsCurvature.length = 0
 }
 
 export interface HairpinSeverityOptions {
@@ -522,6 +589,11 @@ export function computeCorneringSpeedFromEnvelope(
   envelope: CurvatureEnvelope,
   options: CorneringSpeedOptions,
 ): number {
+  const smoothedEnvelope = smoothCurvatureEnvelope(
+    envelope,
+    options.smoothingWindow ?? 5,
+    options.smoothingState,
+  )
   const { maxLateralAcceleration } = options
 
   const baseAcceleration = Number.isFinite(maxLateralAcceleration)
@@ -532,8 +604,8 @@ export function computeCorneringSpeedFromEnvelope(
     return Infinity
   }
 
-  const coverage = MathUtils.clamp(envelope.coverageRatio ?? 0, 0, 1)
-  const intensity = MathUtils.clamp(envelope.intensity ?? 0, 0, 1)
+  const coverage = MathUtils.clamp(smoothedEnvelope.coverageRatio ?? 0, 0, 1)
+  const intensity = MathUtils.clamp(smoothedEnvelope.intensity ?? 0, 0, 1)
   const coverageExponent = Math.max(1e-3, options.coverageExponent ?? 1.2)
   const coverageWeight = Math.pow(coverage, coverageExponent)
   const intensityWeight = Math.pow(intensity, coverageExponent)
@@ -547,13 +619,13 @@ export function computeCorneringSpeedFromEnvelope(
   )
   const sustainedWeight = Math.max(coverageWeight, Math.max(intensityWeight, sustainedRamp))
 
-  const nominalPeak = Math.max(0, envelope.maxAbsCurvature ?? 0)
-  const rawPeak = Math.max(nominalPeak, envelope.rawMaxAbsCurvature ?? 0)
+  const nominalPeak = Math.max(0, smoothedEnvelope.maxAbsCurvature ?? 0)
+  const rawPeak = Math.max(nominalPeak, smoothedEnvelope.rawMaxAbsCurvature ?? 0)
   const spikeRetention = MathUtils.clamp(options.spikeRetention ?? 0.35, 0, 1)
   const retainedPeak = MathUtils.lerp(nominalPeak, rawPeak, spikeRetention)
 
-  const rms = Math.max(0, envelope.rootMeanSquareAbsCurvature ?? 0)
-  const average = Math.max(0, envelope.averageAbsCurvature ?? 0)
+  const rms = Math.max(0, smoothedEnvelope.rootMeanSquareAbsCurvature ?? 0)
+  const average = Math.max(0, smoothedEnvelope.averageAbsCurvature ?? 0)
   const sustainedCurvature = Math.max(nominalPeak, Math.max(rms, average))
 
   let effectiveCurvature = MathUtils.lerp(retainedPeak, sustainedCurvature, sustainedWeight)
@@ -561,7 +633,7 @@ export function computeCorneringSpeedFromEnvelope(
   const relief = MathUtils.lerp(1 - reliefFactor, 1, sustainedWeight)
   effectiveCurvature *= relief
 
-  const classification = assessCorneringProfile(envelope, options.classificationOptions)
+  const classification = assessCorneringProfile(smoothedEnvelope, options.classificationOptions)
   let lateralLimit = baseAcceleration
   if (classification.category === 'hairpin') {
     const hairpinLimit = Number.isFinite(options.hairpinLateralAcceleration)
@@ -583,7 +655,7 @@ export function computeCorneringSpeedFromEnvelope(
   const currentRadius = effectiveCurvature > 1e-6 ? 1 / effectiveCurvature : Infinity
 
   if (currentRadius >= radiusThreshold) {
-    const clampedFloor = Math.max(0, options.cornerSpeedFloor ?? 0.9)
+    const clampedFloor = Math.max(0, options.cornerSpeedFloor ?? 0.85)
     const flooredMax = Number.isFinite(safeMaxSpeed)
       ? safeMaxSpeed * clampedFloor
       : safeMaxSpeed
