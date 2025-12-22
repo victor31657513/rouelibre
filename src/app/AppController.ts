@@ -17,7 +17,12 @@ import { PelotonSceneUpdater } from '../domain/simulation/PelotonSceneUpdater'
 import { SimulationClient } from '../domain/simulation/SimulationClient'
 import { initPeloton } from '../domain/simulation/peloton'
 import { PathSpline, resamplePath } from '../domain/route/pathSpline'
-import { elevationStats, ensureProgressivePath, simplifyPath } from '../domain/route/pathProcessing'
+import {
+  elevationStats,
+  ensureProgressivePath,
+  simplifyPath,
+  smoothPathSurface,
+} from '../domain/route/pathProcessing'
 import {
   buildCenterDashes,
   buildRoadBounds,
@@ -447,13 +452,18 @@ export class AppController {
 
     const progressive = ensureProgressivePath(path3D)
     const simplified = simplifyPath(progressive, 1.0)
-    const smoothed = resamplePath(simplified, 1.0)
-    this.cameraRig.setInitialPose(smoothed, APP_CONFIG.camHeight, APP_CONFIG.camDistance)
+    const resampled = resamplePath(simplified, 1.0)
+    const surfaceSmoothed = smoothPathSurface(resampled, {
+      windowSize: 3,
+      blend: 0.42,
+      iterations: 2,
+    })
+    this.cameraRig.setInitialPose(surfaceSmoothed, APP_CONFIG.camHeight, APP_CONFIG.camDistance)
 
-    this.currentPath = smoothed
+    this.currentPath = surfaceSmoothed
     this.simplifiedPath = simplified
     this.routeClosed = this.detectClosedLoop(simplified)
-    this.spline = new PathSpline(smoothed)
+    this.spline = new PathSpline(surfaceSmoothed)
     this.pelotonScene.setSpline(this.spline)
 
     this.rebuildRoute()
