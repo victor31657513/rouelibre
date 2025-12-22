@@ -65,7 +65,7 @@ export const DEFAULT_WORKER_PARAMS: SimulationParameterDefaults = {
   lookAhead: 5,
   maxYawRate: 360,
   maxYawAccel: 1440,
-  minRadius: 12,
+  minRadius: 30,
   maxTargetSpeed: 9,
   minTargetSpeed: 5,
   maxAcceleration: 0.8,

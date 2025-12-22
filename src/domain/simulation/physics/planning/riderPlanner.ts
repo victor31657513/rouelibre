@@ -256,6 +256,7 @@ export function planRiderStep(
         reliefFactor: 0.25,
         spikeRetention: 0.35,
         hairpinLateralAcceleration: cornering.lateralAcceleration,
+        minRadius,
         classificationOptions: {
           hairpinIntensityThreshold: cornering.intensityThreshold,
           hairpinCoverageThreshold: cornering.coverageThreshold,
