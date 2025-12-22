@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect } from 'vitest'
 import {
   adjustSpeedTowardsTarget,
   adjustTargetSpeedForSlope,
@@ -11,6 +11,7 @@ import {
   computeTargetSpeedCompensation,
   computeCorneringSpeedFromEnvelope,
   computeHairpinSeverityFromEnvelope,
+  resetCurvatureSmoothing,
   estimateSafeTargetSpeed,
   SafeSpeedDiagnostics,
   projectWorldDistanceOntoCenterline,
@@ -24,6 +25,10 @@ import { PathSpline } from '../src/domain/route/pathSpline'
 import { MathUtils, Vector3 } from 'three'
 
 describe('speed control helpers', () => {
+  beforeEach(() => {
+    resetCurvatureSmoothing()
+  })
+
   it('maps rider segment length ratios to bounded target speeds', () => {
     const maxSpeed = 9
     const minSpeed = 5
