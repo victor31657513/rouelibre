@@ -463,6 +463,8 @@ export interface CorneringSpeedOptions {
   hairpinLateralAcceleration?: number
   classificationOptions?: CorneringClassificationOptions
   severityOptions?: HairpinSeverityOptions
+  cornerSpeedFloor?: number
+  minRadius?: number
 }
 
 export interface HairpinSeverityOptions {
@@ -575,7 +577,22 @@ export function computeCorneringSpeedFromEnvelope(
     return Infinity
   }
 
-  const maxCornerSpeed = Math.sqrt(lateralLimit / effectiveCurvature)
+  const safeMaxSpeed = Math.sqrt(baseAcceleration / effectiveCurvature)
+  const safeCandidate = Math.sqrt(lateralLimit / effectiveCurvature)
+  const radiusThreshold = Math.max(0, options.minRadius ?? 30)
+  const currentRadius = effectiveCurvature > 1e-6 ? 1 / effectiveCurvature : Infinity
+
+  if (currentRadius >= radiusThreshold) {
+    const clampedFloor = Math.max(0, options.cornerSpeedFloor ?? 0.9)
+    const flooredMax = Number.isFinite(safeMaxSpeed)
+      ? safeMaxSpeed * clampedFloor
+      : safeMaxSpeed
+    const candidate = Number.isFinite(safeCandidate) ? safeCandidate : Infinity
+    const flooredCandidate = Number.isFinite(flooredMax) ? flooredMax : candidate
+    return Math.max(flooredCandidate, candidate)
+  }
+
+  const maxCornerSpeed = safeCandidate
   return Number.isFinite(maxCornerSpeed) ? maxCornerSpeed : Infinity
 }
 

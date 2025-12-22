@@ -19,7 +19,7 @@ export const APP_CONFIG = {
   startLineOffset: 1,
   camDistance: 10,
   camHeight: 6,
-  workerParams: { ...DEFAULT_WORKER_PARAMS },
+  workerParams: { ...DEFAULT_WORKER_PARAMS, minRadius: DEFAULT_WORKER_PARAMS.minRadius },
 }
 
 export const CAMERA_BOUNDS = {
