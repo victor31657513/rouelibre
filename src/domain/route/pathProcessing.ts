@@ -9,7 +9,22 @@
  * additional pure functions from this module. Ensure they only depend on the
  * {@link Vec3} contract so they stay decoupled from Three.js scene objects.
  */
+import { Vector3 } from 'three'
 import type { Vec3 } from './gpx'
+
+export interface SurfaceSmoothingOptions {
+  /** Number of neighbouring samples considered on each side. */
+  windowSize?: number
+  /**
+   * Strength of the smoothing toward the local neighbourhood average.
+   * 0 preserves the original point, 1 fully adopts the averaged position.
+   */
+  blend?: number
+  /**
+   * Number of passes applied to progressively dampen small-scale artefacts.
+   */
+  iterations?: number
+}
 
 export interface ProgressivePathOptions {
   /** Minimum distance (in meters) required to keep a point ahead of the previous kept point. */
@@ -96,6 +111,62 @@ export function ensureProgressivePath(path: Vec3[], options?: ProgressivePathOpt
   }
 
   return progressive
+}
+
+/**
+ * Softens small lateral bumps that can appear after GPX projection or
+ * simplification.
+ *
+ * The smoothing is intentionally gentle to preserve large scale turns while
+ * ironing out the sharp micro dents that can create artificial slowdown when
+ * computing curvature-based speeds.
+ */
+export function smoothPathSurface(
+  path: Vec3[],
+  options: SurfaceSmoothingOptions = {},
+): Vec3[] {
+  if (path.length < 3) return path.map((p) => p.clone())
+
+  const windowSize = Math.max(1, Math.floor(options.windowSize ?? 3))
+  const blend = Math.min(1, Math.max(0, options.blend ?? 0.45))
+  const iterations = Math.max(1, Math.floor(options.iterations ?? 2))
+
+  let current = path.map((p) => p.clone())
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const next: Vec3[] = [current[0].clone()]
+
+    for (let i = 1; i < current.length - 1; i++) {
+      const start = Math.max(0, i - windowSize)
+      const end = Math.min(current.length - 1, i + windowSize)
+      let sumX = 0
+      let sumY = 0
+      let sumZ = 0
+      let weightSum = 0
+
+      for (let j = start; j <= end; j++) {
+        const distance = Math.abs(j - i)
+        const weight = windowSize - distance + 1
+        sumX += current[j].x * weight
+        sumY += current[j].y * weight
+        sumZ += current[j].z * weight
+        weightSum += weight
+      }
+
+      const avgX = sumX / weightSum
+      const avgY = sumY / weightSum
+      const avgZ = sumZ / weightSum
+
+      const original = current[i]
+      const blended = original.clone().lerp(new Vector3(avgX, avgY, avgZ), blend)
+      next.push(blended)
+    }
+
+    next.push(current[current.length - 1].clone())
+    current = next
+  }
+
+  return current
 }
 
 /**
