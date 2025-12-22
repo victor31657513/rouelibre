@@ -570,6 +570,32 @@ describe('speed control helpers', () => {
     expect(speed).toBeCloseTo(9, 5)
   })
 
+  it('ignores road boundaries when no lateral neighbor is present', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(16, 0, 0),
+    ])
+
+    const speed = estimateSafeTargetSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      currentDistance: 2,
+      currentOffset: 0.95,
+      desiredOffset: -0.95,
+      hasNeighbor: false,
+      neighborMin: -1,
+      neighborMax: 1,
+      lookAheadDistance: 5,
+      maxOffset: 1,
+      maxOffsetRate: 2.5,
+      maxTargetSpeed: 9,
+      minTargetSpeed: 3,
+      dt: 0.1,
+    })
+
+    expect(speed).toBeCloseTo(9, 5)
+  })
+
   it('limits cornering speed based on curvature intensity', () => {
     const envelope: CurvatureEnvelope = {
       averageAbsCurvature: 0.018,

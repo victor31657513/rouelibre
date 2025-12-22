@@ -677,6 +677,7 @@ export interface SafeSpeedEstimateOptions {
   currentDistance: number
   currentOffset: number
   desiredOffset: number
+  hasNeighbor?: boolean
   neighborMin: number
   neighborMax: number
   lookAheadDistance: number
@@ -792,6 +793,7 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
 
   const finiteMaxTarget = isFiniteNumber(maxTargetSpeed) ? maxTargetSpeed : 0
   const maxSpeed = Math.max(0, finiteMaxTarget)
+  const hasNeighbor = options.hasNeighbor ?? true
   const clampedMinBound = Math.max(-maxOffset, neighborMin)
   const clampedMaxBound = Math.min(maxOffset, neighborMax)
   const clampedOffset = MathUtils.clamp(currentOffset, clampedMinBound, clampedMaxBound)
@@ -826,6 +828,29 @@ export function estimateSafeTargetSpeed(options: SafeSpeedEstimateOptions): numb
       diagnostics.minRightMargin = 0
     }
     return 0
+  }
+
+  const hasFiniteRoadLimit = isFiniteNumber(maxOffset) && maxOffset > 0
+  const roadOnlyCorridor =
+    !hasNeighbor &&
+    hasFiniteRoadLimit &&
+    Math.abs(clampedMinBound + maxOffset) < 1e-4 &&
+    Math.abs(clampedMaxBound - maxOffset) < 1e-4
+
+  if (roadOnlyCorridor) {
+    const minSpeed = Math.max(0, Math.min(maxSpeed, minTargetSpeed))
+    const result = Math.max(minSpeed, maxSpeed)
+    if (diagnostics) {
+      diagnostics.limitingSpeed = result
+      diagnostics.limitingReason = 'none'
+      diagnostics.candidateSpeed = maxSpeed
+      diagnostics.offset = clampedOffset
+      diagnostics.minBound = clampedMinBound
+      diagnostics.maxBound = clampedMaxBound
+      diagnostics.minLeftMargin = clampedOffset - clampedMinBound
+      diagnostics.minRightMargin = clampedMaxBound - clampedOffset
+    }
+    return result
   }
 
   const safeDt = isFiniteNumber(dt) && dt > 0 ? dt : 0
