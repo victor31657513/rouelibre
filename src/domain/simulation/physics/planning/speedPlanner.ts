@@ -145,6 +145,11 @@ export interface FinalizeSpeedPlanInput {
   maxAcceleration: number
   maxDeceleration: number
   lateralForce: number
+  availablePower: number
+  mass: number
+  maxLateralAcceleration: number
+  localCurvature: number
+  yawDampingGain?: number
 }
 
 export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResult {
@@ -163,11 +168,20 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
     targetDropRateLimit,
     targetSpeedDamping,
     reactionTime,
+    slope,
+    gapAhead,
+    gapThreshold,
+    repulsionGain,
     referencePower,
     powerWeight,
     maxAcceleration,
     maxDeceleration,
     lateralForce,
+    availablePower,
+    mass,
+    maxLateralAcceleration,
+    localCurvature,
+    yawDampingGain = 0.9,
   } = input
 
   const compensatedTarget = MathUtils.clamp(
@@ -189,7 +203,27 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
     personalMax,
   )
 
-  const maxRise = targetRiseRateLimit * dt
+  const safeMass = Math.max(1, mass)
+  const safeSpeed = Math.max(previousSpeed, 0.8)
+  const powerAccelBudget = availablePower > 0
+    ? availablePower / (safeMass * safeSpeed)
+    : maxAcceleration
+  const curvatureSpeedLimit = localCurvature > 1e-6 && maxLateralAcceleration > 0
+    ? Math.sqrt(maxLateralAcceleration / Math.max(localCurvature, 1e-6))
+    : Infinity
+  const curvatureAccelBudget = Number.isFinite(curvatureSpeedLimit)
+    ? (curvatureSpeedLimit - previousSpeed) / Math.max(dt, 1e-3)
+    : Infinity
+  const positiveBudget = Math.max(
+    0,
+    Math.min(
+      Math.abs(maxAcceleration),
+      Math.max(0, powerAccelBudget),
+      Math.max(0, curvatureAccelBudget),
+    ),
+  )
+
+  const maxRise = Math.min(targetRiseRateLimit * dt, positiveBudget * dt)
   const maxDrop = targetDropRateLimit * dt
   let bounded = biasedTarget
   if (bounded > commandedTargetSpeed + maxRise) bounded = commandedTargetSpeed + maxRise
@@ -207,23 +241,26 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
 
   const slopeAdjustedTarget = nextCommand
 
-  const longitudinalRepulsion = 0
-
-  const baseAccel =
-    (slopeAdjustedTarget - previousSpeed) /
-    Math.max(
-      SOCIAL_TAU * MathUtils.clamp(referencePower / Math.max(powerWeight, 1e-3), 0.7, 1.3),
-      1e-3,
-    )
-  const lateralPenalty = LATERAL_FORCE_DRAG * Math.abs(lateralForce)
-  const desiredAccel =
-    baseAccel >= 0 ? Math.max(0, baseAccel - lateralPenalty) : baseAccel - lateralPenalty
-  const accelInput = desiredAccel + longitudinalRepulsion
-  const clampedAccel = MathUtils.clamp(
-    accelInput,
-    -Math.abs(maxDeceleration),
-    Math.abs(maxAcceleration),
+  const responseTime = Math.max(
+    SOCIAL_TAU * MathUtils.clamp(referencePower / Math.max(powerWeight, 1e-3), 0.7, 1.3),
+    1e-3,
   )
+  const yawRate = Math.abs(previousSpeed * localCurvature)
+  const dampingFactor = 1 / (1 + Math.max(0, yawDampingGain) * yawRate)
+
+  const baseAccel = ((slopeAdjustedTarget - previousSpeed) / responseTime) * dampingFactor
+  const lateralPenalty = LATERAL_FORCE_DRAG * Math.abs(lateralForce)
+  const desiredAccel = baseAccel >= 0 ? Math.max(0, baseAccel - lateralPenalty) : baseAccel - lateralPenalty
+
+  const longitudinalRepulsion = gapAhead > 0 && gapAhead < gapThreshold
+    ? -repulsionGain * MathUtils.smoothstep(gapAhead, gapThreshold * 0.25, gapThreshold)
+    : 0
+
+  const accelInput = desiredAccel + longitudinalRepulsion
+  const positiveAccel = Math.min(accelInput, positiveBudget)
+  const clampedAccel = accelInput >= 0
+    ? Math.min(positiveAccel, Math.abs(maxAcceleration))
+    : Math.max(accelInput, -Math.abs(maxDeceleration))
 
   let newSpeed = previousSpeed + clampedAccel * dt
   if (!Number.isFinite(newSpeed) || newSpeed < 0) {
@@ -231,9 +268,14 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
   }
   newSpeed = MathUtils.clamp(newSpeed, Math.max(0, adaptiveMinSpeed - 0.5), personalMax + 0.5)
 
+  const rampTime = slopeAdjustedTarget > previousSpeed && positiveBudget > 1e-6
+    ? (slopeAdjustedTarget - previousSpeed) / positiveBudget
+    : 0
+
   return {
     commandedTargetSpeed: nextCommand,
     newSpeed,
     biasedTarget,
+    rampTime,
   }
 }
