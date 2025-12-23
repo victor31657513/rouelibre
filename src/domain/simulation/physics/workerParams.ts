@@ -57,6 +57,18 @@ export interface SimulationParameterOverrides {
   corneringLateralAcceleration?: number
   /** Severity threshold above which the cornering limit becomes active. */
   corneringSeverityThreshold?: number
+  /** Optional floor applied to cornering speed on very wide bends. */
+  cornerSpeedFloor?: number
+  /** Range multiplier controlling how quickly the cornering floor fades out. */
+  cornerFloorTransitionFactor?: number
+  /** Exponent applied to hairpin braking activation. */
+  hairpinBrakingExponent?: number
+  /** Ratio used to reduce speed in hairpins based on target speed. */
+  curveSpeedMarginRatio?: number
+  /** Minimum margin applied when reducing speed for hairpins. */
+  curveSpeedMarginMin?: number
+  /** Maximum margin applied when reducing speed for hairpins. */
+  curveSpeedMarginMax?: number
 }
 
 export type SimulationParameterDefaults = Required<SimulationParameterOverrides>
@@ -91,4 +103,10 @@ export const DEFAULT_WORKER_PARAMS: SimulationParameterDefaults = {
   corneringRadiusThreshold: 22,
   corneringLateralAcceleration: 4.6,
   corneringSeverityThreshold: 0.58,
+  cornerSpeedFloor: 0.94,
+  cornerFloorTransitionFactor: 1.8,
+  hairpinBrakingExponent: 1.6,
+  curveSpeedMarginRatio: 0.04,
+  curveSpeedMarginMin: 0.05,
+  curveSpeedMarginMax: 0.25,
 }

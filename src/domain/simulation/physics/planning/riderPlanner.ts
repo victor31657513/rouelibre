@@ -65,6 +65,12 @@ export interface RiderEnvironment {
     radiusThreshold: number
     lateralAcceleration: number
     severityThreshold: number
+    brakingExponent: number
+    speedFloor: number
+    speedFloorTransition: number
+    speedMarginRatio: number
+    speedMarginMin: number
+    speedMarginMax: number
   }
   neighborBounds: {
     min: Float32Array
@@ -274,6 +280,7 @@ export function planRiderStep(
         hairpinIntensityThreshold: cornering.intensityThreshold,
         hairpinCoverageThreshold: cornering.coverageThreshold,
         hairpinRadiusThreshold: cornering.radiusThreshold,
+        hairpinBrakingExponent: cornering.brakingExponent,
       },
     },
   )

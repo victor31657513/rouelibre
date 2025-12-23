@@ -10,6 +10,7 @@ export interface CorneringClassificationOptions {
   minimumCornerIntensity?: number
   minimumCoverageForCorner?: number
   minimumHairpinBrakingFactor?: number
+  hairpinBrakingExponent?: number
 }
 
 export interface CorneringAssessmentResult {
@@ -50,6 +51,7 @@ export function assessCorneringProfile(
     minimumCornerIntensity = 0.18,
     minimumCoverageForCorner = 0.2,
     minimumHairpinBrakingFactor = 0.45,
+    hairpinBrakingExponent = 1.6,
   } = options
 
   const intensity = MathUtils.clamp(envelope.intensity ?? 0, 0, 1)
@@ -97,7 +99,8 @@ export function assessCorneringProfile(
   }
 
   const brakingFloor = MathUtils.clamp(minimumHairpinBrakingFactor, 0.25, 0.95)
-  const brakingFactor = MathUtils.lerp(1, brakingFloor, MathUtils.clamp(activation, 0, 1))
+  const easedActivation = Math.pow(MathUtils.clamp(activation, 0, 1), Math.max(1, hairpinBrakingExponent))
+  const brakingFactor = MathUtils.lerp(1, brakingFloor, easedActivation)
 
   return {
     category: 'hairpin',
