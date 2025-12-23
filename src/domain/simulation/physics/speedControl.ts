@@ -7,10 +7,12 @@
  */
 import { MathUtils, Vector3 } from 'three'
 import { PathSpline } from '../../route/pathSpline'
+import { sampleBestLineOffset, type BestLineLookup } from './bestLine'
 import {
   constrainOffsetWithinRate,
   steerOffsetTowardTarget,
   type CurvatureEnvelope,
+  type PathBoundaryMode,
 } from './riderPathing'
 import {
   assessCorneringProfile,
@@ -548,6 +550,180 @@ export interface HairpinSeverityResult {
   classification: CorneringAssessmentResult
 }
 
+export interface LocalCorneringOptions {
+  spline: PathSpline
+  totalLength: number
+  distance: number
+  offset: number
+  maxOffset: number
+  maxLateralAcceleration: number
+  pathBoundaryMode: PathBoundaryMode
+  lookAheadDistance?: number
+  bestLine?: BestLineLookup | null
+  smoothingWindow?: number
+  sampleStep?: number
+  cornerSpeedFloor?: number
+  openRadiusFloor?: number
+}
+
+export interface LocalCorneringResult {
+  maxSpeed: number
+  curvature: number
+  limitingReason: 'geometry-local' | 'none'
+}
+
+const scratchLocalRight = new Vector3(1, 0, 0)
+const scratchLocalPosition = new Vector3()
+const scratchLocalPoints: Vector3[] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()]
+
+function normalizeLocalDistance(
+  distance: number,
+  totalLength: number,
+  mode: PathBoundaryMode,
+): number {
+  if (totalLength <= 0) return distance
+  if (mode === 'loop') return wrapDistance(distance, totalLength)
+  if (distance <= 0) return 0
+  if (distance >= totalLength) return totalLength
+  return distance
+}
+
+function sampleOffsetPosition(
+  spline: PathSpline,
+  distance: number,
+  totalLength: number,
+  offset: number,
+  maxOffset: number,
+  pathBoundaryMode: PathBoundaryMode,
+  bestLine?: BestLineLookup | null,
+  target: Vector3 = scratchLocalPosition,
+): Vector3 {
+  const normalized = normalizeLocalDistance(distance, totalLength, pathBoundaryMode)
+  const sample = spline.sampleByDistance(normalized)
+  scratchLocalRight.set(-sample.tangent.z, 0, sample.tangent.x)
+  if (scratchLocalRight.lengthSq() <= 1e-6) {
+    scratchLocalRight.set(1, 0, 0)
+  } else {
+    scratchLocalRight.normalize()
+  }
+
+  const bestLineOffset = bestLine
+    ? sampleBestLineOffset(bestLine, normalized, totalLength, pathBoundaryMode)
+    : 0
+  const totalOffset = MathUtils.clamp(offset + bestLineOffset, -Math.abs(maxOffset), Math.abs(maxOffset))
+
+  return target.copy(sample.position).addScaledVector(scratchLocalRight, totalOffset)
+}
+
+function curvatureFromPoints(p0: Vector3, p1: Vector3, p2: Vector3): number {
+  const v1x = p1.x - p0.x
+  const v1z = p1.z - p0.z
+  const v2x = p2.x - p1.x
+  const v2z = p2.z - p1.z
+
+  const len1 = Math.hypot(v1x, v1z)
+  const len2 = Math.hypot(v2x, v2z)
+  if (len1 < 1e-6 || len2 < 1e-6) return 0
+
+  const t1x = v1x / len1
+  const t1z = v1z / len1
+  const t2x = v2x / len2
+  const t2z = v2z / len2
+
+  const cross = t1x * t2z - t1z * t2x
+  const dot = MathUtils.clamp(t1x * t2x + t1z * t2z, -1, 1)
+  const angle = Math.atan2(cross, dot)
+  const avgLen = (len1 + len2) / 2
+  if (!Number.isFinite(angle) || avgLen < 1e-6) return 0
+  return Math.abs(angle / avgLen)
+}
+
+export function computeLocalCorneringSpeed(options: LocalCorneringOptions): LocalCorneringResult {
+  const {
+    spline,
+    totalLength,
+    distance,
+    offset,
+    maxOffset,
+    maxLateralAcceleration,
+    pathBoundaryMode,
+    lookAheadDistance,
+    bestLine,
+    smoothingWindow = 3,
+    sampleStep = 0.7,
+    cornerSpeedFloor = 0.92,
+    openRadiusFloor = 140,
+  } = options
+
+  if (!spline || totalLength <= 0 || !(maxLateralAcceleration > 0)) {
+    return { maxSpeed: Infinity, curvature: 0, limitingReason: 'none' }
+  }
+
+  const spacing = Math.max(0.3, sampleStep)
+  const evaluationHorizon = Math.max(lookAheadDistance ?? spacing * 3, spacing * 2)
+  const sampleCount = Math.max(3, Math.min(8, Math.round(evaluationHorizon / spacing) + 1))
+
+  for (let i = scratchLocalPoints.length; i < sampleCount; i++) {
+    scratchLocalPoints.push(new Vector3())
+  }
+
+  for (let i = 0; i < sampleCount; i++) {
+    const travel = spacing * i
+    sampleOffsetPosition(
+      spline,
+      distance + travel,
+      totalLength,
+      offset,
+      maxOffset,
+      pathBoundaryMode,
+      bestLine,
+      scratchLocalPoints[i],
+    )
+  }
+
+  const curvatures: number[] = []
+  for (let i = 0; i < sampleCount - 2; i++) {
+    const p0 = scratchLocalPoints[i]
+    const p1 = scratchLocalPoints[i + 1]
+    const p2 = scratchLocalPoints[i + 2]
+    curvatures.push(curvatureFromPoints(p0, p1, p2))
+  }
+
+  const window = Math.max(1, Math.round(smoothingWindow))
+  const smoothed: number[] = []
+  for (let i = 0; i < curvatures.length; i++) {
+    const start = Math.max(0, i - window + 1)
+    const end = i
+    let acc = 0
+    let count = 0
+    for (let j = start; j <= end; j++) {
+      acc += curvatures[j]
+      count++
+    }
+    smoothed.push(count > 0 ? acc / count : 0)
+  }
+
+  const effectiveCurvature = smoothed.length > 0 ? Math.max(...smoothed) : 0
+  const curvatureFloor = openRadiusFloor > 0 ? 1 / Math.max(openRadiusFloor, 1e-3) : 0
+  const limitingCurvature = Math.max(effectiveCurvature, curvatureFloor)
+
+  if (!(limitingCurvature > 0)) {
+    return { maxSpeed: Infinity, curvature: effectiveCurvature, limitingReason: 'none' }
+  }
+
+  const safeSpeed = Math.sqrt(maxLateralAcceleration / limitingCurvature)
+  const flooredSpeed = Math.sqrt(maxLateralAcceleration / Math.max(curvatureFloor, 1e-6))
+  const maxSpeed = limitingCurvature > effectiveCurvature
+    ? Math.max(safeSpeed * cornerSpeedFloor, safeSpeed)
+    : Math.max(safeSpeed, flooredSpeed * cornerSpeedFloor)
+
+  return {
+    maxSpeed: Number.isFinite(maxSpeed) ? maxSpeed : Infinity,
+    curvature: effectiveCurvature,
+    limitingReason: effectiveCurvature > 0 ? 'geometry-local' : 'none',
+  }
+}
+
 export function computeHairpinSeverityFromEnvelope(
   envelope: CurvatureEnvelope,
   options: HairpinSeverityOptions = {},
@@ -591,81 +767,37 @@ export function computeCorneringSpeedFromEnvelope(
 ): number {
   const smoothedEnvelope = smoothCurvatureEnvelope(
     envelope,
-    options.smoothingWindow ?? 5,
+    options.smoothingWindow ?? 3,
     options.smoothingState,
   )
-  const { maxLateralAcceleration } = options
-
-  const baseAcceleration = Number.isFinite(maxLateralAcceleration)
-    ? Math.max(0, maxLateralAcceleration)
+  const baseAcceleration = Number.isFinite(options.maxLateralAcceleration)
+    ? Math.max(0, options.maxLateralAcceleration as number)
     : 0
-
-  if (baseAcceleration <= 0) {
+  if (!(baseAcceleration > 0)) {
     return Infinity
   }
 
-  const coverage = MathUtils.clamp(smoothedEnvelope.coverageRatio ?? 0, 0, 1)
-  const intensity = MathUtils.clamp(smoothedEnvelope.intensity ?? 0, 0, 1)
-  const coverageExponent = Math.max(1e-3, options.coverageExponent ?? 1.2)
-  const coverageWeight = Math.pow(coverage, coverageExponent)
-  const intensityWeight = Math.pow(intensity, coverageExponent)
-  const sustainedBlendStart = options.sustainedBlendStart ?? 0.2
-  const sustainedBlendEnd = options.sustainedBlendEnd ?? 0.8
-  const sustainedRange = Math.max(1e-3, sustainedBlendEnd - sustainedBlendStart)
-  const sustainedRamp = MathUtils.clamp(
-    (coverage - sustainedBlendStart) / sustainedRange,
+  const localCurvature = Math.max(
+    smoothedEnvelope.maxAbsCurvature ?? 0,
+    smoothedEnvelope.rawMaxAbsCurvature ?? 0,
     0,
-    1,
   )
-  const sustainedWeight = Math.max(coverageWeight, Math.max(intensityWeight, sustainedRamp))
+  const curvatureFloor = options.minRadius && options.minRadius > 0 ? 1 / options.minRadius : 0
+  const limitingCurvature = Math.max(localCurvature, curvatureFloor)
 
-  const nominalPeak = Math.max(0, smoothedEnvelope.maxAbsCurvature ?? 0)
-  const rawPeak = Math.max(nominalPeak, smoothedEnvelope.rawMaxAbsCurvature ?? 0)
-  const spikeRetention = MathUtils.clamp(options.spikeRetention ?? 0.35, 0, 1)
-  const retainedPeak = MathUtils.lerp(nominalPeak, rawPeak, spikeRetention)
-
-  const rms = Math.max(0, smoothedEnvelope.rootMeanSquareAbsCurvature ?? 0)
-  const average = Math.max(0, smoothedEnvelope.averageAbsCurvature ?? 0)
-  const sustainedCurvature = Math.max(nominalPeak, Math.max(rms, average))
-
-  let effectiveCurvature = MathUtils.lerp(retainedPeak, sustainedCurvature, sustainedWeight)
-  const reliefFactor = MathUtils.clamp(options.reliefFactor ?? 0.25, 0, 1)
-  const relief = MathUtils.lerp(1 - reliefFactor, 1, sustainedWeight)
-  effectiveCurvature *= relief
-
-  const classification = assessCorneringProfile(smoothedEnvelope, options.classificationOptions)
-  let lateralLimit = baseAcceleration
-  if (classification.category === 'hairpin') {
-    const hairpinLimit = Number.isFinite(options.hairpinLateralAcceleration)
-      ? Math.max(0, options.hairpinLateralAcceleration as number)
-      : baseAcceleration
-    const activation = MathUtils.clamp(classification.activation, 0, 1)
-    const activatedLimit = MathUtils.lerp(baseAcceleration, hairpinLimit, activation)
-    lateralLimit = Math.min(lateralLimit, activatedLimit)
-    lateralLimit *= Math.max(0, classification.brakingFactor)
-  }
-
-  if (!(effectiveCurvature > 0) || !(lateralLimit > 0)) {
+  if (!(limitingCurvature > 0)) {
     return Infinity
   }
 
-  const safeMaxSpeed = Math.sqrt(baseAcceleration / effectiveCurvature)
-  const safeCandidate = Math.sqrt(lateralLimit / effectiveCurvature)
-  const radiusThreshold = Math.max(0, options.minRadius ?? 30)
-  const currentRadius = effectiveCurvature > 1e-6 ? 1 / effectiveCurvature : Infinity
+  const nominalSpeed = Math.sqrt(baseAcceleration / limitingCurvature)
+  const openRoadSpeed = curvatureFloor > 0 ? Math.sqrt(baseAcceleration / curvatureFloor) : nominalSpeed
+  const floorFactor = Math.max(0, options.cornerSpeedFloor ?? 0.92)
 
-  if (currentRadius >= radiusThreshold) {
-    const clampedFloor = Math.max(0, options.cornerSpeedFloor ?? 0.85)
-    const flooredMax = Number.isFinite(safeMaxSpeed)
-      ? safeMaxSpeed * clampedFloor
-      : safeMaxSpeed
-    const candidate = Number.isFinite(safeCandidate) ? safeCandidate : Infinity
-    const flooredCandidate = Number.isFinite(flooredMax) ? flooredMax : candidate
-    return Math.max(flooredCandidate, candidate)
+  if (limitingCurvature === curvatureFloor && Number.isFinite(openRoadSpeed)) {
+    return openRoadSpeed * floorFactor
   }
 
-  const maxCornerSpeed = safeCandidate
-  return Number.isFinite(maxCornerSpeed) ? maxCornerSpeed : Infinity
+  return Number.isFinite(nominalSpeed) ? nominalSpeed : Infinity
 }
 
 const scratchRight = new Vector3()

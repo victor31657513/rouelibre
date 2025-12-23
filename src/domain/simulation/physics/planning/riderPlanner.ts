@@ -6,8 +6,8 @@ import {
   steerOffsetTowardTarget,
 } from '../riderPathing'
 import {
-  computeCorneringSpeedFromEnvelope,
   computeHairpinSeverityFromEnvelope,
+  computeLocalCorneringSpeed,
   projectWorldDistanceOntoCenterline,
   type SegmentSamplingOptions,
 } from '../speedControl'
@@ -27,7 +27,6 @@ import {
   HEADWAY_TIME,
   LONGITUDINAL_REPULSION_GAIN,
   computeBaselineSpeedPlan,
-  evaluateHairpinCornering,
   finalizeSpeedPlan,
 } from './speedPlanner'
 import { planOffset } from './offsetPlanner'
@@ -136,6 +135,7 @@ export interface RiderStepResult {
   biasedTarget: number
   centerlineTravel: number
   yawAheadDistance: number
+  rampTime: number
 }
 
 export function planRiderStep(
@@ -225,6 +225,19 @@ export function planRiderStep(
     slope = computeSlope(currentSample.position, aheadSample.position, travelDistance)
   }
 
+  const localCornering = computeLocalCorneringSpeed({
+    spline,
+    totalLength,
+    distance: currentDistance,
+    offset: currentOffset,
+    maxOffset,
+    maxLateralAcceleration,
+    pathBoundaryMode,
+    lookAheadDistance,
+    bestLine,
+    openRadiusFloor: Number.isFinite(minRadius) ? Math.max(minRadius * 3, 120) : 140,
+  })
+
   const curvatureEnvelope = computeCurvatureEnvelope(
     spline,
     progress[index],
@@ -244,38 +257,6 @@ export function planRiderStep(
     : rawCurvature
   const kEnv = Math.max(boundedCurvature, 0)
 
-  let cornerCandidate = effectiveMaxTargetSpeed
-  if (maxLateralAcceleration > 0) {
-    const candidate = computeCorneringSpeedFromEnvelope(
-      { ...curvatureEnvelope, maxAbsCurvature: kEnv },
-      {
-        maxLateralAcceleration,
-        sustainedBlendStart: 0.2,
-        sustainedBlendEnd: 0.8,
-        coverageExponent: 1.35,
-        reliefFactor: 0.25,
-        spikeRetention: 0.35,
-        hairpinLateralAcceleration: cornering.lateralAcceleration,
-        minRadius,
-        classificationOptions: {
-          hairpinIntensityThreshold: cornering.intensityThreshold,
-          hairpinCoverageThreshold: cornering.coverageThreshold,
-          hairpinRadiusThreshold: cornering.radiusThreshold,
-        },
-        severityOptions: {
-          classificationOptions: {
-            hairpinIntensityThreshold: cornering.intensityThreshold,
-            hairpinCoverageThreshold: cornering.coverageThreshold,
-            hairpinRadiusThreshold: cornering.radiusThreshold,
-          },
-        },
-      },
-    )
-    if (Number.isFinite(candidate) && candidate > 0) {
-      cornerCandidate = Math.min(cornerCandidate, candidate)
-    }
-  }
-
   const { severity: hairpinSeverity } = computeHairpinSeverityFromEnvelope(
     { ...curvatureEnvelope, maxAbsCurvature: kEnv },
     {
@@ -287,26 +268,7 @@ export function planRiderStep(
     },
   )
 
-  const hairpinCornering = evaluateHairpinCornering({
-    curvatureEnvelope,
-    localCurvature: kEnv,
-    maxTargetSpeed: effectiveMaxTargetSpeed,
-    candidateSpeed: cornerCandidate,
-  })
-
-  const severityThreshold = MathUtils.clamp(cornering.severityThreshold, 0, 1)
-  const severityActivation = severityThreshold < 1
-    ? MathUtils.clamp(
-        (hairpinSeverity - severityThreshold) / Math.max(1 - severityThreshold, 1e-3),
-        0,
-        1,
-      )
-    : MathUtils.clamp(hairpinSeverity, 0, 1)
-
-  const vCorner = Math.min(
-    effectiveMaxTargetSpeed,
-    MathUtils.lerp(effectiveMaxTargetSpeed, hairpinCornering.cornerSpeed, severityActivation),
-  )
+  const vCorner = Math.min(effectiveMaxTargetSpeed, localCornering.maxSpeed)
 
   const slipLookahead = lookAheadDistance > 0
     ? Math.min(Math.max(lookAheadDistance, 2), 12)
@@ -430,6 +392,11 @@ export function planRiderStep(
     maxAcceleration,
     maxDeceleration,
     lateralForce: offsetPlan.lateralDecision.lateralForce,
+    availablePower,
+    mass: systemMass,
+    maxLateralAcceleration,
+    localCurvature: localCornering.curvature,
+    yawDampingGain: 0.85,
   })
 
   const nextOffset = steerOffsetTowardTarget(
@@ -442,14 +409,14 @@ export function planRiderStep(
   )
 
   const travel = ((previousSpeed + speedResult.newSpeed) / 2) * dt
-  const curvature = computeSignedCurvature(
+  const centerlineCurvature = computeSignedCurvature(
     spline,
     progress[index],
     totalLength,
     undefined,
     pathBoundaryMode,
   )
-  const centerlineTravel = projectWorldDistanceOntoCenterline(travel, curvature, nextOffset, {
+  const centerlineTravel = projectWorldDistanceOntoCenterline(travel, centerlineCurvature, nextOffset, {
     minRatio: env.lengthRatioRange.min,
     maxRatio: env.lengthRatioRange.max,
   })
@@ -479,11 +446,12 @@ export function planRiderStep(
     cornerSpeed: vCorner,
     hairpinSeverity,
     slope,
-    curvature: kEnv,
+    curvature: localCornering.curvature,
     draftFactor,
     power: diagnosticPower,
     biasedTarget: speedResult.biasedTarget,
     centerlineTravel,
     yawAheadDistance: yawAhead.sampleDistance,
+    rampTime: speedResult.rampTime,
   }
 }

@@ -27,6 +27,7 @@ export interface SpeedPlanResult {
   commandedTargetSpeed: number
   newSpeed: number
   biasedTarget: number
+  rampTime: number
 }
 
 export interface OffsetPlanResult {

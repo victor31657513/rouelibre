@@ -11,6 +11,7 @@ import {
   computeTargetSpeedCompensation,
   computeCorneringSpeedFromEnvelope,
   computeHairpinSeverityFromEnvelope,
+  computeLocalCorneringSpeed,
   resetCurvatureSmoothing,
   estimateSafeTargetSpeed,
   SafeSpeedDiagnostics,
@@ -596,33 +597,61 @@ describe('speed control helpers', () => {
     expect(speed).toBeCloseTo(9, 5)
   })
 
-  it('limits cornering speed based on curvature intensity', () => {
-    const envelope: CurvatureEnvelope = {
-      averageAbsCurvature: 0.018,
-      rootMeanSquareAbsCurvature: 0.022,
-      maxAbsCurvature: 0.025,
-      rawMaxAbsCurvature: 0.028,
-      coverageRatio: 0.32,
-      intensity: 0.4,
-    }
+  it('computes local cornering speed from the ridden trajectory', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(10, 0, 0),
+      new Vector3(16, 0, 6),
+      new Vector3(20, 0, 14),
+      new Vector3(24, 0, 22),
+    ])
 
-    const vCorner = computeCorneringSpeedFromEnvelope(envelope, {
+    const result = computeLocalCorneringSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      distance: 6,
+      offset: 0.8,
+      maxOffset: 2.5,
       maxLateralAcceleration: 4.5,
-      sustainedBlendStart: 0.2,
-      sustainedBlendEnd: 0.8,
-      coverageExponent: 1.35,
-      reliefFactor: 0.25,
-      spikeRetention: 0.35,
-      hairpinLateralAcceleration: 4.2,
-      classificationOptions: {
-        hairpinIntensityThreshold: 0.7,
-        hairpinCoverageThreshold: 0.55,
-        hairpinRadiusThreshold: 20,
-      },
+      pathBoundaryMode: 'loop',
+      lookAheadDistance: 8,
+      openRadiusFloor: 110,
     })
 
-    expect(vCorner).toBeGreaterThan(9)
-    expect(vCorner).toBeCloseTo(14.57716, 4)
+    expect(result.curvature).toBeGreaterThan(0)
+    const curvatureFloor = 1 / 110
+    const limitingCurvature = Math.max(result.curvature, curvatureFloor)
+    const safeSpeed = Math.sqrt(4.5 / limitingCurvature)
+    const flooredSpeed = Math.sqrt(4.5 / curvatureFloor)
+    const expected = limitingCurvature > result.curvature
+      ? Math.max(safeSpeed * 0.92, safeSpeed)
+      : Math.max(safeSpeed, flooredSpeed * 0.92)
+    expect(result.maxSpeed).toBeCloseTo(expected, 4)
+  })
+
+  it('applies an open-radius floor on straights', () => {
+    const spline = new PathSpline([
+      new Vector3(0, 0, 0),
+      new Vector3(30, 0, 0),
+      new Vector3(60, 0, 0),
+    ])
+
+    const result = computeLocalCorneringSpeed({
+      spline,
+      totalLength: spline.totalLength,
+      distance: 10,
+      offset: 0,
+      maxOffset: 3,
+      maxLateralAcceleration: 4,
+      pathBoundaryMode: 'clamp',
+      openRadiusFloor: 150,
+    })
+
+    const curvatureFloor = 1 / 150
+    const safeSpeed = Math.sqrt(4 / curvatureFloor)
+    const expected = Math.max(safeSpeed * 0.92, safeSpeed)
+    expect(result.curvature).toBeGreaterThanOrEqual(0)
+    expect(result.maxSpeed).toBeCloseTo(expected, 4)
   })
 
   it('classifies sustained but wide bends as standard corners', () => {
@@ -677,9 +706,13 @@ describe('speed control helpers', () => {
       classificationOptions: options.classificationOptions,
     }).severity
     const vCorner = computeCorneringSpeedFromEnvelope(envelope, options)
+    const limitingCurvature = Math.max(
+      envelope.maxAbsCurvature,
+      envelope.rawMaxAbsCurvature as number,
+    )
+    const expected = Math.sqrt(options.maxLateralAcceleration / limitingCurvature)
 
-    expect(vCorner).toBeLessThan(6)
-    expect(vCorner).toBeCloseTo(5.61757, 4)
+    expect(vCorner).toBeCloseTo(expected, 4)
     expect(severity).toBeGreaterThan(0.75)
   })
 
