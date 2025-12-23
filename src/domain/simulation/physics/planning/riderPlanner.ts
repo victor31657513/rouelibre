@@ -397,6 +397,8 @@ export function planRiderStep(
     maxLateralAcceleration,
     localCurvature: localCornering.curvature,
     yawDampingGain: 0.85,
+    rollingResistanceCoeff,
+    gravity,
   })
 
   const nextOffset = steerOffsetTowardTarget(

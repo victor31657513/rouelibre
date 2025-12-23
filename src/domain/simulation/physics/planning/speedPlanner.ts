@@ -8,6 +8,8 @@ export const HEADWAY_TIME = 0.4
 export const LONGITUDINAL_REPULSION_GAIN = 3.0
 export const LATERAL_FORCE_DRAG = 0.45
 export const COMMAND_NOISE_STDDEV = 0.1
+const CURVE_SCRUB_RELIEF_GAIN = 0.35
+const CURVE_SCRUB_RELIEF_CLAMP = 0.65
 
 const MIN_CURVE_SPEED_MARGIN = 0.35
 const HAIRPIN_RADIUS_TIGHT = 16
@@ -150,6 +152,36 @@ export interface FinalizeSpeedPlanInput {
   maxLateralAcceleration: number
   localCurvature: number
   yawDampingGain?: number
+  rollingResistanceCoeff: number
+  gravity: number
+}
+
+function computeCurveScrubRelief(
+  localCurvature: number,
+  speed: number,
+  rollingResistanceCoeff: number,
+  gravity: number,
+): { yawAttenuation: number; frictionRelief: number } {
+  if (!(Number.isFinite(localCurvature) && Number.isFinite(speed))) {
+    return { yawAttenuation: 1, frictionRelief: 0 }
+  }
+
+  const yawRate = Math.abs(localCurvature * speed)
+  if (yawRate <= 1e-6) {
+    return { yawAttenuation: 1, frictionRelief: 0 }
+  }
+
+  const baseResistance = Math.max(0, rollingResistanceCoeff) * Math.max(0, gravity)
+  const reliefTarget = MathUtils.clamp(
+    yawRate * CURVE_SCRUB_RELIEF_GAIN,
+    0,
+    CURVE_SCRUB_RELIEF_CLAMP,
+  )
+
+  const yawAttenuation = MathUtils.clamp(1 - reliefTarget * 0.55, 0.35, 1)
+  const frictionRelief = baseResistance * reliefTarget
+
+  return { yawAttenuation, frictionRelief }
 }
 
 export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResult {
@@ -182,6 +214,8 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
     maxLateralAcceleration,
     localCurvature,
     yawDampingGain = 0.9,
+    rollingResistanceCoeff,
+    gravity,
   } = input
 
   const compensatedTarget = MathUtils.clamp(
@@ -246,10 +280,20 @@ export function finalizeSpeedPlan(input: FinalizeSpeedPlanInput): SpeedPlanResul
     1e-3,
   )
   const yawRate = Math.abs(previousSpeed * localCurvature)
-  const dampingFactor = 1 / (1 + Math.max(0, yawDampingGain) * yawRate)
+  const curveScrub = computeCurveScrubRelief(
+    localCurvature,
+    previousSpeed,
+    rollingResistanceCoeff,
+    gravity,
+  )
+  const dampingFactor = 1 /
+    (1 + Math.max(0, yawDampingGain) * yawRate * curveScrub.yawAttenuation)
 
   const baseAccel = ((slopeAdjustedTarget - previousSpeed) / responseTime) * dampingFactor
-  const lateralPenalty = LATERAL_FORCE_DRAG * Math.abs(lateralForce)
+  const lateralPenalty = Math.max(
+    0,
+    LATERAL_FORCE_DRAG * Math.abs(lateralForce) - curveScrub.frictionRelief,
+  )
   const desiredAccel = baseAccel >= 0 ? Math.max(0, baseAccel - lateralPenalty) : baseAccel - lateralPenalty
 
   const longitudinalRepulsion = gapAhead > 0 && gapAhead < gapThreshold
