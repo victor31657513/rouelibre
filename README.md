@@ -60,11 +60,11 @@ Veiller à documenter toute nouvelle fonction publique avec son rôle, ses entr�
 
 ## Routes ouvertes vs circuits fermés
 
-Les parcours GPX sont désormais traités comme des routes ouvertes par défaut lors de l'échantillonnage de la courbure afin d'éviter les pics artificiels qui faisaient chuter `vCorner` aux extrémités. Lorsque vous initialisez manuellement le worker via `SimulationClient`, transmettez `closedLoop: true` si votre circuit boucle réellement : le worker continuera alors à réenrouler les distances. Pensez à marquer explicitement les tracés fermés dans vos intégrations (ou à laisser l'heuristique de `AppController` détecter un départ/arrivée superposés) pour conserver le comportement historique.
+Les parcours GPX sont traités comme des routes ouvertes par défaut lors de l'échantillonnage de la courbure afin d'éviter les pics artificiels qui font chuter `vCorner` aux extrémités. Lorsque vous initialisez manuellement le worker via `SimulationClient`, transmettez `closedLoop: true` si votre circuit boucle réellement : le worker continuera alors à réenrouler les distances. Pensez à marquer explicitement les tracés fermés dans vos intégrations (ou à laisser l'heuristique de `AppController` détecter un départ/arrivée superposés) pour conserver le comportement historique.
 
 ## Calibrer le rayon minimal (`minRadius`)
 
-Le paramètre `minRadius` limite désormais les ralentissements déclenchés par des pics de courbure locaux. Pour conserver des vitesses crédibles :
+Le paramètre `minRadius` limite les ralentissements déclenchés par des pics de courbure locaux. Pour conserver des vitesses crédibles :
 
 - Commencer par analyser la trace source (profil latéral ou export CSV) et repérer les virages les plus serrés réellement franchissables par le peloton.
 - Définir `minRadius` légèrement en dessous de ce rayon réel (5 à 10 % de marge) afin d'autoriser une adaptation progressive sans provoquer de freinage prématuré.

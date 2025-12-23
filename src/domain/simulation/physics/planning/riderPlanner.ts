@@ -138,6 +138,14 @@ export interface RiderStepResult {
   rampTime: number
 }
 
+/**
+ * Computes the next offset and target speed for a single rider.
+ *
+ * The planner blends deterministic inputs (drafting, curvature, slope) with
+ * rider-specific preferences and bounded randomness. It returns both the
+ * commanded target speed sent to the physics engine and contextual metrics
+ * (e.g. curvature, drafting factor) used for telemetry.
+ */
 export function planRiderStep(
   env: RiderEnvironment,
   rider: RiderProperties,
@@ -183,6 +191,8 @@ export function planRiderStep(
   const currentOffset = MathUtils.clamp(offsets[index], -maxOffset, maxOffset)
   const currentDistance = progress[index]
 
+  // Weight normalisation keeps behaviour comparable between modes while still
+  // allowing per-rider tuning of the emphasis on power vs. gap keeping.
   const weightSet = normalizeWeights(
     Number.isFinite(powerWeight) ? powerWeight : normalizedBaseWeights.power,
     Number.isFinite(gapWeight) ? gapWeight : normalizedBaseWeights.gap,

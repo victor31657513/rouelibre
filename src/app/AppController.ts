@@ -425,6 +425,13 @@ export class AppController {
     this.refreshTelemetryDisplay()
   }
 
+  /**
+   * Loads and preprocesses a route before handing buffers to the simulation.
+   *
+   * The method drives the entire loading pipeline: display loader feedback,
+   * normalise the GPX samples, rebuild scene meshes, compute elevation stats
+   * for the console, then prime the peloton and UI controls.
+   */
   private async loadRoute(
     url: string,
     preloaded?: { path3D: Vec3[]; points: GPXPoint[] },
@@ -492,6 +499,8 @@ export class AppController {
     this.scene.ridersMesh.count = riderCount
     this.applyModeColors()
 
+    // Seeded placements ensure deterministic replays while keeping riders
+    // distributed within the road envelope defined by the current configuration.
     const pelotonPositions = initPeloton(this.currentPath, riderCount, {
       seed: APP_CONFIG.rngSeed,
       spacing: APP_CONFIG.startSpacing,
@@ -671,6 +680,8 @@ export class AppController {
       return
     }
 
+    // Remove previous meshes to avoid leaving hidden objects or outdated
+    // geometries in the scene graph when switching GPX files.
     const { scene } = this.scene
     if (this.roadAssets.road) scene.remove(this.roadAssets.road)
     if (this.roadAssets.markings) scene.remove(this.roadAssets.markings)
