@@ -11,7 +11,9 @@ export const COMMAND_NOISE_STDDEV = 0.1
 const CURVE_SCRUB_RELIEF_GAIN = 0.35
 const CURVE_SCRUB_RELIEF_CLAMP = 0.65
 
-const MIN_CURVE_SPEED_MARGIN = 0.35
+const CURVE_SPEED_MARGIN_RATIO = 0.04
+const CURVE_SPEED_MARGIN_MIN = 0.05
+const CURVE_SPEED_MARGIN_MAX = 0.25
 const HAIRPIN_RADIUS_TIGHT = 16
 const HAIRPIN_RADIUS_RELAXED = 40
 const HAIRPIN_ACTIVATION_THRESHOLD = 0.35
@@ -32,6 +34,8 @@ interface HairpinOptions {
   maxTargetSpeed: number
   candidateSpeed: number
   minSpeedMargin?: number
+  marginRatio?: number
+  maxSpeedMargin?: number
   activationThreshold?: number
 }
 
@@ -44,7 +48,7 @@ export function evaluateHairpinCornering(options: HairpinOptions): {
     localCurvature,
     maxTargetSpeed,
     candidateSpeed,
-    minSpeedMargin = MIN_CURVE_SPEED_MARGIN,
+    minSpeedMargin = CURVE_SPEED_MARGIN_MIN,
     activationThreshold = HAIRPIN_ACTIVATION_THRESHOLD,
   } = options
 
@@ -86,7 +90,14 @@ export function evaluateHairpinCornering(options: HairpinOptions): {
     : safeMaxSpeed
 
   const baseline = MathUtils.lerp(safeMaxSpeed, safeCandidate, activation)
-  const margin = MathUtils.clamp(minSpeedMargin * (1 - activation), 0, safeMaxSpeed)
+  const marginSeed = MathUtils.clamp(
+    safeMaxSpeed * Math.max(0, options.marginRatio ?? CURVE_SPEED_MARGIN_RATIO),
+    Math.max(0, minSpeedMargin),
+    options.maxSpeedMargin !== undefined
+      ? Math.max(Math.max(0, minSpeedMargin), options.maxSpeedMargin)
+      : CURVE_SPEED_MARGIN_MAX,
+  )
+  const margin = marginSeed * (1 - activation)
   const reduced = baseline - margin
   const cornerSpeed = Math.max(safeCandidate, Math.min(safeMaxSpeed, reduced))
 

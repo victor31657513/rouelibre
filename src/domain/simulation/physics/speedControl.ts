@@ -466,6 +466,7 @@ export interface CorneringSpeedOptions {
   classificationOptions?: CorneringClassificationOptions
   severityOptions?: HairpinSeverityOptions
   cornerSpeedFloor?: number
+  cornerFloorTransitionFactor?: number
   minRadius?: number
   smoothingWindow?: number
   smoothingState?: CurvatureSmoothingState
@@ -791,10 +792,20 @@ export function computeCorneringSpeedFromEnvelope(
 
   const nominalSpeed = Math.sqrt(baseAcceleration / limitingCurvature)
   const openRoadSpeed = curvatureFloor > 0 ? Math.sqrt(baseAcceleration / curvatureFloor) : nominalSpeed
-  const floorFactor = Math.max(0, options.cornerSpeedFloor ?? 0.92)
+  const floorFactor = MathUtils.clamp(options.cornerSpeedFloor ?? 0.92, 0, 1)
+  const transitionFactor = Math.max(1, options.cornerFloorTransitionFactor ?? 1.8)
 
   if (limitingCurvature === curvatureFloor && Number.isFinite(openRoadSpeed)) {
-    return openRoadSpeed * floorFactor
+    const transitionStartRadius = curvatureFloor > 0 ? 1 / curvatureFloor : Infinity
+    const transitionEndRadius = transitionStartRadius * transitionFactor
+    const currentRadius = localCurvature > 1e-6 ? 1 / localCurvature : transitionEndRadius
+    const blend = Number.isFinite(currentRadius)
+      ? MathUtils.smoothstep(currentRadius, transitionStartRadius, transitionEndRadius)
+      : 1
+    // Apply the floor progressively: near the minimum radius we enforce the floor, and we fade it out
+    // on wider bends to avoid penalising gentle curves.
+    const blendedFloor = MathUtils.lerp(openRoadSpeed * floorFactor, openRoadSpeed, MathUtils.clamp(blend, 0, 1))
+    return blendedFloor
   }
 
   return Number.isFinite(nominalSpeed) ? nominalSpeed : Infinity

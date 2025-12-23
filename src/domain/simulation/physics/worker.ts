@@ -192,6 +192,13 @@ let corneringCoverageThreshold = DEFAULT_WORKER_PARAMS.corneringCoverageThreshol
 let corneringRadiusThreshold = DEFAULT_WORKER_PARAMS.corneringRadiusThreshold
 let corneringLateralAcceleration = DEFAULT_WORKER_PARAMS.corneringLateralAcceleration
 let corneringSeverityThreshold = DEFAULT_WORKER_PARAMS.corneringSeverityThreshold
+let hairpinBrakingExponent = DEFAULT_WORKER_PARAMS.hairpinBrakingExponent
+
+let cornerSpeedFloor = DEFAULT_WORKER_PARAMS.cornerSpeedFloor
+let cornerFloorTransitionFactor = DEFAULT_WORKER_PARAMS.cornerFloorTransitionFactor
+let curveSpeedMarginRatio = DEFAULT_WORKER_PARAMS.curveSpeedMarginRatio
+let curveSpeedMarginMin = DEFAULT_WORKER_PARAMS.curveSpeedMarginMin
+let curveSpeedMarginMax = DEFAULT_WORKER_PARAMS.curveSpeedMarginMax
 
 const GRAVITY = 9.80665
 const DEFAULT_AIR_DENSITY = DEFAULT_WORKER_PARAMS.rho
@@ -364,6 +371,30 @@ function applyParameterOverrides(overrides?: SimulationParameterOverrides | null
     Number.isFinite(overrides.corneringSeverityThreshold)
   ) {
     corneringSeverityThreshold = MathUtils.clamp(overrides.corneringSeverityThreshold, 0, 1)
+  }
+  if (
+    overrides.hairpinBrakingExponent !== undefined &&
+    Number.isFinite(overrides.hairpinBrakingExponent)
+  ) {
+    hairpinBrakingExponent = Math.max(1, overrides.hairpinBrakingExponent)
+  }
+  if (overrides.cornerSpeedFloor !== undefined && Number.isFinite(overrides.cornerSpeedFloor)) {
+    cornerSpeedFloor = MathUtils.clamp(overrides.cornerSpeedFloor, 0, 1)
+  }
+  if (
+    overrides.cornerFloorTransitionFactor !== undefined &&
+    Number.isFinite(overrides.cornerFloorTransitionFactor)
+  ) {
+    cornerFloorTransitionFactor = Math.max(1, overrides.cornerFloorTransitionFactor)
+  }
+  if (overrides.curveSpeedMarginRatio !== undefined && Number.isFinite(overrides.curveSpeedMarginRatio)) {
+    curveSpeedMarginRatio = Math.max(0, overrides.curveSpeedMarginRatio)
+  }
+  if (overrides.curveSpeedMarginMin !== undefined && Number.isFinite(overrides.curveSpeedMarginMin)) {
+    curveSpeedMarginMin = Math.max(0, overrides.curveSpeedMarginMin)
+  }
+  if (overrides.curveSpeedMarginMax !== undefined && Number.isFinite(overrides.curveSpeedMarginMax)) {
+    curveSpeedMarginMax = Math.max(0, overrides.curveSpeedMarginMax)
   }
   if (overrides.Crr !== undefined && Number.isFinite(overrides.Crr)) {
     rollingResistanceCoeff = Math.max(0, overrides.Crr)
@@ -722,6 +753,12 @@ self.onmessage = async (e: MessageEvent) => {
         radiusThreshold: Math.max(1, corneringRadiusThreshold),
         lateralAcceleration: resolvedCorneringAcceleration,
         severityThreshold: MathUtils.clamp(corneringSeverityThreshold, 0, 1),
+        brakingExponent: hairpinBrakingExponent,
+        speedFloor: cornerSpeedFloor,
+        speedFloorTransition: cornerFloorTransitionFactor,
+        speedMarginRatio: curveSpeedMarginRatio,
+        speedMarginMin: curveSpeedMarginMin,
+        speedMarginMax: curveSpeedMarginMax,
       },
       neighborBounds,
       airDensity,
