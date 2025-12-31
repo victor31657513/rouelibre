@@ -19,7 +19,7 @@ export interface SimulationInitConfig {
   shortestPath?: ArrayBuffer
 }
 
-export type SimulationStateListener = (state: Float32Array) => void
+export type SimulationStateListener = (state: Float32Array, dt?: number) => void
 
 export class SimulationClient {
   private readonly worker: Worker
@@ -31,7 +31,11 @@ export class SimulationClient {
     this.worker.onmessage = (event: MessageEvent) => {
       const { type, data } = event.data || {}
       if (type === 'state' && data) {
-        this.listener(new Float32Array(data))
+        const buffer: ArrayBuffer | undefined = data.buffer || data
+        const dt: number | undefined = data.dt
+        if (buffer) {
+          this.listener(new Float32Array(buffer), dt)
+        }
       }
     }
   }

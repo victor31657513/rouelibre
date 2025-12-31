@@ -138,7 +138,7 @@ export class AppController {
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
     })
-    this.simulation = new SimulationClient((state) => this.onSimulationState(state))
+    this.simulation = new SimulationClient((state, dt) => this.onSimulationState(state, dt))
     this.positions = new Float32Array(this.riderCount * 4)
     setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
     this.dom.shortestPathToggle.checked = this.showShortestPath
@@ -945,13 +945,18 @@ export class AppController {
     return this.scene.riderObjects[index] ?? null
   }
 
-  private onSimulationState(state: Float32Array): void {
+  private onSimulationState(state: Float32Array, dt?: number): void {
     const previous = this.positions
     this.positions = state
     this.pelotonScene.applyState(this.positions)
     const queuedDt = this.pendingStepDts.shift()
-    this.lastStateDt =
-      typeof queuedDt === 'number' && Number.isFinite(queuedDt) && queuedDt > 0 ? queuedDt : 0
+    const resolvedDt =
+      typeof dt === 'number' && Number.isFinite(dt) && dt > 0
+        ? dt
+        : typeof queuedDt === 'number' && Number.isFinite(queuedDt) && queuedDt > 0
+          ? queuedDt
+          : 0
+    this.lastStateDt = resolvedDt
     this.updateTelemetry(previous, this.positions)
   }
 
