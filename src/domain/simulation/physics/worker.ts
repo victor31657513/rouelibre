@@ -683,7 +683,7 @@ self.onmessage = async (e: MessageEvent) => {
 
     refreshRiderPoseCache()
     ;(self as unknown as Worker).postMessage(
-      { type: 'state', data: state.buffer },
+      { type: 'state', data: { buffer: state.buffer, dt } },
       [state.buffer]
     )
       state = new Float32Array(N * 4)
@@ -894,7 +894,7 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     ;(self as unknown as Worker).postMessage(
-      { type: 'state', data: state.buffer },
+      { type: 'state', data: { buffer: state.buffer, dt } },
       [state.buffer]
     )
     state = new Float32Array(N * 4)
