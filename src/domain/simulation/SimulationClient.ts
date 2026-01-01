@@ -17,6 +17,10 @@ export interface SimulationInitConfig {
   params?: SimulationParameterOverrides
   closedLoop?: boolean
   shortestPath?: ArrayBuffer
+  surfaceDistances?: ArrayBuffer
+  surfaceHeights?: ArrayBuffer
+  surfaceNormals?: ArrayBuffer
+  surfaceOffset?: number
 }
 
 export type SimulationStateListener = (
@@ -64,6 +68,10 @@ export class SimulationClient {
       margin: config.margin,
       params: config.params,
       closedLoop: config.closedLoop,
+      surfaceDistances: config.surfaceDistances,
+      surfaceHeights: config.surfaceHeights,
+      surfaceNormals: config.surfaceNormals,
+      surfaceOffset: config.surfaceOffset,
     }
     if (config.shortestPath) {
       payload.shortestPath = config.shortestPath
@@ -72,6 +80,9 @@ export class SimulationClient {
     const transfers: ArrayBuffer[] = [config.positions, config.yaw, config.path]
     if (config.shortestPath) {
       transfers.push(config.shortestPath)
+    }
+    if (config.surfaceDistances && config.surfaceHeights && config.surfaceNormals) {
+      transfers.push(config.surfaceDistances, config.surfaceHeights, config.surfaceNormals)
     }
 
     this.worker.postMessage(

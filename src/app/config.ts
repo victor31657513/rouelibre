@@ -19,6 +19,9 @@ export const APP_CONFIG = {
   startLineOffset: 1,
   camDistance: 10,
   camHeight: 6,
+  surfaceSampleStep: 1,
+  surfaceRayHeight: 30,
+  riderSurfaceOffset: 0.05,
   workerParams: { ...DEFAULT_WORKER_PARAMS, minRadius: DEFAULT_WORKER_PARAMS.minRadius },
 }
 

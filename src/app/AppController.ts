@@ -37,6 +37,7 @@ import { changeSelectedIndex, selectedIndex, setSelectedIndex } from '../domain/
 import { initModeSelector, type ModeSelectorHandle } from '../ui/modeSelector'
 import { initRouteSelector } from '../ui/routeSelector'
 import type { SimulationParameterOverrides } from '../domain/simulation/physics/workerParams'
+import { sampleRoadSurfaceProfile, type SurfaceProfile } from '../domain/scene/roadSurfaceSampler'
 
 interface DomRefs {
   canvas: HTMLCanvasElement
@@ -83,6 +84,7 @@ export class AppController {
   private simplifiedPath: Vec3[] | null = null
   private spline: PathSpline | null = null
   private pathData: Float32Array | null = null
+  private surfaceProfile: SurfaceProfile | null = null
   private shortestPathPoints: Vec3[] | null = null
   private shortestPathData: Float32Array | null = null
   private positions: Float32Array
@@ -567,6 +569,12 @@ export class AppController {
     }
     this.pathData = pathArray.slice()
 
+    const surfaceDistances = this.surfaceProfile
+      ? this.surfaceProfile.distances.slice()
+      : null
+    const surfaceHeights = this.surfaceProfile ? this.surfaceProfile.heights.slice() : null
+    const surfaceNormals = this.surfaceProfile ? this.surfaceProfile.normals.slice() : null
+
     const shortestArray = this.shortestPathData ? this.shortestPathData.slice() : null
 
     this.simulation.initialize({
@@ -580,6 +588,10 @@ export class AppController {
       params: this.resolveWorkerParams(),
       closedLoop: this.routeClosed,
       shortestPath: shortestArray?.buffer,
+      surfaceDistances: surfaceDistances?.buffer,
+      surfaceHeights: surfaceHeights?.buffer,
+      surfaceNormals: surfaceNormals?.buffer,
+      surfaceOffset: APP_CONFIG.riderSurfaceOffset,
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -643,6 +655,11 @@ export class AppController {
 
     const pathCopy = this.pathData.slice()
     const shortestCopy = this.shortestPathData ? this.shortestPathData.slice() : null
+    const surfaceDistances = this.surfaceProfile
+      ? this.surfaceProfile.distances.slice()
+      : null
+    const surfaceHeights = this.surfaceProfile ? this.surfaceProfile.heights.slice() : null
+    const surfaceNormals = this.surfaceProfile ? this.surfaceProfile.normals.slice() : null
     this.simulation.initialize({
       riderCount,
       positions: pelotonPositions.buffer,
@@ -654,6 +671,10 @@ export class AppController {
       params: this.resolveWorkerParams(),
       closedLoop: this.routeClosed,
       shortestPath: shortestCopy?.buffer,
+      surfaceDistances: surfaceDistances?.buffer,
+      surfaceHeights: surfaceHeights?.buffer,
+      surfaceNormals: surfaceNormals?.buffer,
+      surfaceOffset: APP_CONFIG.riderSurfaceOffset,
     })
 
     this.pelotonScene.applyState(this.positions)
@@ -685,6 +706,7 @@ export class AppController {
     if (!this.currentPath) {
       this.shortestPathPoints = null
       this.shortestPathData = null
+      this.surfaceProfile = null
       return
     }
 
@@ -751,9 +773,22 @@ export class AppController {
 
     this.roadAssets = { road, markings, startLine, bounds, shortestPath }
     this.pelotonScene.setRoadMesh(road)
+    this.recomputeSurfaceProfile(road)
     this.roadReady = true
     this.pelotonScene.applyState(this.positions)
     this.updateShortestPathVisibility()
+  }
+
+  private recomputeSurfaceProfile(road: THREE.Mesh): void {
+    if (!this.spline) {
+      this.surfaceProfile = null
+      return
+    }
+
+    this.surfaceProfile = sampleRoadSurfaceProfile(this.spline, road, this.scene.raycaster, {
+      step: APP_CONFIG.surfaceSampleStep,
+      rayHeight: APP_CONFIG.surfaceRayHeight,
+    })
   }
 
   private updateShortestPathVisibility(): void {

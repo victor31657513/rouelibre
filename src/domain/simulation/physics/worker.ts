@@ -77,6 +77,10 @@ let riderOrientations: Quaternion[] = []
 let arcProgress: Float32Array
 let lastStepTimestamp: number | null = null
 let bestLineLookup: BestLineLookup | null = null
+let surfaceArcDistances: Float32Array | null = null
+let surfaceHeights: Float32Array | null = null
+let surfaceNormals: Float32Array | null = null
+let riderSurfaceOffset = 0.05
 
 let laneWidth = 1
 let roadWidth = 8
@@ -124,7 +128,10 @@ function formatSegmentOptionsKey(options: SegmentSamplingOptions | undefined): s
   return `${sampleCount}|${adaptiveStep ? 1 : 0}|${minOffsetKey}`
 }
 
-function buildRoadFrame(tangent: Vector3): {
+function buildRoadFrame(
+  tangent: Vector3,
+  normalHint?: Vector3,
+): {
   forward: Vector3
   normal: Vector3
   binormal: Vector3
@@ -136,33 +143,41 @@ function buildRoadFrame(tangent: Vector3): {
     scratchRoadFrameForward.normalize()
   }
 
+  scratchRoadFrameNormal.copy(normalHint ?? WORLD_UP)
+  const projection = scratchRoadFrameForward.dot(scratchRoadFrameNormal)
+  scratchRoadFrameNormal.addScaledVector(scratchRoadFrameForward, -projection)
+  if (scratchRoadFrameNormal.lengthSq() < 1e-8) {
+    scratchRoadFrameNormal.copy(WORLD_UP)
+  } else {
+    scratchRoadFrameNormal.normalize()
+  }
+
   const binormal = scratchRoadFrameRight.crossVectors(
+    scratchRoadFrameNormal,
     scratchRoadFrameForward,
-    WORLD_UP,
   )
 
+  if (binormal.lengthSq() < 1e-8) {
+    binormal.crossVectors(WORLD_UP, scratchRoadFrameForward)
+  }
   if (binormal.lengthSq() < 1e-8) {
     binormal.set(1, 0, 0)
   } else {
     binormal.normalize()
   }
 
-  const normal = scratchRoadFrameNormal.crossVectors(binormal, scratchRoadFrameForward)
-  if (normal.lengthSq() < 1e-8) {
-    normal.copy(WORLD_UP)
-  } else {
-    normal.normalize()
-  }
-
-  const correctedBinormal = binormal.crossVectors(scratchRoadFrameForward, normal)
-  if (correctedBinormal.lengthSq() > 1e-8) {
-    correctedBinormal.normalize()
+  const correctedNormal = scratchRoadFrameNormal.crossVectors(
+    scratchRoadFrameForward,
+    binormal,
+  )
+  if (correctedNormal.lengthSq() > 1e-8) {
+    correctedNormal.normalize()
   }
 
   return {
     forward: scratchRoadFrameForward,
-    normal,
-    binormal: correctedBinormal.lengthSq() > 0 ? correctedBinormal : binormal,
+    normal: correctedNormal.lengthSq() > 0 ? correctedNormal : scratchRoadFrameNormal,
+    binormal,
   }
 }
 
@@ -246,6 +261,129 @@ function sampleOffsetSegmentLengths(
   return lengths.slice()
 }
 
+function loadSurfaceProfile(
+  distances?: ArrayBuffer,
+  heights?: ArrayBuffer,
+  normals?: ArrayBuffer,
+): void {
+  if (distances && heights && normals) {
+    const distanceArray = new Float32Array(distances)
+    const heightArray = new Float32Array(heights)
+    const normalArray = new Float32Array(normals)
+    const hasConsistentLengths =
+      distanceArray.length === heightArray.length &&
+      normalArray.length === distanceArray.length * 3
+    if (hasConsistentLengths && distanceArray.length > 0) {
+      surfaceArcDistances = distanceArray
+      surfaceHeights = heightArray
+      surfaceNormals = normalArray
+      return
+    }
+  }
+
+  surfaceArcDistances = null
+  surfaceHeights = null
+  surfaceNormals = null
+}
+
+function wrapSurfaceDistance(distance: number): number {
+  if (pathBoundaryMode === 'loop' && totalLength > 0) {
+    return MathUtils.euclideanModulo(distance, totalLength)
+  }
+  if (totalLength > 0) {
+    return MathUtils.clamp(distance, 0, totalLength)
+  }
+  return Math.max(0, distance)
+}
+
+function readSurfaceNormal(index: number, target: Vector3): Vector3 {
+  if (!surfaceNormals) {
+    return target.copy(WORLD_UP)
+  }
+
+  const base = index * 3
+  target.set(
+    surfaceNormals[base] ?? 0,
+    surfaceNormals[base + 1] ?? 1,
+    surfaceNormals[base + 2] ?? 0,
+  )
+
+  if (target.lengthSq() < 1e-9) {
+    target.copy(WORLD_UP)
+  } else {
+    target.normalize()
+  }
+
+  return target
+}
+
+function findSurfaceIndex(distance: number): number {
+  if (!surfaceArcDistances || surfaceArcDistances.length === 0) {
+    return -1
+  }
+
+  const lastIndex = surfaceArcDistances.length - 1
+  if (distance <= surfaceArcDistances[0]) return 0
+  if (distance >= surfaceArcDistances[lastIndex]) return lastIndex
+
+  let low = 0
+  let high = lastIndex
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2)
+    const value = surfaceArcDistances[mid]
+    if (value < distance) {
+      low = mid + 1
+    } else if (value > distance) {
+      high = mid - 1
+    } else {
+      return mid
+    }
+  }
+
+  return Math.min(Math.max(low, 1), lastIndex)
+}
+
+function sampleSurfaceInfo(distance: number): { height: number; normal: Vector3 } {
+  const clamped = wrapSurfaceDistance(distance)
+  const fallbackSample = spline?.sampleByDistance(clamped)
+  let height = fallbackSample?.position.y ?? 0
+  const defaultNormal = scratchSurfaceNormal.copy(WORLD_UP)
+
+  if (!surfaceArcDistances || !surfaceHeights || !surfaceNormals || surfaceArcDistances.length === 0) {
+    return { height, normal: defaultNormal }
+  }
+
+  const upperIndex = findSurfaceIndex(clamped)
+  if (upperIndex < 0) {
+    return { height, normal: defaultNormal }
+  }
+
+  const lowerIndex = Math.max(0, upperIndex - 1)
+
+  if (upperIndex === lowerIndex) {
+    height = surfaceHeights[upperIndex] ?? height
+    return { height, normal: readSurfaceNormal(upperIndex, scratchSurfaceNormal) }
+  }
+
+  const d0 = surfaceArcDistances[lowerIndex]
+  const d1 = surfaceArcDistances[upperIndex]
+  const span = Math.max(1e-6, d1 - d0)
+  const t = MathUtils.clamp((clamped - d0) / span, 0, 1)
+  const h0 = surfaceHeights[lowerIndex] ?? height
+  const h1 = surfaceHeights[upperIndex] ?? h0
+  height = MathUtils.lerp(h0, h1, t)
+  const n0 = readSurfaceNormal(lowerIndex, scratchSurfaceNormalA)
+  const n1 = readSurfaceNormal(upperIndex, scratchSurfaceNormalB)
+  scratchSurfaceNormal.lerpVectors(n0, n1, t)
+  if (scratchSurfaceNormal.lengthSq() < 1e-8) {
+    scratchSurfaceNormal.copy(WORLD_UP)
+  } else {
+    scratchSurfaceNormal.normalize()
+  }
+
+  return { height, normal: scratchSurfaceNormal }
+}
+
 // paramètres ajustables
 let lookAhead = DEFAULT_WORKER_PARAMS.lookAhead
 let maxYawRate = DEFAULT_WORKER_PARAMS.maxYawRate
@@ -293,6 +431,7 @@ const FALLBACK_WALL_WEIGHT = DEFAULT_WORKER_PARAMS.wW
 
 const ORIENTATION_SMOOTHING_RATE = 6.0
 const WORLD_UP = new Vector3(0, 1, 0)
+const DEFAULT_RIDER_SURFACE_OFFSET = 0.05
 
 const scratchRoadFrameRight = new Vector3()
 const scratchRoadFrameNormal = new Vector3()
@@ -301,6 +440,9 @@ const scratchOrientationMatrix = new Matrix4()
 const scratchOrientationQuat = new Quaternion()
 const scratchPrevOrientation = new Quaternion()
 const scratchPrevForward = new Vector3(0, 0, 1)
+const scratchSurfaceNormal = new Vector3()
+const scratchSurfaceNormalA = new Vector3()
+const scratchSurfaceNormalB = new Vector3()
 
 const ROLE_PROFILES: RiderRoleProfile[] = [
   { powerWeight: 0.6, gapWeight: 0.25 }, // sprinteur protecteur, cherche l'aspi
@@ -365,7 +507,9 @@ const scratchNextPose = createPose()
 function refreshRiderPoseCache(): void {
   if (!riderPoses || riderPoses.length !== N) return
   for (let i = 0; i < riderPoses.length; i++) {
-    samplePoseAtDistance(spline, progress[i], offsets[i], riderPoses[i])
+    const pose = samplePoseAtDistance(spline, progress[i], offsets[i], riderPoses[i])
+    const surface = sampleSurfaceInfo(progress[i])
+    pose.position.y = surface.height
   }
 }
 
@@ -639,6 +783,15 @@ self.onmessage = async (e: MessageEvent) => {
       }
     }
 
+    loadSurfaceProfile(
+      payload.surfaceDistances as ArrayBuffer | undefined,
+      payload.surfaceHeights as ArrayBuffer | undefined,
+      payload.surfaceNormals as ArrayBuffer | undefined,
+    )
+    riderSurfaceOffset = Number.isFinite(payload.surfaceOffset)
+      ? Math.max(0, payload.surfaceOffset)
+      : DEFAULT_RIDER_SURFACE_OFFSET
+
     // buffers pour le calcul
     renderState = new Float32Array(N * 7)
     telemetryState = new Float32Array(N)
@@ -745,9 +898,10 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = clampedOffset
 
       const pos = center.clone().add(right.multiplyScalar(clampedOffset))
-      const worldY = pos.y + 1
-      rb.setTranslation({ x: pos.x, y: worldY, z: pos.z }, true)
-      const frame = buildRoadFrame(sample.tangent)
+      const surface = sampleSurfaceInfo(s)
+      pos.y = surface.height + riderSurfaceOffset
+      rb.setTranslation({ x: pos.x, y: pos.y, z: pos.z }, true)
+      const frame = buildRoadFrame(sample.tangent, surface.normal)
       const baseOrientation = frameToQuaternion(frame)
       const orientation = riderOrientations[i]
       orientation.copy(baseOrientation)
@@ -758,7 +912,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const baseState = i * 7
       renderState[baseState + 0] = pos.x
-      renderState[baseState + 1] = worldY
+      renderState[baseState + 1] = pos.y
       renderState[baseState + 2] = pos.z
       renderState[baseState + 3] = orientation.x
       renderState[baseState + 4] = orientation.y
@@ -937,8 +1091,12 @@ self.onmessage = async (e: MessageEvent) => {
       const pose = samplePoseAtDistance(spline, s, result.offset, scratchNextPose)
       const pos = pose.position
 
+      const surface = sampleSurfaceInfo(s)
+      pos.y = surface.height + riderSurfaceOffset
+
       const look = spline.sampleByDistance(result.yawAheadDistance)
-      const targetFrame = buildRoadFrame(look.tangent)
+      const lookSurface = sampleSurfaceInfo(result.yawAheadDistance)
+      const targetFrame = buildRoadFrame(look.tangent, lookSurface.normal)
       const targetOrientation = frameToQuaternion(targetFrame)
       const smoothed = smoothOrientation(
         riderOrientations[i],
@@ -948,7 +1106,7 @@ self.onmessage = async (e: MessageEvent) => {
       )
       yawRates[i] = smoothed.yawRate
 
-      rb.setNextKinematicTranslation({ x: pos.x, y: pos.y + 1, z: pos.z })
+      rb.setNextKinematicTranslation({ x: pos.x, y: pos.y, z: pos.z })
       rb.setNextKinematicRotation({
         x: smoothed.orientation.x,
         y: smoothed.orientation.y,
@@ -959,7 +1117,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const base7 = i * 7
       renderState[base7 + 0] = pos.x
-      renderState[base7 + 1] = pos.y + 1
+      renderState[base7 + 1] = pos.y
       renderState[base7 + 2] = pos.z
       renderState[base7 + 3] = smoothed.orientation.x
       renderState[base7 + 4] = smoothed.orientation.y
