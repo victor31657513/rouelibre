@@ -50,8 +50,9 @@ export { computeAdaptiveMinSpeed, evaluateHairpinCornering } from './planning/sp
 
 let world: RAPIER.World
 let N = 0
-// buffer envoyé au thread principal : [s, t, h, yaw]*N
-let state: Float32Array
+// buffer envoyé au thread principal : [x, y, z, yaw]*N
+let renderState: Float32Array
+let telemetryState: Float32Array
 let bodies: RAPIER.RigidBody[] = []
 let speeds: Float32Array
 let progress: Float32Array
@@ -554,7 +555,8 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     // buffers pour le calcul
-    state = new Float32Array(N * 4)
+    renderState = new Float32Array(N * 4)
+    telemetryState = new Float32Array(N)
     bodies = new Array(N)
     speeds = new Float32Array(N)
     progress = new Float32Array(N)
@@ -656,12 +658,14 @@ self.onmessage = async (e: MessageEvent) => {
       offsets[i] = clampedOffset
 
       const pos = center.clone().add(right.multiplyScalar(clampedOffset))
-      rb.setTranslation({ x: pos.x, y: pos.y + 1, z: pos.z }, true)
+      const worldY = pos.y + 1
+      rb.setTranslation({ x: pos.x, y: worldY, z: pos.z }, true)
       const yaw = Math.atan2(tangent.x, tangent.z) + yawOffsets[i]
-      state[i * 4 + 0] = s
-      state[i * 4 + 1] = clampedOffset
-      state[i * 4 + 2] = 1
-      state[i * 4 + 3] = yaw
+      renderState[i * 4 + 0] = pos.x
+      renderState[i * 4 + 1] = worldY
+      renderState[i * 4 + 2] = pos.z
+      renderState[i * 4 + 3] = yaw
+      telemetryState[i] = s
       const initialSpeed = MathUtils.clamp(
         sampleNormal(rng, preferredSpeed, 0.4),
         Math.max(effectiveMinInitSpeed, preferredSpeed - 1.5),
@@ -682,11 +686,13 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     refreshRiderPoseCache()
+    const dt = 0
     ;(self as unknown as Worker).postMessage(
-      { type: 'state', data: { buffer: state.buffer, dt } },
-      [state.buffer]
+      { type: 'state', data: { state: renderState.buffer, telemetry: telemetryState.buffer, dt } },
+      [renderState.buffer, telemetryState.buffer]
     )
-      state = new Float32Array(N * 4)
+    renderState = new Float32Array(N * 4)
+    telemetryState = new Float32Array(N)
     } catch (error) {
       console.error('[worker] init failed', error)
     }
@@ -834,7 +840,7 @@ self.onmessage = async (e: MessageEvent) => {
 
       const look = spline.sampleByDistance(result.yawAheadDistance)
       const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
-      const currentYaw = state[i * 4 + 3]
+      const currentYaw = renderState[i * 4 + 3]
       const yawState: YawState = { yawRate: yawRates[i] }
       const yaw = smoothLimitAngle(currentYaw, targetYaw, yawState, maxYawRate, maxYawAccel, dt)
       yawRates[i] = yawState.yawRate
@@ -845,10 +851,11 @@ self.onmessage = async (e: MessageEvent) => {
       rb.setAngvel({ x: 0, y: yawRates[i], z: 0 }, true)
 
       const base4 = i * 4
-      state[base4 + 0] = s
-      state[base4 + 1] = result.offset
-      state[base4 + 2] = 1
-      state[base4 + 3] = yaw
+      renderState[base4 + 0] = pos.x
+      renderState[base4 + 1] = pos.y + 1
+      renderState[base4 + 2] = pos.z
+      renderState[base4 + 3] = yaw
+      telemetryState[i] = s
 
       if (i === referenceRiderIndex) {
         const acceleration = dt > 0 ? (result.newSpeed - previousSpeed) / dt : 0
@@ -894,10 +901,11 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     ;(self as unknown as Worker).postMessage(
-      { type: 'state', data: { buffer: state.buffer, dt } },
-      [state.buffer]
+      { type: 'state', data: { state: renderState.buffer, telemetry: telemetryState.buffer, dt } },
+      [renderState.buffer, telemetryState.buffer]
     )
-    state = new Float32Array(N * 4)
+    renderState = new Float32Array(N * 4)
+    telemetryState = new Float32Array(N)
     } catch (error) {
       console.error('[worker] step failed', error)
     }
