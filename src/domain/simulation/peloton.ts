@@ -5,6 +5,7 @@
  * functions sharing the same options structure.
  */
 import * as THREE from 'three'
+import { PathSpline } from '../route/pathSpline'
 import type { Vec3 } from '../route/gpx'
 
 export interface PelotonOptions {
@@ -43,8 +44,8 @@ export function initPeloton(
     return new THREE.Vector3(point.x, point.y, point.z)
   })
 
-  const curve = new THREE.CatmullRomCurve3(waypoints, false)
-  const totalLength = curve.getLength() || 1
+  const spline = new PathSpline(waypoints)
+  const totalLength = spline.totalLength || 1
 
   const nCols = Math.max(1, Math.floor(roadWidth / laneWidth))
   const maxOffset = Math.max(0, roadWidth / 2 - margin)
@@ -58,9 +59,7 @@ export function initPeloton(
     const longitudinal = row * spacing
     const maxDistance = totalLength
     const distance = Math.min(longitudinal, maxDistance)
-    const u = distance / totalLength
-    const center = curve.getPointAt(u)
-    const tangent = curve.getTangentAt(u).normalize()
+    const { position: center, tangent } = spline.sampleByDistance(distance)
 
     const tangentXZ = new THREE.Vector3(tangent.x, 0, tangent.z)
     if (tangentXZ.lengthSq() < 1e-6) {
