@@ -18,6 +18,7 @@ export class PelotonSceneUpdater {
   private readonly ridersMesh: THREE.InstancedMesh
   private readonly riderObjects: THREE.Object3D[]
   private readonly tempObject = new THREE.Object3D()
+  private readonly tempQuaternion = new THREE.Quaternion()
   private readonly geometryAlign = new THREE.Quaternion().setFromAxisAngle(
     new THREE.Vector3(0, 1, 0),
     -Math.PI / 2,
@@ -57,19 +58,24 @@ export class PelotonSceneUpdater {
     const count = Math.min(
       this.riderObjects.length,
       this.ridersMesh.count,
-      Math.floor(state.length / 4),
+      Math.floor(state.length / 7),
     )
 
     for (let i = 0; i < count; i++) {
-      const base = i * 4
+      const base = i * 7
       const x = state[base + 0]
       const y = state[base + 1]
       const z = state[base + 2]
-      const yaw = state[base + 3]
+      const qx = state[base + 3]
+      const qy = state[base + 4]
+      const qz = state[base + 5]
+      const qw = state[base + 6]
 
       this.tempObject.position.set(x, y, z)
-      const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
-      this.tempObject.quaternion.copy(yawQuat.multiply(this.geometryAlign))
+      this.tempQuaternion.set(qx, qy, qz, qw).normalize()
+      this.tempObject.quaternion.copy(
+        this.tempQuaternion.multiply(this.geometryAlign),
+      )
       this.tempObject.updateMatrix()
       this.ridersMesh.setMatrixAt(i, this.tempObject.matrix)
       this.riderObjects[i].position.set(x, y, z)
