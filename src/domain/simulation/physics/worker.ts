@@ -990,6 +990,8 @@ self.onmessage = async (e: MessageEvent) => {
       ? Math.max(0, corneringLateralAcceleration)
       : maxLateralAcceleration
 
+    const scratchCornerNormal = new Vector3()
+
     const stepEnvironment: RiderEnvironment = {
       spline,
       totalLength,
@@ -1036,6 +1038,8 @@ self.onmessage = async (e: MessageEvent) => {
       segmentSampler: (startDistance, endDistance, offsets, options) =>
         sampleOffsetSegmentLengths(startDistance, endDistance, offsets, options),
       bestLine: bestLineLookup,
+      sampleSurfaceNormal: (distance: number) =>
+        scratchCornerNormal.copy(sampleSurfaceInfo(distance).normal),
     }
 
     let snapshot: DiagnosticSnapshot | null = null

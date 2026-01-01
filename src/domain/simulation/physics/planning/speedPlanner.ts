@@ -113,9 +113,9 @@ export interface BaselineSpeedInput {
 }
 
 export function computeBaselineSpeedPlan(input: BaselineSpeedInput): BaselineSpeedPlan {
-  const { vCorner, effectiveMaxTargetSpeed, effectiveMinTargetSpeed, personalMax } = input
+  const { vCorner, vPower, effectiveMaxTargetSpeed, effectiveMinTargetSpeed, personalMax } = input
 
-  const candidateSpeeds = [vCorner, effectiveMaxTargetSpeed].filter(
+  const candidateSpeeds = [vCorner, vPower, effectiveMaxTargetSpeed].filter(
     (value) => Number.isFinite(value) && value > 0,
   )
   const rawTarget =

@@ -561,20 +561,27 @@ export interface LocalCorneringOptions {
   pathBoundaryMode: PathBoundaryMode
   lookAheadDistance?: number
   bestLine?: BestLineLookup | null
+  surfaceNormalSampler?: (distance: number) => Vector3 | null
   smoothingWindow?: number
   sampleStep?: number
   cornerSpeedFloor?: number
   openRadiusFloor?: number
+  gravity?: number
 }
 
 export interface LocalCorneringResult {
   maxSpeed: number
   curvature: number
+  support: number
+  effectiveLateralAcceleration: number
   limitingReason: 'geometry-local' | 'none'
 }
 
 const scratchLocalRight = new Vector3(1, 0, 0)
+const scratchLocalRightSupport = new Vector3(1, 0, 0)
 const scratchLocalPosition = new Vector3()
+const scratchLocalNormal = new Vector3(0, 1, 0)
+const scratchGravity = new Vector3()
 const scratchLocalPoints: Vector3[] = [new Vector3(), new Vector3(), new Vector3(), new Vector3()]
 
 function normalizeLocalDistance(
@@ -597,16 +604,23 @@ function sampleOffsetPosition(
   maxOffset: number,
   pathBoundaryMode: PathBoundaryMode,
   bestLine?: BestLineLookup | null,
+  surfaceNormal?: Vector3 | null,
   target: Vector3 = scratchLocalPosition,
 ): Vector3 {
   const normalized = normalizeLocalDistance(distance, totalLength, pathBoundaryMode)
   const sample = spline.sampleByDistance(normalized)
-  scratchLocalRight.set(-sample.tangent.z, 0, sample.tangent.x)
+  const usableNormal = surfaceNormal && surfaceNormal.lengthSq() > 1e-8
+    ? scratchLocalNormal.copy(surfaceNormal).normalize()
+    : null
+  if (usableNormal) {
+    scratchLocalRight.crossVectors(sample.tangent, usableNormal)
+  } else {
+    scratchLocalRight.set(-sample.tangent.z, 0, sample.tangent.x)
+  }
   if (scratchLocalRight.lengthSq() <= 1e-6) {
     scratchLocalRight.set(1, 0, 0)
-  } else {
-    scratchLocalRight.normalize()
   }
+  scratchLocalRight.normalize()
 
   const bestLineOffset = bestLine
     ? sampleBestLineOffset(bestLine, normalized, totalLength, pathBoundaryMode)
@@ -636,7 +650,9 @@ function curvatureFromPoints(p0: Vector3, p1: Vector3, p2: Vector3): number {
   const angle = Math.atan2(cross, dot)
   const avgLen = (len1 + len2) / 2
   if (!Number.isFinite(angle) || avgLen < 1e-6) return 0
-  return Math.abs(angle / avgLen)
+  const signedCurvature = angle / avgLen
+  if (!Number.isFinite(signedCurvature)) return 0
+  return signedCurvature
 }
 
 export function computeLocalCorneringSpeed(options: LocalCorneringOptions): LocalCorneringResult {
@@ -650,10 +666,12 @@ export function computeLocalCorneringSpeed(options: LocalCorneringOptions): Loca
     pathBoundaryMode,
     lookAheadDistance,
     bestLine,
+    surfaceNormalSampler,
     smoothingWindow = 3,
     sampleStep = 0.7,
     cornerSpeedFloor = 0.92,
     openRadiusFloor = 140,
+    gravity = 9.80665,
   } = options
 
   if (!spline || totalLength <= 0 || !(maxLateralAcceleration > 0)) {
@@ -670,6 +688,7 @@ export function computeLocalCorneringSpeed(options: LocalCorneringOptions): Loca
 
   for (let i = 0; i < sampleCount; i++) {
     const travel = spacing * i
+    const surfaceNormal = surfaceNormalSampler?.(distance + travel)
     sampleOffsetPosition(
       spline,
       distance + travel,
@@ -678,6 +697,7 @@ export function computeLocalCorneringSpeed(options: LocalCorneringOptions): Loca
       maxOffset,
       pathBoundaryMode,
       bestLine,
+      surfaceNormal ?? undefined,
       scratchLocalPoints[i],
     )
   }
@@ -704,23 +724,63 @@ export function computeLocalCorneringSpeed(options: LocalCorneringOptions): Loca
     smoothed.push(count > 0 ? acc / count : 0)
   }
 
-  const effectiveCurvature = smoothed.length > 0 ? Math.max(...smoothed) : 0
+  let effectiveCurvature = 0
+  let curvatureSign = 0
+  for (const value of smoothed) {
+    const absValue = Math.abs(value)
+    if (absValue > effectiveCurvature) {
+      effectiveCurvature = absValue
+      curvatureSign = Math.sign(value)
+    }
+  }
   const curvatureFloor = openRadiusFloor > 0 ? 1 / Math.max(openRadiusFloor, 1e-3) : 0
   const limitingCurvature = Math.max(effectiveCurvature, curvatureFloor)
 
   if (!(limitingCurvature > 0)) {
-    return { maxSpeed: Infinity, curvature: effectiveCurvature, limitingReason: 'none' }
+    return {
+      maxSpeed: Infinity,
+      curvature: effectiveCurvature,
+      support: 0,
+      effectiveLateralAcceleration: maxLateralAcceleration,
+      limitingReason: 'none',
+    }
   }
 
-  const safeSpeed = Math.sqrt(maxLateralAcceleration / limitingCurvature)
-  const flooredSpeed = Math.sqrt(maxLateralAcceleration / Math.max(curvatureFloor, 1e-6))
+  const referenceSample = spline.sampleByDistance(distance)
+  const roadNormal = surfaceNormalSampler?.(distance)
+  if (roadNormal && roadNormal.lengthSq() > 1e-8) {
+    scratchLocalNormal.copy(roadNormal).normalize()
+  } else {
+    scratchLocalNormal.set(0, 1, 0)
+  }
+  scratchLocalRightSupport.crossVectors(referenceSample.tangent, scratchLocalNormal)
+  if (scratchLocalRightSupport.lengthSq() <= 1e-8) {
+    scratchLocalRightSupport.set(-referenceSample.tangent.z, 0, referenceSample.tangent.x)
+  }
+  scratchLocalRightSupport.normalize()
+  scratchGravity.set(0, -Math.abs(gravity), 0)
+  const lateralGravity = scratchGravity.dot(scratchLocalRightSupport)
+  const inwardDirection = curvatureSign >= 0 ? -1 : 1
+  const bankAssist = Math.max(0, lateralGravity * inwardDirection)
+
+  const effectiveLateralAcceleration = Math.max(0, maxLateralAcceleration + bankAssist)
+
+  const safeSpeed = Math.sqrt(effectiveLateralAcceleration / limitingCurvature)
+  const flooredSpeed = Math.sqrt(effectiveLateralAcceleration / Math.max(curvatureFloor, 1e-6))
+  const floorAttenuation = MathUtils.lerp(
+    cornerSpeedFloor,
+    1,
+    MathUtils.clamp(bankAssist / Math.max(maxLateralAcceleration, 1e-6), 0, 1),
+  )
   const maxSpeed = limitingCurvature > effectiveCurvature
-    ? Math.max(safeSpeed * cornerSpeedFloor, safeSpeed)
-    : Math.max(safeSpeed, flooredSpeed * cornerSpeedFloor)
+    ? Math.max(safeSpeed * floorAttenuation, safeSpeed)
+    : Math.max(safeSpeed, flooredSpeed * floorAttenuation)
 
   return {
     maxSpeed: Number.isFinite(maxSpeed) ? maxSpeed : Infinity,
     curvature: effectiveCurvature,
+    support: bankAssist,
+    effectiveLateralAcceleration,
     limitingReason: effectiveCurvature > 0 ? 'geometry-local' : 'none',
   }
 }

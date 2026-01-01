@@ -1,4 +1,4 @@
-import { MathUtils } from 'three'
+import { MathUtils, Vector3 } from 'three'
 import { computeAheadSampleDistance } from '../lookAhead'
 import {
   computeCurvatureEnvelope,
@@ -97,6 +97,7 @@ export interface RiderEnvironment {
     options?: SegmentSamplingOptions,
   ) => number[]
   bestLine?: BestLineLookup | null
+  sampleSurfaceNormal?: (distance: number) => Vector3 | null
 }
 
 export interface RiderProperties {
@@ -134,6 +135,8 @@ export interface RiderStepResult {
   adaptiveMinSpeed: number
   cornerSpeed: number
   hairpinSeverity: number
+  hairpinActivation: number
+  hairpinMargin: number
   slope: number
   curvature: number
   draftFactor: number
@@ -251,6 +254,8 @@ export function planRiderStep(
     pathBoundaryMode,
     lookAheadDistance,
     bestLine,
+    surfaceNormalSampler: env.sampleSurfaceNormal,
+    gravity,
     openRadiusFloor: Number.isFinite(minRadius) ? Math.max(minRadius * 3, 120) : 140,
   })
 
@@ -285,7 +290,28 @@ export function planRiderStep(
     },
   )
 
-  const vCorner = Math.min(effectiveMaxTargetSpeed, localCornering.maxSpeed)
+  const baseCornerSpeed = Math.min(effectiveMaxTargetSpeed, localCornering.maxSpeed, vPower)
+  const hairpinActivation = Math.pow(
+    Math.max(0, hairpinSeverity - cornering.severityThreshold),
+    Math.max(1, cornering.brakingExponent),
+  )
+  const stabilityReserve = localCornering.effectiveLateralAcceleration > 0
+    ? MathUtils.clamp(
+        localCornering.support / localCornering.effectiveLateralAcceleration,
+        0,
+        1,
+      )
+    : 0
+  const hairpinMarginSeed = MathUtils.clamp(
+    baseCornerSpeed * cornering.speedMarginRatio,
+    cornering.speedMarginMin,
+    cornering.speedMarginMax,
+  )
+  const hairpinMargin = hairpinMarginSeed * MathUtils.lerp(1.25, 0.55, stabilityReserve)
+  const vCorner = Math.max(
+    effectiveMinTargetSpeed,
+    baseCornerSpeed - hairpinMargin * hairpinActivation,
+  )
 
   const slipLookahead = lookAheadDistance > 0
     ? Math.min(Math.max(lookAheadDistance, 2), 12)
@@ -464,6 +490,8 @@ export function planRiderStep(
     adaptiveMinSpeed: baselinePlan.adaptiveMinSpeed,
     cornerSpeed: vCorner,
     hairpinSeverity,
+    hairpinActivation,
+    hairpinMargin,
     slope,
     curvature: localCornering.curvature,
     draftFactor,
