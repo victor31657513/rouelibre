@@ -5,8 +5,8 @@
  * blocking the main thread.
  */
 import * as RAPIER from '@dimforge/rapier3d-compat'
-import { MathUtils, Vector3 } from 'three'
-import { PathSpline, smoothLimitAngle, YawState } from '../../route/pathSpline'
+import { MathUtils, Matrix4, Quaternion, Vector3 } from 'three'
+import { PathSpline } from '../../route/pathSpline'
 import {
   computeLengthRatioRange,
   computeOffsetSegmentLengths,
@@ -50,7 +50,7 @@ export { computeAdaptiveMinSpeed, evaluateHairpinCornering } from './planning/sp
 
 let world: RAPIER.World
 let N = 0
-// buffer envoyé au thread principal : [x, y, z, yaw]*N
+// buffer envoyé au thread principal : [x, y, z, qx, qy, qz, qw]*N
 let renderState: Float32Array
 let telemetryState: Float32Array
 let bodies: RAPIER.RigidBody[] = []
@@ -73,6 +73,7 @@ let riderPowerWeights: Float32Array
 let riderGapWeights: Float32Array
 let riderRoles: Int16Array
 let riderPoses: RiderPose[] = []
+let riderOrientations: Quaternion[] = []
 let arcProgress: Float32Array
 let lastStepTimestamp: number | null = null
 let bestLineLookup: BestLineLookup | null = null
@@ -121,6 +122,79 @@ function formatSegmentOptionsKey(options: SegmentSamplingOptions | undefined): s
     ? (Math.round((minOffsetForSampling ?? 0) * 1000) / 1000).toString()
     : 'auto'
   return `${sampleCount}|${adaptiveStep ? 1 : 0}|${minOffsetKey}`
+}
+
+function buildRoadFrame(tangent: Vector3): {
+  forward: Vector3
+  normal: Vector3
+  binormal: Vector3
+} {
+  scratchRoadFrameForward.copy(tangent)
+  if (scratchRoadFrameForward.lengthSq() < 1e-8) {
+    scratchRoadFrameForward.set(0, 0, 1)
+  } else {
+    scratchRoadFrameForward.normalize()
+  }
+
+  const binormal = scratchRoadFrameRight.crossVectors(
+    scratchRoadFrameForward,
+    WORLD_UP,
+  )
+
+  if (binormal.lengthSq() < 1e-8) {
+    binormal.set(1, 0, 0)
+  } else {
+    binormal.normalize()
+  }
+
+  const normal = scratchRoadFrameNormal.crossVectors(binormal, scratchRoadFrameForward)
+  if (normal.lengthSq() < 1e-8) {
+    normal.copy(WORLD_UP)
+  } else {
+    normal.normalize()
+  }
+
+  const correctedBinormal = binormal.crossVectors(scratchRoadFrameForward, normal)
+  if (correctedBinormal.lengthSq() > 1e-8) {
+    correctedBinormal.normalize()
+  }
+
+  return {
+    forward: scratchRoadFrameForward,
+    normal,
+    binormal: correctedBinormal.lengthSq() > 0 ? correctedBinormal : binormal,
+  }
+}
+
+function frameToQuaternion(frame: {
+  forward: Vector3
+  normal: Vector3
+  binormal: Vector3
+}): Quaternion {
+  scratchOrientationMatrix.makeBasis(frame.binormal, frame.normal, frame.forward)
+  return scratchOrientationQuat.setFromRotationMatrix(scratchOrientationMatrix)
+}
+
+function smoothOrientation(
+  current: Quaternion,
+  target: Quaternion,
+  dt: number,
+  store: Quaternion,
+): { orientation: Quaternion; yawRate: number } {
+  scratchPrevOrientation.copy(store)
+  const forwardBefore = scratchPrevForward.set(0, 0, 1).applyQuaternion(scratchPrevOrientation)
+  const prevYaw = Math.atan2(forwardBefore.x, forwardBefore.z)
+
+  const rate = 1 - Math.exp(-ORIENTATION_SMOOTHING_RATE * Math.max(dt, 0))
+  store.copy(current).slerp(target, MathUtils.clamp(rate, 0, 1))
+
+  const forwardAfter = scratchPrevForward.set(0, 0, 1).applyQuaternion(store)
+  const nextYaw = Math.atan2(forwardAfter.x, forwardAfter.z)
+  let yawDelta = nextYaw - prevYaw
+  yawDelta = Math.atan2(Math.sin(yawDelta), Math.cos(yawDelta))
+  const yawRate = dt > 0 ? yawDelta / dt : 0
+
+  return { orientation: store, yawRate }
 }
 
 function sampleOffsetSegmentLengths(
@@ -216,6 +290,17 @@ const MAX_STEP_DT = 0.2
 const FALLBACK_POWER_WEIGHT = DEFAULT_WORKER_PARAMS.wP
 const FALLBACK_GAP_WEIGHT = DEFAULT_WORKER_PARAMS.wG
 const FALLBACK_WALL_WEIGHT = DEFAULT_WORKER_PARAMS.wW
+
+const ORIENTATION_SMOOTHING_RATE = 6.0
+const WORLD_UP = new Vector3(0, 1, 0)
+
+const scratchRoadFrameRight = new Vector3()
+const scratchRoadFrameNormal = new Vector3()
+const scratchRoadFrameForward = new Vector3()
+const scratchOrientationMatrix = new Matrix4()
+const scratchOrientationQuat = new Quaternion()
+const scratchPrevOrientation = new Quaternion()
+const scratchPrevForward = new Vector3(0, 0, 1)
 
 const ROLE_PROFILES: RiderRoleProfile[] = [
   { powerWeight: 0.6, gapWeight: 0.25 }, // sprinteur protecteur, cherche l'aspi
@@ -555,7 +640,7 @@ self.onmessage = async (e: MessageEvent) => {
     }
 
     // buffers pour le calcul
-    renderState = new Float32Array(N * 4)
+    renderState = new Float32Array(N * 7)
     telemetryState = new Float32Array(N)
     bodies = new Array(N)
     speeds = new Float32Array(N)
@@ -576,9 +661,11 @@ self.onmessage = async (e: MessageEvent) => {
     riderGapWeights = new Float32Array(N)
     riderRoles = new Int16Array(N)
     riderPoses = new Array(N)
+    riderOrientations = new Array(N)
     arcProgress = new Float32Array(N)
     for (let i = 0; i < N; i++) {
       riderPoses[i] = createPose()
+      riderOrientations[i] = new Quaternion()
     }
     const rng = mulberry32(123456)
     const effectiveMaxInitSpeed = Math.max(0, maxTargetSpeed)
@@ -660,11 +747,23 @@ self.onmessage = async (e: MessageEvent) => {
       const pos = center.clone().add(right.multiplyScalar(clampedOffset))
       const worldY = pos.y + 1
       rb.setTranslation({ x: pos.x, y: worldY, z: pos.z }, true)
-      const yaw = Math.atan2(tangent.x, tangent.z) + yawOffsets[i]
-      renderState[i * 4 + 0] = pos.x
-      renderState[i * 4 + 1] = worldY
-      renderState[i * 4 + 2] = pos.z
-      renderState[i * 4 + 3] = yaw
+      const frame = buildRoadFrame(sample.tangent)
+      const baseOrientation = frameToQuaternion(frame)
+      const orientation = riderOrientations[i]
+      orientation.copy(baseOrientation)
+      if (Number.isFinite(yawOffsets[i])) {
+        scratchPrevOrientation.setFromAxisAngle(frame.normal, yawOffsets[i])
+        orientation.multiply(scratchPrevOrientation)
+      }
+
+      const baseState = i * 7
+      renderState[baseState + 0] = pos.x
+      renderState[baseState + 1] = worldY
+      renderState[baseState + 2] = pos.z
+      renderState[baseState + 3] = orientation.x
+      renderState[baseState + 4] = orientation.y
+      renderState[baseState + 5] = orientation.z
+      renderState[baseState + 6] = orientation.w
       telemetryState[i] = s
       const initialSpeed = MathUtils.clamp(
         sampleNormal(rng, preferredSpeed, 0.4),
@@ -691,7 +790,7 @@ self.onmessage = async (e: MessageEvent) => {
       { type: 'state', data: { state: renderState.buffer, telemetry: telemetryState.buffer, dt } },
       [renderState.buffer, telemetryState.buffer]
     )
-    renderState = new Float32Array(N * 4)
+    renderState = new Float32Array(N * 7)
     telemetryState = new Float32Array(N)
     } catch (error) {
       console.error('[worker] init failed', error)
@@ -839,22 +938,33 @@ self.onmessage = async (e: MessageEvent) => {
       const pos = pose.position
 
       const look = spline.sampleByDistance(result.yawAheadDistance)
-      const targetYaw = Math.atan2(look.tangent.x, look.tangent.z)
-      const currentYaw = renderState[i * 4 + 3]
-      const yawState: YawState = { yawRate: yawRates[i] }
-      const yaw = smoothLimitAngle(currentYaw, targetYaw, yawState, maxYawRate, maxYawAccel, dt)
-      yawRates[i] = yawState.yawRate
+      const targetFrame = buildRoadFrame(look.tangent)
+      const targetOrientation = frameToQuaternion(targetFrame)
+      const smoothed = smoothOrientation(
+        riderOrientations[i],
+        targetOrientation,
+        dt,
+        riderOrientations[i],
+      )
+      yawRates[i] = smoothed.yawRate
 
       rb.setNextKinematicTranslation({ x: pos.x, y: pos.y + 1, z: pos.z })
-      const half = yaw / 2
-      rb.setNextKinematicRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
+      rb.setNextKinematicRotation({
+        x: smoothed.orientation.x,
+        y: smoothed.orientation.y,
+        z: smoothed.orientation.z,
+        w: smoothed.orientation.w,
+      })
       rb.setAngvel({ x: 0, y: yawRates[i], z: 0 }, true)
 
-      const base4 = i * 4
-      renderState[base4 + 0] = pos.x
-      renderState[base4 + 1] = pos.y + 1
-      renderState[base4 + 2] = pos.z
-      renderState[base4 + 3] = yaw
+      const base7 = i * 7
+      renderState[base7 + 0] = pos.x
+      renderState[base7 + 1] = pos.y + 1
+      renderState[base7 + 2] = pos.z
+      renderState[base7 + 3] = smoothed.orientation.x
+      renderState[base7 + 4] = smoothed.orientation.y
+      renderState[base7 + 5] = smoothed.orientation.z
+      renderState[base7 + 6] = smoothed.orientation.w
       telemetryState[i] = s
 
       if (i === referenceRiderIndex) {
@@ -904,7 +1014,7 @@ self.onmessage = async (e: MessageEvent) => {
       { type: 'state', data: { state: renderState.buffer, telemetry: telemetryState.buffer, dt } },
       [renderState.buffer, telemetryState.buffer]
     )
-    renderState = new Float32Array(N * 4)
+    renderState = new Float32Array(N * 7)
     telemetryState = new Float32Array(N)
     } catch (error) {
       console.error('[worker] step failed', error)

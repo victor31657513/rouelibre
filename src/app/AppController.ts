@@ -142,7 +142,7 @@ export class AppController {
     this.simulation = new SimulationClient((state, telemetry, dt) =>
       this.onSimulationState(state, telemetry, dt),
     )
-    this.positions = new Float32Array(this.riderCount * 4)
+    this.positions = new Float32Array(this.riderCount * 7)
     this.telemetry = new Float32Array(this.riderCount)
     setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
     this.dom.shortestPathToggle.checked = this.showShortestPath
@@ -180,7 +180,7 @@ export class AppController {
     const countChanged = nextCount !== this.riderCount
     this.riderCount = nextCount
     this.scene.ridersMesh.count = this.riderCount
-    this.positions = new Float32Array(this.riderCount * 4)
+    this.positions = new Float32Array(this.riderCount * 7)
     this.telemetry = new Float32Array(this.riderCount)
     setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
     this.applyModeColors()
@@ -516,7 +516,7 @@ export class AppController {
 
     const yawOffsets = new Float32Array(riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
-    this.positions = new Float32Array(riderCount * 4)
+    this.positions = new Float32Array(riderCount * 7)
     this.telemetry = new Float32Array(riderCount)
     this.lastStateDt = 0
     this.pendingStepDts.length = 0
@@ -527,8 +527,9 @@ export class AppController {
       this.currentPath[1].z - this.currentPath[0].z,
     )
 
+    const yawQuat = new THREE.Quaternion()
     for (let i = 0; i < riderCount; i++) {
-      const base = i * 4
+      const base = i * 7
       const sign = yawRng() < 0.5 ? -1 : 1
       const magnitude = 2 + yawRng() * 2
       const yawOffset = sign * magnitude * (Math.PI / 180)
@@ -545,7 +546,11 @@ export class AppController {
       this.positions[base + 0] = x
       this.positions[base + 1] = y
       this.positions[base + 2] = z
-      this.positions[base + 3] = yaw
+      yawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
+      this.positions[base + 3] = yawQuat.x
+      this.positions[base + 4] = yawQuat.y
+      this.positions[base + 5] = yawQuat.z
+      this.positions[base + 6] = yawQuat.w
       this.telemetry[i] = s
     }
 
@@ -600,7 +605,7 @@ export class AppController {
 
     const yawOffsets = new Float32Array(riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
-    this.positions = new Float32Array(riderCount * 4)
+    this.positions = new Float32Array(riderCount * 7)
     this.telemetry = new Float32Array(riderCount)
     this.lastStateDt = 0
     this.pendingStepDts.length = 0
@@ -611,7 +616,7 @@ export class AppController {
     )
 
     for (let i = 0; i < riderCount; i++) {
-      const base = i * 4
+      const base = i * 7
       const sign = yawRng() < 0.5 ? -1 : 1
       const magnitude = 2 + yawRng() * 2
       const yawOffset = sign * magnitude * (Math.PI / 180)
@@ -628,7 +633,11 @@ export class AppController {
       this.positions[base + 0] = x
       this.positions[base + 1] = y
       this.positions[base + 2] = z
-      this.positions[base + 3] = yaw
+      yawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
+      this.positions[base + 3] = yawQuat.x
+      this.positions[base + 4] = yawQuat.y
+      this.positions[base + 5] = yawQuat.z
+      this.positions[base + 6] = yawQuat.w
       this.telemetry[i] = s
     }
 

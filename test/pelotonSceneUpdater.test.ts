@@ -20,12 +20,17 @@ function createUpdater(instanceCount: number): {
 }
 
 describe('PelotonSceneUpdater', () => {
-  it('applies world positions and yaw directly to rider matrices', () => {
+  it('applies world positions and orientation directly to rider matrices', () => {
     const { mesh, objects, updater } = createUpdater(2)
     const yaw = Math.PI / 2
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      yaw,
+    )
+    const identity = new THREE.Quaternion()
     const state = new Float32Array([
-      1, 2, 3, yaw,
-      -4, 0.5, 2, 0,
+      1, 2, 3, yawQuat.x, yawQuat.y, yawQuat.z, yawQuat.w,
+      -4, 0.5, 2, identity.x, identity.y, identity.z, identity.w,
     ])
 
     updater.applyState(state)

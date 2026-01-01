@@ -25,17 +25,22 @@ export function updateCameraView(
   dt: number,
   obstacles: THREE.Object3D[] = []
 ): void {
-  const count = positions.length / 4
+  const count = positions.length / 7
   const index = Math.floor(count / 2)
-  const base = index * 4
+  const base = index * 7
   const x = positions[base]
   const y = positions[base + 1]
   const z = positions[base + 2]
-  const yaw = positions[base + 3]
+  const orientation = new THREE.Quaternion(
+    positions[base + 3],
+    positions[base + 4],
+    positions[base + 5],
+    positions[base + 6],
+  )
 
   pivot.set(x, y, z)
 
-  const tangent = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+  const tangent = new THREE.Vector3(0, 0, 1).applyQuaternion(orientation)
   const targetPos = new THREE.Vector3(x, y, z)
   const desiredPos = targetPos
     .clone()
