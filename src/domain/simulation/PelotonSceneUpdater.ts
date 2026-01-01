@@ -54,12 +54,6 @@ export class PelotonSceneUpdater {
 
   /** Applies the latest state buffer to the instanced mesh. */
   applyState(state: Float32Array): void {
-    if (!this.spline) return
-
-    const { laneWidth, roadWidth, margin } = this.config
-    const qRoad = this.roadMesh
-      ? this.roadMesh.getWorldQuaternion(new THREE.Quaternion())
-      : new THREE.Quaternion()
     const count = Math.min(
       this.riderObjects.length,
       this.ridersMesh.count,
@@ -68,46 +62,18 @@ export class PelotonSceneUpdater {
 
     for (let i = 0; i < count; i++) {
       const base = i * 4
-      const s = state[base + 0]
-      let t = state[base + 1]
-      const h = state[base + 2]
+      const x = state[base + 0]
+      const y = state[base + 1]
+      const z = state[base + 2]
+      const yaw = state[base + 3]
 
-      const maxT = roadWidth / 2 - laneWidth / 2 - margin
-      const clampedT = THREE.MathUtils.clamp(t, -maxT, maxT)
-      if (clampedT !== t) {
-        state[base + 1] = clampedT
-      }
-      t = clampedT
-
-      const sample = this.spline.sampleByDistance(s)
-      const tangent = sample.tangent
-      const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
-      const up = new THREE.Vector3(0, 1, 0)
-      const tangentXZ = tangent.clone().setY(0)
-      if (tangentXZ.lengthSq() < 1e-6) {
-        tangentXZ.set(0, 0, 1)
-      }
-      tangentXZ.normalize()
-
-      const forwardQuat = new THREE.Quaternion().setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        tangentXZ,
-      )
-      forwardQuat.multiply(this.geometryAlign)
-
-      const localPos = sample.position
-        .clone()
-        .add(right.multiplyScalar(t))
-        .add(up.multiplyScalar(h))
-
-      const worldPos = this.roadMesh ? this.roadMesh.localToWorld(localPos.clone()) : localPos
-      const worldQuat = this.roadMesh ? qRoad.clone().multiply(forwardQuat) : forwardQuat
-
-      this.tempObject.position.copy(worldPos)
-      this.tempObject.quaternion.copy(worldQuat)
+      this.tempObject.position.set(x, y, z)
+      const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw)
+      this.tempObject.quaternion.copy(yawQuat.multiply(this.geometryAlign))
       this.tempObject.updateMatrix()
       this.ridersMesh.setMatrixAt(i, this.tempObject.matrix)
-      this.riderObjects[i].position.copy(worldPos)
+      this.riderObjects[i].position.set(x, y, z)
+      this.riderObjects[i].quaternion.copy(this.tempObject.quaternion)
     }
 
     this.ridersMesh.instanceMatrix.needsUpdate = true

@@ -86,6 +86,7 @@ export class AppController {
   private shortestPathPoints: Vec3[] | null = null
   private shortestPathData: Float32Array | null = null
   private positions: Float32Array
+  private telemetry: Float32Array
   private roadReady = false
   private roadAssets: RoadAssets = {}
   private routeClosed = false
@@ -138,8 +139,11 @@ export class AppController {
       roadWidth: APP_CONFIG.roadWidth,
       margin: APP_CONFIG.roadMargin,
     })
-    this.simulation = new SimulationClient((state, dt) => this.onSimulationState(state, dt))
+    this.simulation = new SimulationClient((state, telemetry, dt) =>
+      this.onSimulationState(state, telemetry, dt),
+    )
     this.positions = new Float32Array(this.riderCount * 4)
+    this.telemetry = new Float32Array(this.riderCount)
     setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
     this.dom.shortestPathToggle.checked = this.showShortestPath
     this.applyModeColors()
@@ -177,6 +181,7 @@ export class AppController {
     this.riderCount = nextCount
     this.scene.ridersMesh.count = this.riderCount
     this.positions = new Float32Array(this.riderCount * 4)
+    this.telemetry = new Float32Array(this.riderCount)
     setSelectedIndex(Math.min(selectedIndex, this.riderCount - 1), this.riderCount)
     this.applyModeColors()
     this.modeSelectorHandle?.setActive(this.mode.id)
@@ -512,6 +517,7 @@ export class AppController {
     const yawOffsets = new Float32Array(riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
     this.positions = new Float32Array(riderCount * 4)
+    this.telemetry = new Float32Array(riderCount)
     this.lastStateDt = 0
     this.pendingStepDts.length = 0
 
@@ -532,19 +538,15 @@ export class AppController {
       const row = Math.floor(leaderIndex / 9)
       let s = row * APP_CONFIG.startSpacing
       if (totalLength > 0) s = s % totalLength
-      const sample = this.spline.sampleByDistance(s)
-      const tangent = sample.tangent
-      const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
-      const center = sample.position
       const x = pelotonPositions[i * 3 + 0]
       const y = pelotonPositions[i * 3 + 1]
       const z = pelotonPositions[i * 3 + 2]
-      const t = (x - center.x) * right.x + (z - center.z) * right.z
-      const h = y - center.y
-      this.positions[base + 0] = s
-      this.positions[base + 1] = t
-      this.positions[base + 2] = h
-      this.positions[base + 3] = yaw0 + yawOffset
+      const yaw = yaw0 + yawOffset
+      this.positions[base + 0] = x
+      this.positions[base + 1] = y
+      this.positions[base + 2] = z
+      this.positions[base + 3] = yaw
+      this.telemetry[i] = s
     }
 
     const median = Math.floor(riderCount / 2)
@@ -599,6 +601,7 @@ export class AppController {
     const yawOffsets = new Float32Array(riderCount)
     const yawRng = this.createMulberry(APP_CONFIG.rngSeed + 1)
     this.positions = new Float32Array(riderCount * 4)
+    this.telemetry = new Float32Array(riderCount)
     this.lastStateDt = 0
     this.pendingStepDts.length = 0
     const totalLength = this.spline.totalLength
@@ -618,19 +621,15 @@ export class AppController {
       const row = Math.floor(leaderIndex / 9)
       let s = row * APP_CONFIG.startSpacing
       if (totalLength > 0) s = s % totalLength
-      const sample = this.spline.sampleByDistance(s)
-      const tangent = sample.tangent
-      const right = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize()
-      const center = sample.position
       const x = pelotonPositions[i * 3 + 0]
       const y = pelotonPositions[i * 3 + 1]
       const z = pelotonPositions[i * 3 + 2]
-      const t = (x - center.x) * right.x + (z - center.z) * right.z
-      const h = y - center.y
-      this.positions[base + 0] = s
-      this.positions[base + 1] = t
-      this.positions[base + 2] = h
-      this.positions[base + 3] = yaw0 + yawOffset
+      const yaw = yaw0 + yawOffset
+      this.positions[base + 0] = x
+      this.positions[base + 1] = y
+      this.positions[base + 2] = z
+      this.positions[base + 3] = yaw
+      this.telemetry[i] = s
     }
 
     const pathCopy = this.pathData.slice()
@@ -851,17 +850,17 @@ export class AppController {
   }
 
   private refreshTelemetryDisplay(): void {
-    if (!this.positions || this.positions.length === 0) {
+    if (!this.telemetry || this.telemetry.length === 0) {
       this.setSpeedDisplay(null)
       this.setDistanceDisplay(null, null)
       return
     }
-    this.updateTelemetry(null, this.positions, true)
+    this.updateTelemetry(null, this.telemetry, true)
   }
 
   private updateTelemetry(
-    previousState: Float32Array | null,
-    currentState: Float32Array,
+    previousTelemetry: Float32Array | null,
+    currentTelemetry: Float32Array | null,
     force = false,
   ): void {
     const now = performance.now()
@@ -877,18 +876,17 @@ export class AppController {
     }
 
     const totalLength = this.spline.totalLength
-    const base = selectedIndex * 4
-    const progress = currentState[base]
+    const progress = currentTelemetry?.[selectedIndex] ?? null
     let speedMs = 0
 
     if (
-      previousState &&
-      previousState.length === currentState.length &&
+      previousTelemetry &&
+      previousTelemetry.length === (currentTelemetry?.length ?? 0) &&
       this.lastStateDt > 0 &&
       Number.isFinite(progress) &&
-      Number.isFinite(previousState[base])
+      Number.isFinite(previousTelemetry[selectedIndex])
     ) {
-      let delta = progress - previousState[base]
+      let delta = progress - previousTelemetry[selectedIndex]
       if (Number.isFinite(totalLength) && totalLength > 0) {
         const halfLength = totalLength / 2
         if (delta < -halfLength) {
@@ -945,9 +943,16 @@ export class AppController {
     return this.scene.riderObjects[index] ?? null
   }
 
-  private onSimulationState(state: Float32Array, dt?: number): void {
-    const previous = this.positions
+  private onSimulationState(
+    state: Float32Array,
+    telemetry?: Float32Array,
+    dt?: number,
+  ): void {
+    const previousTelemetry = this.telemetry
     this.positions = state
+    if (telemetry) {
+      this.telemetry = telemetry
+    }
     this.pelotonScene.applyState(this.positions)
     const queuedDt = this.pendingStepDts.shift()
     const resolvedDt =
@@ -957,7 +962,7 @@ export class AppController {
           ? queuedDt
           : 0
     this.lastStateDt = resolvedDt
-    this.updateTelemetry(previous, this.positions)
+    this.updateTelemetry(previousTelemetry, this.telemetry)
   }
 
   private applyModeColors(): void {
