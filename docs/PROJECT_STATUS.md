@@ -22,7 +22,8 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Affichage des observables physiques, énergétiques, environnementales et des forces du coureur isolé.
 - Représentation visuelle minimale dérivée de la distance simulée et jauge W'.
 - Vérification CI pour l'installation, le typecheck, les tests et le build sur Pull Request.
-- Documentation du projet, de l'architecture, du modèle physique longitudinal, du modèle énergétique minimal et du laboratoire visuel.
+- Workflow GitHub Actions pouvant publier le build Vite du laboratoire sur GitHub Pages depuis `main`, après installation, typecheck, tests et build de production.
+- Documentation du projet, de l'architecture, du modèle physique longitudinal, du modèle énergétique minimal, du laboratoire visuel et de la publication GitHub Pages.
 
 ## Limites
 
@@ -30,7 +31,7 @@ Le laboratoire observe le moteur existant et ne contient pas de nouvelle équati
 
 ## Non existant
 
-Le projet ne contient pas de pente, GPX, virages, position latérale, aspiration, intelligence artificielle, tactique, psychologie, exécution Web Worker, moteur de corps rigides, collisions, adhérence, modèle physiologique complexe, courbes de puissance personnalisées, plusieurs réserves énergétiques, température, hydratation, nutrition, plusieurs coureurs, scène 3D, Three.js, Zustand, sons, sauvegarde, backend, authentification ou déploiement.
+Le projet ne contient pas de pente, GPX, virages, position latérale, aspiration, intelligence artificielle, tactique, psychologie, exécution Web Worker, moteur de corps rigides, collisions, adhérence, modèle physiologique complexe, courbes de puissance personnalisées, plusieurs réserves énergétiques, température, hydratation, nutrition, plusieurs coureurs, scène 3D, Three.js, Zustand, sons, sauvegarde, backend ou authentification.
 
 ## Prochaine tâche unique
 

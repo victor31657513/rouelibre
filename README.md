@@ -49,11 +49,13 @@ Le laboratoire permet de régler la puissance demandée de 0 à 1 200 W, le vent
 
 Le pas de simulation est fixe (`1 / 60 s`). Le sélecteur ×1, ×5 ou ×20 change uniquement le nombre de ticks exécutés par seconde réelle : en fonctionnement normal, ×20 exécute vingt secondes simulées par seconde réelle sans modifier `dt`. Le plafond de sécurité concerne le temps réel rattrapable après une frame longue avant application du multiplicateur, afin d'éviter un rattrapage illimité après un gel ou un onglet inactif. La réinitialisation remet le temps, la distance, la vitesse, l'accélération, la réserve W' et les observables du dernier pas à zéro ou à leur capacité maximale, tout en conservant la puissance et le vent sélectionnés pour répéter un scénario.
 
-## Déploiement de prévisualisation
+## Publication GitHub Pages
 
-Le laboratoire web dispose d’un workflow GitHub Actions de prévisualisation qui construit le workspace, vérifie TypeScript et les tests, publie `apps/lab/dist` comme artefact et synchronise le contenu statique vers un serveur SSH. Le site est servi à la racine d’un sous-domaine dédié avec une base Vite `/`.
+Le laboratoire web dispose d’un workflow GitHub Actions qui construit le workspace, vérifie TypeScript, exécute les tests, produit `apps/lab/dist` et publie cet artefact avec GitHub Pages depuis la branche `main`. Le workflow peut aussi être lancé manuellement avec `workflow_dispatch` lorsque la branche sélectionnée est `main`.
 
-Consultez [`docs/PREVIEW_DEPLOYMENT.md`](docs/PREVIEW_DEPLOYMENT.md) pour la branche `preview`, le déclenchement manuel, les secrets de l’environnement GitHub `preview`, les protections sur le chemin distant et le diagnostic des échecs.
+Le développement local conserve une base Vite `/`. Le workflow GitHub Pages définit `VITE_BASE_PATH` pendant le build : `/` pour un dépôt de type `<propriétaire>.github.io`, ou `/<nom-du-dépôt>/` pour un dépôt projet. L’URL GitHub Pages est indiquée par l’environnement GitHub `github-pages` lorsqu’un déploiement réussit.
+
+Consultez [`docs/GITHUB_PAGES_DEPLOYMENT.md`](docs/GITHUB_PAGES_DEPLOYMENT.md) pour la configuration GitHub Pages, le dossier téléversé, la stratégie de base Vite et le diagnostic des échecs.
 
 ## Hors périmètre du socle actuel
 
