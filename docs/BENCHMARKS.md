@@ -38,3 +38,39 @@ Convention du vent : valeur positive pour un vent de face, valeur négative pour
 ## Limites d'interprétation
 
 Ces résultats valident uniquement le comportement numérique du modèle longitudinal plat avec les paramètres indiqués. Ils ne constituent pas une validation physiologique ou aérodynamique complète.
+
+## Scénario de référence : énergie CP/W' du coureur isolé
+
+Le scénario énergétique de référence utilise la logique CP/W' sans validation physiologique universelle. Les valeurs constituent des paramètres numériques de projet.
+
+Paramètres énergétiques :
+
+| Paramètre | Valeur |
+| --- | ---: |
+| Puissance critique (CP) | 250 W |
+| Réserve anaérobie W' | 20 000 J |
+| Efficacité de récupération | 0,5 |
+
+Résultats de référence pour des phases constantes :
+
+| Scénario | Résultat attendu |
+| --- | ---: |
+| 60 s à 250 W, réserve initiale 20 000 J | 20 000 J |
+| 60 s à 350 W, réserve initiale 20 000 J | 14 000 J |
+| 200 s à 350 W, réserve initiale 20 000 J | 0 J |
+| Pas suivant à 350 W avec réserve vide | 250 W produits |
+| 60 s à 150 W, réserve initiale 0 J | 3 000 J |
+| 120 s à 150 W, réserve initiale 0 J | 6 000 J |
+
+Scénario combiné avec un pas de 1 s :
+
+| Transition | Demande | Puissance produite | Réserve après transition |
+| --- | ---: | ---: | ---: |
+| Départ avec réserve pleine | 350 W | 350 W | 19 900 J après 1 s |
+| Après 200 s d'effort au-dessus de CP | 350 W | 350 W | 0 J |
+| Pas suivant avec réserve épuisée | 350 W | 250 W | 0 J |
+| Après 60 s sous CP depuis réserve vide | 150 W | 150 W | 3 000 J |
+| Reprise d'un effort au-dessus de CP pendant 30 s | 350 W | 350 W | 0 J |
+| Pas suivant après la seconde exhaustion | 350 W | 250 W | 0 J |
+
+Dans ce scénario combiné, l'effort à 350 W consomme 100 J/s au-dessus de CP. La phase à 150 W récupère 50 J/s avec une efficacité de 0,5. Après 60 s de récupération, 3 000 J permettent 30 s supplémentaires à 350 W avant une nouvelle limitation à CP.
