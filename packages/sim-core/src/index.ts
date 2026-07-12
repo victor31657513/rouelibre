@@ -16,7 +16,7 @@ export interface SingleRiderProfile {
    * Limite explicite de force propulsive à très basse vitesse.
    * Elle évite qu'une puissance finie produise une force infinie à l'arrêt.
    */
-  maxPropulsiveForceNewtons?: number;
+  maxPropulsiveForceNewtons: number;
 }
 
 /** Environnement longitudinal plat, en unités SI. */
@@ -59,7 +59,7 @@ export const defaultSingleRiderProfile: SingleRiderProfile = {
   rollingResistanceCoefficient: 0.004,
   mechanicalEfficiency: 0.97,
   maxPowerWatts: 1_200,
-  maxPropulsiveForceNewtons: 1_200,
+  maxPropulsiveForceNewtons: 200,
 };
 
 export const defaultFlatRoadEnvironment: FlatRoadEnvironment = {
@@ -72,6 +72,61 @@ function assertFinite(name: string, value: number): void {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${name} must be finite`);
   }
+}
+
+function assertNonNegative(name: string, value: number): void {
+  assertFinite(name, value);
+  if (value < 0) {
+    throw new RangeError(`${name} must be greater than or equal to zero`);
+  }
+}
+
+function assertPositive(name: string, value: number): void {
+  assertFinite(name, value);
+  if (value <= 0) {
+    throw new RangeError(`${name} must be greater than zero`);
+  }
+}
+
+function validateProfile(profile: SingleRiderProfile): void {
+  assertPositive("profile.riderMassKg", profile.riderMassKg);
+  assertNonNegative("profile.bikeMassKg", profile.bikeMassKg);
+  assertPositive("profile.totalMassKg", profile.riderMassKg + profile.bikeMassKg);
+  assertNonNegative("profile.cdaSquareMeters", profile.cdaSquareMeters);
+  assertNonNegative("profile.rollingResistanceCoefficient", profile.rollingResistanceCoefficient);
+  assertFinite("profile.mechanicalEfficiency", profile.mechanicalEfficiency);
+  if (profile.mechanicalEfficiency < 0 || profile.mechanicalEfficiency > 1) {
+    throw new RangeError("profile.mechanicalEfficiency must be between 0 and 1");
+  }
+  assertNonNegative("profile.maxPowerWatts", profile.maxPowerWatts);
+  assertPositive("profile.maxPropulsiveForceNewtons", profile.maxPropulsiveForceNewtons);
+}
+
+function validateEnvironment(environment: FlatRoadEnvironment): void {
+  assertNonNegative("environment.airDensityKgPerCubicMeter", environment.airDensityKgPerCubicMeter);
+  assertFinite("environment.windSpeedMetersPerSecond", environment.windSpeedMetersPerSecond);
+  assertPositive("environment.gravityMetersPerSecondSquared", environment.gravityMetersPerSecondSquared);
+}
+
+function validateState(state: SingleRiderState): void {
+  assertNonNegative("state.timeSeconds", state.timeSeconds);
+  assertNonNegative("state.distanceMeters", state.distanceMeters);
+  assertNonNegative("state.speedMetersPerSecond", state.speedMetersPerSecond);
+  assertFinite("state.accelerationMetersPerSecondSquared", state.accelerationMetersPerSecondSquared);
+  assertFinite("state.requestedPowerWatts", state.requestedPowerWatts);
+  assertNonNegative("state.producedPowerWatts", state.producedPowerWatts);
+}
+
+function validateStepInputs(
+  state: SingleRiderState,
+  profile: SingleRiderProfile,
+  environment: FlatRoadEnvironment,
+  dtSeconds: number,
+): void {
+  validateState(state);
+  validateProfile(profile);
+  validateEnvironment(environment);
+  assertPositive("dtSeconds", dtSeconds);
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -96,9 +151,13 @@ export function computeSingleRiderForces(
   profile: SingleRiderProfile,
   environment: FlatRoadEnvironment,
 ): SingleRiderForces {
+  validateState(state);
+  validateProfile(profile);
+  validateEnvironment(environment);
+
   const totalMassKg = profile.riderMassKg + profile.bikeMassKg;
   const producedPowerWatts = clamp(state.requestedPowerWatts, 0, profile.maxPowerWatts);
-  const maxPropulsiveForceNewtons = profile.maxPropulsiveForceNewtons ?? 1_200;
+  const maxPropulsiveForceNewtons = profile.maxPropulsiveForceNewtons;
   const effectivePowerWatts = producedPowerWatts * profile.mechanicalEfficiency;
   const forceFromPowerNewtons = effectivePowerWatts > 0
     ? effectivePowerWatts / Math.max(state.speedMetersPerSecond, effectivePowerWatts / maxPropulsiveForceNewtons)
@@ -135,10 +194,7 @@ export function stepSingleRider(
   environment: FlatRoadEnvironment,
   dtSeconds: number,
 ): void {
-  assertFinite("dtSeconds", dtSeconds);
-  if (dtSeconds <= 0) {
-    throw new RangeError("dtSeconds must be greater than zero");
-  }
+  validateStepInputs(state, profile, environment, dtSeconds);
 
   const forces = computeSingleRiderForces(state, profile, environment);
   const previousSpeedMetersPerSecond = Math.max(0, state.speedMetersPerSecond);
@@ -150,7 +206,7 @@ export function stepSingleRider(
   state.timeSeconds += dtSeconds;
   state.distanceMeters += ((previousSpeedMetersPerSecond + nextSpeedMetersPerSecond) / 2) * dtSeconds;
   state.speedMetersPerSecond = nextSpeedMetersPerSecond;
-  state.accelerationMetersPerSecondSquared = forces.accelerationMetersPerSecondSquared;
+  state.accelerationMetersPerSecondSquared = (nextSpeedMetersPerSecond - previousSpeedMetersPerSecond) / dtSeconds;
   state.producedPowerWatts = forces.producedPowerWatts;
 
   assertFinite("timeSeconds", state.timeSeconds);

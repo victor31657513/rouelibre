@@ -14,7 +14,7 @@ Paramètres coureur-vélo :
 | Coefficient de résistance au roulement | 0,004 |
 | Rendement mécanique | 0,97 |
 | Puissance maximale | 1 200 W |
-| Force propulsive maximale | 1 200 N |
+| Force propulsive maximale | 200 N |
 
 Paramètres environnement :
 

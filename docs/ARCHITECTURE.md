@@ -17,7 +17,7 @@ API exposée :
 - `SingleRiderState` contient l'état dynamique mutable.
 - `createSingleRiderState` crée un état initial typé.
 - `computeSingleRiderForces` calcule les forces longitudinales instantanées.
-- `stepSingleRider` avance un état d'un pas temporel explicite.
+- `stepSingleRider` valide les entrées publiques puis avance un état d'un pas temporel explicite.
 
 Contraintes :
 

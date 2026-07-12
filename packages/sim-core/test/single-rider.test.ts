@@ -18,7 +18,7 @@ const referenceProfile: SingleRiderProfile = {
   rollingResistanceCoefficient: 0.004,
   mechanicalEfficiency: 0.97,
   maxPowerWatts: 1_200,
-  maxPropulsiveForceNewtons: 1_200,
+  maxPropulsiveForceNewtons: 200,
 };
 
 const referenceEnvironment: FlatRoadEnvironment = {
@@ -28,12 +28,20 @@ const referenceEnvironment: FlatRoadEnvironment = {
   gravityMetersPerSecondSquared: 9.80665,
 };
 
+// Les valeurs de référence sont documentées au millième de m/s.
+const stabilizedSpeedToleranceMetersPerSecond = 0.001;
+const convergenceToleranceMetersPerSecond = 0.001;
+
 function expectFiniteState(state: SingleRiderState): void {
   expect(Number.isFinite(state.timeSeconds)).toBe(true);
   expect(Number.isFinite(state.distanceMeters)).toBe(true);
   expect(Number.isFinite(state.speedMetersPerSecond)).toBe(true);
   expect(Number.isFinite(state.accelerationMetersPerSecondSquared)).toBe(true);
   expect(Number.isFinite(state.producedPowerWatts)).toBe(true);
+}
+
+function cloneState(state: SingleRiderState): SingleRiderState {
+  return { ...state };
 }
 
 function simulate(
@@ -60,6 +68,29 @@ function simulate(
   return state;
 }
 
+function simulateWithPreviousSpeed(
+  powerWatts: number,
+  durationSeconds: number,
+  dtSeconds: number,
+  environment: FlatRoadEnvironment = referenceEnvironment,
+  previousWindowSeconds = 60,
+): { finalState: SingleRiderState; previousWindowSpeed: number } {
+  const state = createSingleRiderState(powerWatts);
+  const steps = Math.trunc(durationSeconds / dtSeconds);
+  const previousWindowStep = steps - Math.trunc(previousWindowSeconds / dtSeconds);
+  let previousWindowSpeed = state.speedMetersPerSecond;
+
+  for (let index = 0; index < steps; index += 1) {
+    if (index === previousWindowStep) {
+      previousWindowSpeed = state.speedMetersPerSecond;
+    }
+
+    stepSingleRider(state, referenceProfile, environment, dtSeconds);
+  }
+
+  return { finalState: state, previousWindowSpeed };
+}
+
 describe("single rider longitudinal physics", () => {
   it("starts from rest without NaN or infinite values", () => {
     const state = createSingleRiderState(250);
@@ -69,6 +100,18 @@ describe("single rider longitudinal physics", () => {
     expectFiniteState(state);
     expect(state.speedMetersPerSecond).toBeGreaterThan(0);
     expect(state.distanceMeters).toBeGreaterThan(0);
+  });
+
+  it("starts progressively at 60 Hz with bounded acceleration and speed", () => {
+    const state = createSingleRiderState(250);
+    const dtSeconds = 1 / 60;
+
+    stepSingleRider(state, referenceProfile, referenceEnvironment, dtSeconds);
+
+    expectFiniteState(state);
+    expect(state.accelerationMetersPerSecondSquared).toBeGreaterThan(0);
+    expect(state.accelerationMetersPerSecondSquared).toBeLessThanOrEqual(3);
+    expect(state.speedMetersPerSecond).toBeLessThanOrEqual(3 * dtSeconds);
   });
 
   it("keeps speed non-negative while coasting under resistance", () => {
@@ -132,6 +175,18 @@ describe("single rider longitudinal physics", () => {
     expect(state.accelerationMetersPerSecondSquared).toBeLessThan(0);
   });
 
+  it("keeps exposed acceleration consistent with clamped speed at rest", () => {
+    const state = createSingleRiderState(0);
+
+    stepSingleRider(state, referenceProfile, {
+      ...referenceEnvironment,
+      windSpeedMetersPerSecond: 3,
+    }, 0.5);
+
+    expect(state.speedMetersPerSecond).toBe(0);
+    expect(state.accelerationMetersPerSecondSquared).toBe(0);
+  });
+
   it("is deterministic for identical inputs", () => {
     const first = simulate(250, 3_600, 0.5, {
       ...referenceEnvironment,
@@ -150,5 +205,65 @@ describe("single rider longitudinal physics", () => {
 
     expectFiniteState(state);
     expect(state.timeSeconds).toBe(86_400);
+  });
+
+  it.each([
+    ["200 W sans vent", 200, 0, 9.411],
+    ["250 W sans vent", 250, 0, 10.220],
+    ["300 W sans vent", 300, 0, 10.923],
+    ["250 W vent de face", 250, 3, 8.418],
+    ["250 W vent arrière", 250, -3, 12.206],
+  ])("matches the documented stabilized speed for %s", (_label, powerWatts, windSpeedMetersPerSecond, expectedSpeed) => {
+    const { finalState, previousWindowSpeed } = simulateWithPreviousSpeed(powerWatts, 7_200, 0.5, {
+      ...referenceEnvironment,
+      windSpeedMetersPerSecond,
+    });
+
+    expect(Math.abs(finalState.speedMetersPerSecond - expectedSpeed)).toBeLessThanOrEqual(
+      stabilizedSpeedToleranceMetersPerSecond,
+    );
+    expect(Math.abs(finalState.speedMetersPerSecond - previousWindowSpeed)).toBeLessThan(
+      convergenceToleranceMetersPerSecond,
+    );
+  });
+});
+
+describe("single rider input validation", () => {
+  it.each([
+    ["zero total mass", { riderMassKg: 0, bikeMassKg: 0 }, /profile\.riderMassKg/],
+    ["negative maximum power", { maxPowerWatts: -1 }, /profile\.maxPowerWatts/],
+    ["efficiency below zero", { mechanicalEfficiency: -0.1 }, /profile\.mechanicalEfficiency/],
+    ["efficiency above one", { mechanicalEfficiency: 1.1 }, /profile\.mechanicalEfficiency/],
+    ["zero maximum propulsive force", { maxPropulsiveForceNewtons: 0 }, /profile\.maxPropulsiveForceNewtons/],
+    ["NaN CdA", { cdaSquareMeters: Number.NaN }, /profile\.cdaSquareMeters/],
+  ])("rejects invalid profile input: %s", (_label, profilePatch, expectedMessage) => {
+    const state = createSingleRiderState(250);
+    const before = cloneState(state);
+
+    expect(() => {
+      stepSingleRider(state, { ...referenceProfile, ...profilePatch }, referenceEnvironment, 0.5);
+    }).toThrow(expectedMessage);
+    expect(state).toStrictEqual(before);
+  });
+
+  it.each([0, -0.5])("rejects a non-positive dt without mutating state: %s", (dtSeconds) => {
+    const state = createSingleRiderState(250);
+    const before = cloneState(state);
+
+    expect(() => {
+      stepSingleRider(state, referenceProfile, referenceEnvironment, dtSeconds);
+    }).toThrow(/dtSeconds/);
+    expect(state).toStrictEqual(before);
+  });
+
+  it("rejects invalid state values before mutation", () => {
+    const state = createSingleRiderState(250);
+    state.distanceMeters = Number.NaN;
+    const before = cloneState(state);
+
+    expect(() => {
+      stepSingleRider(state, referenceProfile, referenceEnvironment, 0.5);
+    }).toThrow(/state\.distanceMeters/);
+    expect(state).toStrictEqual(before);
   });
 });

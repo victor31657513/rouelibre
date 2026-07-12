@@ -20,4 +20,4 @@ Le projet ne contient pas de modèle d'énergie, puissance critique, fatigue, r�
 
 ## Prochaine tâche unique
 
-La prochaine tâche doit rester limitée à un seul sujet explicitement demandé. Le moteur longitudinal plat constitue le seul comportement de simulation cycliste implémenté et testé.
+Implémenter le modèle énergétique minimal du coureur isolé avec puissance critique, réserve anaérobie, consommation et récupération. Cette tâche n’est pas implémentée dans la PR du moteur longitudinal plat.
