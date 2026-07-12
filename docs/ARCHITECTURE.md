@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-Le dépôt est organisé en workspace pnpm. Le socle contient les éléments nécessaires aux vérifications reproductibles et au noyau de simulation longitudinal minimal.
+Le dépôt est organisé en workspace pnpm. Le socle contient les éléments nécessaires aux vérifications reproductibles, au noyau de simulation longitudinal minimal et au modèle énergétique minimal d'un coureur isolé.
 
 ## Packages
 
@@ -10,14 +10,26 @@ Le dépôt est organisé en workspace pnpm. Le socle contient les éléments né
 
 `sim-core` contient le moteur de simulation sans dépendance graphique, navigateur, DOM, React, Three.js ni moteur de corps rigides.
 
+Organisation interne :
+
+- `src/longitudinal.ts` contient le profil physique, l'environnement plat, l'état physique, les forces longitudinales et le pas physique historique.
+- `src/energy.ts` contient le profil énergétique CP/W', l'état énergétique, la logique de consommation/récupération et l'orchestration énergie puis physique.
+- `src/index.ts` expose uniquement l'API publique nécessaire aux consommateurs du package.
+
 API exposée :
 
 - `SingleRiderProfile` décrit le couple coureur-vélo avec masses, CdA, coefficient de roulement, rendement mécanique, puissance maximale et limite de force propulsive basse vitesse.
 - `FlatRoadEnvironment` décrit l'air, le vent longitudinal et la gravité.
-- `SingleRiderState` contient l'état dynamique mutable.
-- `createSingleRiderState` crée un état initial typé.
-- `computeSingleRiderForces` calcule les forces longitudinales instantanées.
-- `stepSingleRider` valide les entrées publiques puis avance un état d'un pas temporel explicite.
+- `SingleRiderState` contient l'état dynamique physique mutable.
+- `createSingleRiderState` crée un état physique initial typé.
+- `computeSingleRiderForces` calcule les forces longitudinales instantanées en utilisant la puissance demandée bornée, pour les usages historiques sans modèle énergétique.
+- `computeSingleRiderForcesAtPower` calcule les forces longitudinales instantanées avec une puissance produite explicite, utile lorsque la puissance est limitée par le modèle énergétique.
+- `stepSingleRider` valide les entrées publiques puis avance un état physique d'un pas temporel explicite sans modèle énergétique.
+- `SingleRiderEnergyProfile` décrit la puissance critique, la capacité anaérobie W' et l'efficacité de récupération.
+- `SingleRiderEnergyState` contient la réserve anaérobie mutable et les observables du dernier pas énergétique.
+- `createSingleRiderEnergyState` crée un état énergétique initial, plein par défaut ou avec une réserve explicite bornée.
+- `stepSingleRiderEnergy` applique uniquement la logique énergétique CP/W' et retourne la puissance produite autorisée.
+- `stepSingleRiderWithEnergy` orchestre un pas complet : validation, calcul énergétique pur, calcul physique candidat pur, validation des candidats, puis commit atomique des états énergétique et physique.
 
 Contraintes :
 
@@ -26,7 +38,8 @@ Contraintes :
 - pas de dépendance au DOM ou au navigateur ;
 - pas de dépendance graphique ;
 - pas d'utilisation directe de `Math.random()` dans le code de simulation ;
-- unités SI dans le moteur.
+- unités SI dans le moteur ;
+- séparation entre profil physique, profil énergétique, état physique, état énergétique, logique énergétique et orchestration combinée.
 
 ## Scripts racine
 
