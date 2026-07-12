@@ -46,5 +46,30 @@ Contraintes :
 - `pnpm install` installe le workspace.
 - `pnpm typecheck` exécute le typecheck des packages.
 - `pnpm test` exécute les tests des packages.
+- `pnpm build` exécute le build de production des workspaces qui en définissent un, notamment le laboratoire visuel.
 
-Aucun script `build` racine n'est défini parce qu'aucun build pertinent n'existe.
+### `apps/lab`
+
+`apps/lab` contient le laboratoire visuel minimal du coureur isolé. L'application utilise Vite, React, TypeScript strict et du CSS simple. Elle dépend de `@rouelibre/sim-core` par son API publique et ne copie pas le moteur.
+
+Direction des dépendances :
+
+```text
+apps/lab → packages/sim-core
+```
+
+`sim-core` ne dépend pas du laboratoire, de React, de Vite, du DOM, du navigateur, de Three.js ni d'une bibliothèque graphique.
+
+Organisation :
+
+- `src/simulation/labSimulation.ts` contient le contrôleur indépendant de React et du DOM. Il possède les états physique et énergétique, applique CP = 250 W, W' = 20 000 J, une efficacité de récupération de 0,5, un pas fixe `1 / 60 s` et calcule les forces avec la puissance réellement produite.
+- `src/simulation/fixedStepRunner.ts` contient l'adaptateur temporel. Il transforme le temps réel issu de `requestAnimationFrame` en ticks entiers, conserve un reliquat, plafonne le rattrapage après gel et réinitialise sa référence temporelle lors d'une reprise.
+- `src/App.tsx` contient les composants React d'affichage et de commande. Les composants ne portent pas la logique de simulation et ne reçoivent que des instantanés copiés et gelés.
+- `src/styles.css` fournit une présentation CSS simple, responsive et lisible.
+
+Choix temporaires et réversibles :
+
+- Three.js est reporté parce qu'une route plate et un bloc cycliste suffisent à observer un seul coureur isolé.
+- Zustand est reporté parce qu'une page unique peut rester pilotée par l'état React local et un contrôleur explicite.
+- Web Worker est reporté parce qu'un seul coureur à 60 Hz ne justifie pas encore un protocole de messages dédié. La séparation entre contrôleur, adaptateur temporel et UI permet de déplacer ultérieurement l'exécution dans un Web Worker sans modifier `sim-core`.
+- Les bibliothèques de graphiques, de composants et les frameworks CSS sont reportés parce que les observables sont des valeurs numériques et des jauges simples.

@@ -1,10 +1,10 @@
 # Roue libre
 
-Roue libre est un projet de simulation cycliste en phase de fondation technique.
+Roue libre est un projet de simulation cycliste en phase de fondation technique, physique minimale, énergétique minimale et laboratoire visuel minimal pour un coureur isolé.
 
 ## État du projet
 
-Le dépôt contient le socle minimal pour développer, tester et examiner les futures Pull Requests de manière reproductible. Aucune fonctionnalité de simulation cycliste n'est implémentée, validée ou exposée.
+Le dépôt contient un moteur longitudinal déterministe plat pour un coureur isolé, un modèle énergétique minimal CP/W' et une application web de laboratoire destinée à observer ces modèles. Le laboratoire expose les modèles implémentés et testés ; il ne valide pas de fonctionnalité hors périmètre comme la pente, le GPX, les virages, l'aspiration ou plusieurs coureurs.
 
 Consultez [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) avant toute modification importante.
 
@@ -13,24 +13,42 @@ Consultez [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) avant toute modific
 - Node.js 24 (`>=24 <25`)
 - pnpm 10.28.1
 
+## Installation
+
+```bash
+pnpm install
+```
+
 ## Workspace
 
 Le dépôt utilise un workspace pnpm avec TypeScript strict et Vitest.
 
 Packages présents :
 
-- `packages/sim-core` : package de base destiné au futur moteur de simulation. Il ne dépend pas de React, Three.js, du DOM, du navigateur ou d'une technologie graphique.
+- `packages/sim-core` : moteur de simulation longitudinal et énergétique minimal, sans dépendance à React, Vite, Three.js, au DOM, au navigateur ou à une technologie graphique.
+- `apps/lab` : laboratoire web Vite/React qui dépend de l'API publique de `@rouelibre/sim-core` pour piloter et observer un coureur isolé.
 
 ## Commandes
 
 ```bash
 pnpm install
+pnpm dev
 pnpm typecheck
 pnpm test
+pnpm build
 ```
 
-Le dépôt ne définit pas de script `build` racine parce qu'aucun build pertinent n'existe dans le socle actuel.
+- `pnpm dev` lance le laboratoire visuel.
+- `pnpm typecheck` vérifie le workspace en TypeScript strict.
+- `pnpm test` exécute les tests du moteur, du contrôleur du laboratoire, de l'adaptateur temporel et des composants React.
+- `pnpm build` produit le build de production du laboratoire.
+
+## Laboratoire visuel
+
+Le laboratoire permet de régler la puissance demandée de 0 à 1 200 W, le vent longitudinal de -10 à +10 m/s, de démarrer ou mettre en pause l'exécution, de réinitialiser le scénario et d'avancer exactement une seconde simulée lorsque l'exécution est en pause.
+
+Le pas de simulation est fixe (`1 / 60 s`). Le sélecteur ×1, ×5 ou ×20 change uniquement le nombre de ticks exécutés par seconde réelle. La réinitialisation remet le temps, la distance, la vitesse, l'accélération, la réserve W' et les observables du dernier pas à zéro ou à leur capacité maximale, tout en conservant la puissance et le vent sélectionnés pour répéter un scénario.
 
 ## Hors périmètre du socle actuel
 
-Le dépôt ne contient pas de moteur physique, d'énergie, d'intelligence artificielle, d'aspiration, de rendu graphique, d'import GPX, de Web Worker, de React, de Three.js, de Zustand ou de Rapier.
+Le dépôt ne contient pas de pente, altitude, GPX, virages, position latérale, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, Three.js, scène 3D, Zustand, Web Worker, moteur de corps rigides, collisions, adhérence, sons, sauvegarde, backend, authentification ou déploiement.
