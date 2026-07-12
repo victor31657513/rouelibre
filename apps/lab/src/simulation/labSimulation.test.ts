@@ -1,0 +1,24 @@
+import { computeSingleRiderForcesAtPower, defaultSingleRiderProfile } from "@rouelibre/sim-core";
+import { describe, expect, it } from "vitest";
+import { createLabSimulation, LAB_ENERGY_PROFILE } from "./labSimulation.js";
+
+const closeTo = (a: number, b: number, d = 8) => expect(a).toBeCloseTo(b, d);
+const run = (power: number, wind: number, ticks: number) => { const s = createLabSimulation(); s.setRequestedPowerWatts(power); s.setWindSpeedMetersPerSecond(wind); s.stepTicks(ticks); return s.getSnapshot(); };
+
+describe("lab simulation controller", () => {
+  it("exposes the exact initial state", () => { const snap = createLabSimulation().getSnapshot(); expect(snap.physicalState).toMatchObject({ timeSeconds: 0, distanceMeters: 0, speedMetersPerSecond: 0, accelerationMetersPerSecondSquared: 0, requestedPowerWatts: 250, producedPowerWatts: 0 }); expect(snap.energyState).toMatchObject({ anaerobicReserveJoules: 20_000, lastAnaerobicPowerWatts: 0, lastRecoveryPowerWatts: 0, isPowerLimitedByEnergy: false }); expect(snap.environment.windSpeedMetersPerSecond).toBe(0); });
+  it("advances 600 ticks as about ten simulated seconds", () => closeTo(run(250, 0, 600).physicalState.timeSeconds, 10));
+  it("is deterministic for identical command and tick sequences", () => expect(run(350, 2, 1234)).toEqual(run(350, 2, 1234)));
+  it("has positive distance and speed after progression at 250 W", () => { const p = run(250, 0, 600).physicalState; expect(p.distanceMeters).toBeGreaterThan(0); expect(p.speedMetersPerSecond).toBeGreaterThan(0); });
+  it("keeps reserve unchanged at CP", () => closeTo(run(250, 0, 600).energyState.anaerobicReserveJoules, 20_000));
+  it("consumes reserve at 350 W", () => expect(run(350, 0, 600).energyState.anaerobicReserveJoules).toBeLessThan(20_000));
+  it("recovers below CP after prior consumption", () => { const s = createLabSimulation(); s.setRequestedPowerWatts(350); s.stepTicks(600); const depleted = s.getSnapshot().energyState.anaerobicReserveJoules; s.setRequestedPowerWatts(150); s.stepTicks(600); expect(s.getSnapshot().energyState.anaerobicReserveJoules).toBeGreaterThan(depleted); });
+  it("headwind reduces speed versus no wind", () => expect(run(250, 3, 1800).physicalState.speedMetersPerSecond).toBeLessThan(run(250, 0, 1800).physicalState.speedMetersPerSecond));
+  it("tailwind increases speed versus no wind", () => expect(run(250, -3, 1800).physicalState.speedMetersPerSecond).toBeGreaterThan(run(250, 0, 1800).physicalState.speedMetersPerSecond));
+  it("empty reserve limits a 350 W demand to 250 W", () => { const s = createLabSimulation(); s.setRequestedPowerWatts(350); s.stepTicks(12_001); closeTo(s.getSnapshot().physicalState.producedPowerWatts, 250); expect(s.getSnapshot().energyState.isPowerLimitedByEnergy).toBe(true); });
+  it("computes forces from produced power instead of requested power", () => { const snap = run(350, 0, 12_001); const producedForces = computeSingleRiderForcesAtPower(snap.physicalState, defaultSingleRiderProfile, snap.environment, snap.physicalState.producedPowerWatts); const requestedForces = computeSingleRiderForcesAtPower(snap.physicalState, defaultSingleRiderProfile, snap.environment, snap.physicalState.requestedPowerWatts); closeTo(snap.forces.propulsiveForceNewtons, producedForces.propulsiveForceNewtons); expect(snap.forces.propulsiveForceNewtons).not.toBeCloseTo(requestedForces.propulsiveForceNewtons, 4); });
+  it("resets physical and energy state", () => { const s = createLabSimulation(); s.setRequestedPowerWatts(350); s.stepTicks(600); s.reset(); const snap = s.getSnapshot(); expect(snap.physicalState.timeSeconds).toBe(0); expect(snap.physicalState.distanceMeters).toBe(0); expect(snap.physicalState.speedMetersPerSecond).toBe(0); expect(snap.energyState.anaerobicReserveJoules).toBe(LAB_ENERGY_PROFILE.anaerobicCapacityJoules); expect(snap.energyState.lastAnaerobicPowerWatts).toBe(0); });
+  it("keeps power and wind controls after reset", () => { const s = createLabSimulation(); s.setRequestedPowerWatts(500); s.setWindSpeedMetersPerSecond(-4); s.stepTicks(10); s.reset(); const snap = s.getSnapshot(); expect(snap.physicalState.requestedPowerWatts).toBe(500); expect(snap.environment.windSpeedMetersPerSecond).toBe(-4); });
+  it("rejects invalid tick counts", () => { const s = createLabSimulation(); expect(() => s.stepTicks(-1)).toThrow(RangeError); expect(() => s.stepTicks(1.5)).toThrow(RangeError); expect(() => s.stepTicks(Number.POSITIVE_INFINITY)).toThrow(RangeError); });
+  it("returns snapshots that cannot mutate internals", () => { const s = createLabSimulation(); const snap = s.getSnapshot(); expect(Object.isFrozen(snap.physicalState)).toBe(true); expect(() => { (snap.physicalState as { requestedPowerWatts: number }).requestedPowerWatts = 999; }).toThrow(TypeError); expect(s.getSnapshot().physicalState.requestedPowerWatts).toBe(250); });
+});
