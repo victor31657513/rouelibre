@@ -41,6 +41,21 @@ export interface SingleRiderState {
   producedPowerWatts: number;
 }
 
+/** Paramètres énergétiques CP/W' minimaux d'un coureur isolé, en unités SI. */
+export interface SingleRiderEnergyProfile {
+  criticalPowerWatts: number;
+  anaerobicCapacityJoules: number;
+  recoveryEfficiency: number;
+}
+
+/** État énergétique mutable d'un coureur isolé, en unités SI. */
+export interface SingleRiderEnergyState {
+  anaerobicReserveJoules: number;
+  anaerobicPowerWatts: number;
+  lastRecoveryPowerWatts: number;
+  isPowerLimitedByEnergy: boolean;
+}
+
 export interface SingleRiderForces {
   totalMassKg: number;
   producedPowerWatts: number;
@@ -50,6 +65,16 @@ export interface SingleRiderForces {
   rollingResistanceForceNewtons: number;
   netForceNewtons: number;
   accelerationMetersPerSecondSquared: number;
+}
+
+interface SingleRiderStepCandidate extends SingleRiderState {}
+
+interface SingleRiderEnergyStepResult {
+  producedPowerWatts: number;
+  nextAnaerobicReserveJoules: number;
+  anaerobicPowerWatts: number;
+  recoveryPowerWatts: number;
+  isPowerLimitedByEnergy: boolean;
 }
 
 export const defaultSingleRiderProfile: SingleRiderProfile = {
@@ -62,6 +87,12 @@ export const defaultSingleRiderProfile: SingleRiderProfile = {
   maxPropulsiveForceNewtons: 200,
 };
 
+export const defaultSingleRiderEnergyProfile: SingleRiderEnergyProfile = {
+  criticalPowerWatts: 250,
+  anaerobicCapacityJoules: 20_000,
+  recoveryEfficiency: 0.5,
+};
+
 export const defaultFlatRoadEnvironment: FlatRoadEnvironment = {
   airDensityKgPerCubicMeter: 1.225,
   windSpeedMetersPerSecond: 0,
@@ -71,6 +102,12 @@ export const defaultFlatRoadEnvironment: FlatRoadEnvironment = {
 function assertFinite(name: string, value: number): void {
   if (!Number.isFinite(value)) {
     throw new RangeError(`${name} must be finite`);
+  }
+}
+
+function assertFiniteResult(name: string, value: number): void {
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${name} result must be finite`);
   }
 }
 
@@ -102,6 +139,15 @@ function validateProfile(profile: SingleRiderProfile): void {
   assertPositive("profile.maxPropulsiveForceNewtons", profile.maxPropulsiveForceNewtons);
 }
 
+function validateEnergyProfile(energyProfile: SingleRiderEnergyProfile): void {
+  assertNonNegative("energyProfile.criticalPowerWatts", energyProfile.criticalPowerWatts);
+  assertNonNegative("energyProfile.anaerobicCapacityJoules", energyProfile.anaerobicCapacityJoules);
+  assertFinite("energyProfile.recoveryEfficiency", energyProfile.recoveryEfficiency);
+  if (energyProfile.recoveryEfficiency < 0 || energyProfile.recoveryEfficiency > 1) {
+    throw new RangeError("energyProfile.recoveryEfficiency must be between 0 and 1");
+  }
+}
+
 function validateEnvironment(environment: FlatRoadEnvironment): void {
   assertNonNegative("environment.airDensityKgPerCubicMeter", environment.airDensityKgPerCubicMeter);
   assertFinite("environment.windSpeedMetersPerSecond", environment.windSpeedMetersPerSecond);
@@ -117,6 +163,15 @@ function validateState(state: SingleRiderState): void {
   assertNonNegative("state.producedPowerWatts", state.producedPowerWatts);
 }
 
+function validateEnergyState(energyState: SingleRiderEnergyState, energyProfile: SingleRiderEnergyProfile): void {
+  assertNonNegative("energyState.anaerobicReserveJoules", energyState.anaerobicReserveJoules);
+  if (energyState.anaerobicReserveJoules > energyProfile.anaerobicCapacityJoules) {
+    throw new RangeError("energyState.anaerobicReserveJoules must be less than or equal to energyProfile.anaerobicCapacityJoules");
+  }
+  assertNonNegative("energyState.anaerobicPowerWatts", energyState.anaerobicPowerWatts);
+  assertNonNegative("energyState.lastRecoveryPowerWatts", energyState.lastRecoveryPowerWatts);
+}
+
 function validateStepInputs(
   state: SingleRiderState,
   profile: SingleRiderProfile,
@@ -127,6 +182,64 @@ function validateStepInputs(
   validateProfile(profile);
   validateEnvironment(environment);
   assertPositive("dtSeconds", dtSeconds);
+}
+
+function validateCombinedStepInputs(
+  state: SingleRiderState,
+  energyState: SingleRiderEnergyState,
+  profile: SingleRiderProfile,
+  energyProfile: SingleRiderEnergyProfile,
+  environment: FlatRoadEnvironment,
+  dtSeconds: number,
+): void {
+  validateStepInputs(state, profile, environment, dtSeconds);
+  validateEnergyProfile(energyProfile);
+  validateEnergyState(energyState, energyProfile);
+}
+
+function validateForces(forces: SingleRiderForces): void {
+  assertFiniteResult("forces.totalMassKg", forces.totalMassKg);
+  assertFiniteResult("forces.producedPowerWatts", forces.producedPowerWatts);
+  assertFiniteResult("forces.propulsiveForceNewtons", forces.propulsiveForceNewtons);
+  assertFiniteResult("forces.relativeAirSpeedMetersPerSecond", forces.relativeAirSpeedMetersPerSecond);
+  assertFiniteResult("forces.aerodynamicDragForceNewtons", forces.aerodynamicDragForceNewtons);
+  assertFiniteResult("forces.rollingResistanceForceNewtons", forces.rollingResistanceForceNewtons);
+  assertFiniteResult("forces.netForceNewtons", forces.netForceNewtons);
+  assertFiniteResult("forces.accelerationMetersPerSecondSquared", forces.accelerationMetersPerSecondSquared);
+}
+
+function validateStateCandidate(candidate: SingleRiderStepCandidate): void {
+  assertNonNegative("candidate.timeSeconds", candidate.timeSeconds);
+  assertNonNegative("candidate.distanceMeters", candidate.distanceMeters);
+  assertNonNegative("candidate.speedMetersPerSecond", candidate.speedMetersPerSecond);
+  assertFiniteResult("candidate.accelerationMetersPerSecondSquared", candidate.accelerationMetersPerSecondSquared);
+  assertFinite("candidate.requestedPowerWatts", candidate.requestedPowerWatts);
+  assertNonNegative("candidate.producedPowerWatts", candidate.producedPowerWatts);
+}
+
+function validateEnergyStepResult(
+  result: SingleRiderEnergyStepResult,
+  energyProfile: SingleRiderEnergyProfile,
+): void {
+  assertFiniteResult("energy.producedPowerWatts", result.producedPowerWatts);
+  assertFiniteResult("energy.nextAnaerobicReserveJoules", result.nextAnaerobicReserveJoules);
+  assertFiniteResult("energy.anaerobicPowerWatts", result.anaerobicPowerWatts);
+  assertFiniteResult("energy.recoveryPowerWatts", result.recoveryPowerWatts);
+  if (result.producedPowerWatts < 0) {
+    throw new RangeError("energy.producedPowerWatts result must be greater than or equal to zero");
+  }
+  if (result.nextAnaerobicReserveJoules < 0) {
+    throw new RangeError("energy.nextAnaerobicReserveJoules result must be greater than or equal to zero");
+  }
+  if (result.nextAnaerobicReserveJoules > energyProfile.anaerobicCapacityJoules) {
+    throw new RangeError("energy.nextAnaerobicReserveJoules result must be less than or equal to capacity");
+  }
+  if (result.anaerobicPowerWatts < 0) {
+    throw new RangeError("energy.anaerobicPowerWatts result must be greater than or equal to zero");
+  }
+  if (result.recoveryPowerWatts < 0) {
+    throw new RangeError("energy.recoveryPowerWatts result must be greater than or equal to zero");
+  }
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -146,19 +259,47 @@ export function createSingleRiderState(requestedPowerWatts: number): SingleRider
   };
 }
 
+export function createSingleRiderEnergyState(
+  energyProfile: SingleRiderEnergyProfile = defaultSingleRiderEnergyProfile,
+): SingleRiderEnergyState {
+  validateEnergyProfile(energyProfile);
+
+  return {
+    anaerobicReserveJoules: energyProfile.anaerobicCapacityJoules,
+    anaerobicPowerWatts: 0,
+    lastRecoveryPowerWatts: 0,
+    isPowerLimitedByEnergy: false,
+  };
+}
+
+/**
+ * Calcule les forces avec la puissance demandée de l'état, bornée par la puissance maximale du profil.
+ * Pour une simulation couplée à l'énergie, utiliser `computeSingleRiderForcesAtPower` avec la puissance produite.
+ */
 export function computeSingleRiderForces(
   state: SingleRiderState,
   profile: SingleRiderProfile,
   environment: FlatRoadEnvironment,
 ): SingleRiderForces {
+  return computeSingleRiderForcesAtPower(state, profile, environment, state.requestedPowerWatts);
+}
+
+/** Calcule les forces avec une puissance explicitement fournie, sans modifier l'état. */
+export function computeSingleRiderForcesAtPower(
+  state: SingleRiderState,
+  profile: SingleRiderProfile,
+  environment: FlatRoadEnvironment,
+  producedPowerWatts: number,
+): SingleRiderForces {
   validateState(state);
   validateProfile(profile);
   validateEnvironment(environment);
+  assertFinite("producedPowerWatts", producedPowerWatts);
 
   const totalMassKg = profile.riderMassKg + profile.bikeMassKg;
-  const producedPowerWatts = clamp(state.requestedPowerWatts, 0, profile.maxPowerWatts);
+  const boundedProducedPowerWatts = clamp(producedPowerWatts, 0, profile.maxPowerWatts);
   const maxPropulsiveForceNewtons = profile.maxPropulsiveForceNewtons;
-  const effectivePowerWatts = producedPowerWatts * profile.mechanicalEfficiency;
+  const effectivePowerWatts = boundedProducedPowerWatts * profile.mechanicalEfficiency;
   const forceFromPowerNewtons = effectivePowerWatts > 0
     ? effectivePowerWatts / Math.max(state.speedMetersPerSecond, effectivePowerWatts / maxPropulsiveForceNewtons)
     : 0;
@@ -176,9 +317,9 @@ export function computeSingleRiderForces(
   const netForceNewtons = propulsiveForceNewtons - aerodynamicDragForceNewtons - rollingResistanceForceNewtons;
   const accelerationMetersPerSecondSquared = netForceNewtons / totalMassKg;
 
-  return {
+  const forces = {
     totalMassKg,
-    producedPowerWatts,
+    producedPowerWatts: boundedProducedPowerWatts,
     propulsiveForceNewtons,
     relativeAirSpeedMetersPerSecond,
     aerodynamicDragForceNewtons,
@@ -186,6 +327,116 @@ export function computeSingleRiderForces(
     netForceNewtons,
     accelerationMetersPerSecondSquared,
   };
+  validateForces(forces);
+  return forces;
+}
+
+function computeSingleRiderStepCandidate(
+  state: SingleRiderState,
+  forces: SingleRiderForces,
+  dtSeconds: number,
+): SingleRiderStepCandidate {
+  const previousSpeedMetersPerSecond = Math.max(0, state.speedMetersPerSecond);
+  const nextSpeedMetersPerSecond = Math.max(
+    0,
+    previousSpeedMetersPerSecond + forces.accelerationMetersPerSecondSquared * dtSeconds,
+  );
+
+  const candidate = {
+    timeSeconds: state.timeSeconds + dtSeconds,
+    distanceMeters: state.distanceMeters + ((previousSpeedMetersPerSecond + nextSpeedMetersPerSecond) / 2) * dtSeconds,
+    speedMetersPerSecond: nextSpeedMetersPerSecond,
+    accelerationMetersPerSecondSquared: (nextSpeedMetersPerSecond - previousSpeedMetersPerSecond) / dtSeconds,
+    requestedPowerWatts: state.requestedPowerWatts,
+    producedPowerWatts: forces.producedPowerWatts,
+  };
+  validateStateCandidate(candidate);
+  return candidate;
+}
+
+function commitSingleRiderStep(state: SingleRiderState, candidate: SingleRiderStepCandidate): void {
+  state.timeSeconds = candidate.timeSeconds;
+  state.distanceMeters = candidate.distanceMeters;
+  state.speedMetersPerSecond = candidate.speedMetersPerSecond;
+  state.accelerationMetersPerSecondSquared = candidate.accelerationMetersPerSecondSquared;
+  state.producedPowerWatts = candidate.producedPowerWatts;
+}
+
+function computeSingleRiderEnergyStep(
+  requestedPowerWatts: number,
+  energyState: SingleRiderEnergyState,
+  energyProfile: SingleRiderEnergyProfile,
+  dtSeconds: number,
+): SingleRiderEnergyStepResult {
+  assertFinite("requestedPowerWatts", requestedPowerWatts);
+  validateEnergyProfile(energyProfile);
+  validateEnergyState(energyState, energyProfile);
+  assertPositive("dtSeconds", dtSeconds);
+
+  const requestedPositivePowerWatts = Math.max(0, requestedPowerWatts);
+  const requestedAnaerobicPowerWatts = Math.max(0, requestedPositivePowerWatts - energyProfile.criticalPowerWatts);
+  const availableAnaerobicPowerWatts = energyState.anaerobicReserveJoules / dtSeconds;
+  const anaerobicPowerWatts = Math.min(requestedAnaerobicPowerWatts, availableAnaerobicPowerWatts);
+  const isPowerLimitedByEnergy = anaerobicPowerWatts < requestedAnaerobicPowerWatts;
+  const producedPowerWatts = requestedPositivePowerWatts > energyProfile.criticalPowerWatts
+    ? energyProfile.criticalPowerWatts + anaerobicPowerWatts
+    : requestedPositivePowerWatts;
+
+  if (requestedPositivePowerWatts >= energyProfile.criticalPowerWatts) {
+    const nextAnaerobicReserveJoules = energyState.anaerobicReserveJoules - anaerobicPowerWatts * dtSeconds;
+    const result = {
+      producedPowerWatts,
+      nextAnaerobicReserveJoules,
+      anaerobicPowerWatts,
+      recoveryPowerWatts: 0,
+      isPowerLimitedByEnergy,
+    };
+    validateEnergyStepResult(result, energyProfile);
+    return result;
+  }
+
+  const potentialRecoveryPowerWatts = (energyProfile.criticalPowerWatts - requestedPositivePowerWatts)
+    * energyProfile.recoveryEfficiency;
+  const nextAnaerobicReserveJoules = Math.min(
+    energyProfile.anaerobicCapacityJoules,
+    energyState.anaerobicReserveJoules + potentialRecoveryPowerWatts * dtSeconds,
+  );
+  const recoveryPowerWatts = (nextAnaerobicReserveJoules - energyState.anaerobicReserveJoules) / dtSeconds;
+  const result = {
+    producedPowerWatts,
+    nextAnaerobicReserveJoules,
+    anaerobicPowerWatts: 0,
+    recoveryPowerWatts,
+    isPowerLimitedByEnergy: false,
+  };
+  validateEnergyStepResult(result, energyProfile);
+  return result;
+}
+
+function commitSingleRiderEnergyStep(
+  energyState: SingleRiderEnergyState,
+  result: SingleRiderEnergyStepResult,
+): void {
+  energyState.anaerobicReserveJoules = result.nextAnaerobicReserveJoules;
+  energyState.anaerobicPowerWatts = result.anaerobicPowerWatts;
+  energyState.lastRecoveryPowerWatts = result.recoveryPowerWatts;
+  energyState.isPowerLimitedByEnergy = result.isPowerLimitedByEnergy;
+}
+
+export function stepSingleRiderEnergy(
+  state: SingleRiderState,
+  energyState: SingleRiderEnergyState,
+  energyProfile: SingleRiderEnergyProfile,
+  dtSeconds: number,
+): void {
+  validateState(state);
+  validateEnergyProfile(energyProfile);
+  validateEnergyState(energyState, energyProfile);
+  assertPositive("dtSeconds", dtSeconds);
+
+  const result = computeSingleRiderEnergyStep(state.requestedPowerWatts, energyState, energyProfile, dtSeconds);
+  commitSingleRiderEnergyStep(energyState, result);
+  state.producedPowerWatts = result.producedPowerWatts;
 }
 
 export function stepSingleRider(
@@ -197,21 +448,27 @@ export function stepSingleRider(
   validateStepInputs(state, profile, environment, dtSeconds);
 
   const forces = computeSingleRiderForces(state, profile, environment);
-  const previousSpeedMetersPerSecond = Math.max(0, state.speedMetersPerSecond);
-  const nextSpeedMetersPerSecond = Math.max(
-    0,
-    previousSpeedMetersPerSecond + forces.accelerationMetersPerSecondSquared * dtSeconds,
-  );
+  const candidate = computeSingleRiderStepCandidate(state, forces, dtSeconds);
+  commitSingleRiderStep(state, candidate);
+}
 
-  state.timeSeconds += dtSeconds;
-  state.distanceMeters += ((previousSpeedMetersPerSecond + nextSpeedMetersPerSecond) / 2) * dtSeconds;
-  state.speedMetersPerSecond = nextSpeedMetersPerSecond;
-  state.accelerationMetersPerSecondSquared = (nextSpeedMetersPerSecond - previousSpeedMetersPerSecond) / dtSeconds;
-  state.producedPowerWatts = forces.producedPowerWatts;
+export function stepSingleRiderWithEnergy(
+  state: SingleRiderState,
+  energyState: SingleRiderEnergyState,
+  profile: SingleRiderProfile,
+  energyProfile: SingleRiderEnergyProfile,
+  environment: FlatRoadEnvironment,
+  dtSeconds: number,
+): void {
+  validateCombinedStepInputs(state, energyState, profile, energyProfile, environment, dtSeconds);
 
-  assertFinite("timeSeconds", state.timeSeconds);
-  assertFinite("distanceMeters", state.distanceMeters);
-  assertFinite("speedMetersPerSecond", state.speedMetersPerSecond);
-  assertFinite("accelerationMetersPerSecondSquared", state.accelerationMetersPerSecondSquared);
-  assertFinite("producedPowerWatts", state.producedPowerWatts);
+  const energyResult = computeSingleRiderEnergyStep(state.requestedPowerWatts, energyState, energyProfile, dtSeconds);
+  const forces = computeSingleRiderForcesAtPower(state, profile, environment, energyResult.producedPowerWatts);
+  const candidate = computeSingleRiderStepCandidate(state, forces, dtSeconds);
+
+  validateEnergyStepResult(energyResult, energyProfile);
+  validateStateCandidate(candidate);
+
+  commitSingleRiderEnergyStep(energyState, energyResult);
+  commitSingleRiderStep(state, candidate);
 }

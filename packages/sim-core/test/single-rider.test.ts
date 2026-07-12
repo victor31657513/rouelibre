@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computeSingleRiderForces,
+  computeSingleRiderForcesAtPower,
+  createSingleRiderEnergyState,
   createSingleRiderState,
   defaultFlatRoadEnvironment,
+  defaultSingleRiderEnergyProfile,
   defaultSingleRiderProfile,
   stepSingleRider,
+  stepSingleRiderEnergy,
+  stepSingleRiderWithEnergy,
   type FlatRoadEnvironment,
+  type SingleRiderEnergyProfile,
+  type SingleRiderEnergyState,
   type SingleRiderProfile,
   type SingleRiderState,
 } from "../src/index.js";
@@ -41,6 +49,10 @@ function expectFiniteState(state: SingleRiderState): void {
 }
 
 function cloneState(state: SingleRiderState): SingleRiderState {
+  return { ...state };
+}
+
+function cloneEnergyState(state: SingleRiderEnergyState): SingleRiderEnergyState {
   return { ...state };
 }
 
@@ -265,5 +277,172 @@ describe("single rider input validation", () => {
       stepSingleRider(state, referenceProfile, referenceEnvironment, 0.5);
     }).toThrow(/state\.distanceMeters/);
     expect(state).toStrictEqual(before);
+  });
+});
+
+describe("single rider energy model", () => {
+  const energyProfile: SingleRiderEnergyProfile = {
+    ...defaultSingleRiderEnergyProfile,
+    criticalPowerWatts: 250,
+    anaerobicCapacityJoules: 20_000,
+    recoveryEfficiency: 0.5,
+  };
+
+  it("stores only the recovery that fits below capacity", () => {
+    const state = createSingleRiderState(150);
+    const energyState = createSingleRiderEnergyState(energyProfile);
+    energyState.anaerobicReserveJoules = 19_990;
+
+    stepSingleRiderEnergy(state, energyState, energyProfile, 1);
+
+    expect(energyState.anaerobicReserveJoules).toBe(20_000);
+    expect(energyState.lastRecoveryPowerWatts).toBe(10);
+    expect(state.producedPowerWatts).toBe(150);
+  });
+
+  it("reports zero applied recovery when capacity is zero", () => {
+    const zeroCapacityProfile: SingleRiderEnergyProfile = {
+      criticalPowerWatts: 250,
+      anaerobicCapacityJoules: 0,
+      recoveryEfficiency: 0.5,
+    };
+    const state = createSingleRiderState(150);
+    const energyState = createSingleRiderEnergyState(zeroCapacityProfile);
+
+    stepSingleRiderEnergy(state, energyState, zeroCapacityProfile, 1);
+
+    expect(energyState.anaerobicReserveJoules).toBe(0);
+    expect(energyState.lastRecoveryPowerWatts).toBe(0);
+  });
+});
+
+describe("single rider energy and physics coupling", () => {
+  const energyProfile: SingleRiderEnergyProfile = {
+    ...defaultSingleRiderEnergyProfile,
+    criticalPowerWatts: 250,
+    anaerobicCapacityJoules: 20_000,
+    recoveryEfficiency: 0.5,
+  };
+
+  it("keeps both states unchanged when a finite time step overflows a candidate", () => {
+    const state = createSingleRiderState(350);
+    const energyState = createSingleRiderEnergyState(energyProfile);
+    const beforeState = cloneState(state);
+    const beforeEnergyState = cloneEnergyState(energyState);
+
+    expect(() => {
+      stepSingleRiderWithEnergy(
+        state,
+        energyState,
+        referenceProfile,
+        energyProfile,
+        referenceEnvironment,
+        Number.MAX_VALUE,
+      );
+    }).toThrow(
+      /candidate\.(timeSeconds|distanceMeters|speedMetersPerSecond|accelerationMetersPerSecondSquared).*finite/,
+    );
+    expect(state).toStrictEqual(beforeState);
+    expect(energyState).toStrictEqual(beforeEnergyState);
+  });
+
+  it("rejects non-finite calculated forces before any mutation", () => {
+    const state = createSingleRiderState(250);
+    state.speedMetersPerSecond = 1;
+    const energyState = createSingleRiderEnergyState(energyProfile);
+    const beforeState = cloneState(state);
+    const beforeEnergyState = cloneEnergyState(energyState);
+    const extremeEnvironment: FlatRoadEnvironment = {
+      ...referenceEnvironment,
+      windSpeedMetersPerSecond: Number.MAX_VALUE,
+    };
+
+    expect(() => computeSingleRiderForces(state, referenceProfile, extremeEnvironment)).toThrow(
+      /forces\.aerodynamicDragForceNewtons result must be finite/,
+    );
+    expect(() => {
+      stepSingleRiderWithEnergy(state, energyState, referenceProfile, energyProfile, extremeEnvironment, 1);
+    }).toThrow(/forces\.aerodynamicDragForceNewtons result must be finite/);
+    expect(state).toStrictEqual(beforeState);
+    expect(energyState).toStrictEqual(beforeEnergyState);
+  });
+
+  it("exposes forces for the produced power after energy limiting", () => {
+    const state = createSingleRiderState(350);
+    state.speedMetersPerSecond = 10;
+    const energyState = createSingleRiderEnergyState(energyProfile);
+    energyState.anaerobicReserveJoules = 0;
+
+    stepSingleRiderWithEnergy(state, energyState, referenceProfile, energyProfile, referenceEnvironment, 1);
+
+    const limitedForces = computeSingleRiderForcesAtPower(
+      state,
+      referenceProfile,
+      referenceEnvironment,
+      state.producedPowerWatts,
+    );
+    const physical250WState = { ...state, requestedPowerWatts: 250, producedPowerWatts: 0 };
+    const expectedForces = computeSingleRiderForces(physical250WState, referenceProfile, referenceEnvironment);
+    const requestedForces = computeSingleRiderForcesAtPower(state, referenceProfile, referenceEnvironment, 350);
+
+    expect(state.requestedPowerWatts).toBe(350);
+    expect(state.producedPowerWatts).toBe(250);
+    expect(limitedForces).toStrictEqual(expectedForces);
+    expect(limitedForces.propulsiveForceNewtons).not.toBeCloseTo(requestedForces.propulsiveForceNewtons, 12);
+  });
+
+  it("reduces speed progressively toward the critical-power behavior after reserve depletion", () => {
+    const state = createSingleRiderState(350);
+    const scenarioEnergyProfile = { ...energyProfile, anaerobicCapacityJoules: 20_000 };
+    const energyState = createSingleRiderEnergyState(scenarioEnergyProfile);
+    const cpState = createSingleRiderState(250);
+    const dtSeconds = 1;
+    let speedAtDepletion = 0;
+    let speedImmediatelyAfterDepletion = 0;
+    let observedAboveCriticalPower = false;
+
+    for (let index = 0; index < 240; index += 1) {
+      stepSingleRider(cpState, referenceProfile, referenceEnvironment, dtSeconds);
+      stepSingleRiderWithEnergy(
+        state,
+        energyState,
+        referenceProfile,
+        scenarioEnergyProfile,
+        referenceEnvironment,
+        dtSeconds,
+      );
+
+      expect(state.requestedPowerWatts).toBe(350);
+      if (!energyState.isPowerLimitedByEnergy) {
+        expect(state.producedPowerWatts).toBeGreaterThan(250);
+        observedAboveCriticalPower = true;
+      } else {
+        expect(state.producedPowerWatts).toBe(250);
+        speedAtDepletion = state.speedMetersPerSecond;
+        break;
+      }
+    }
+
+    expect(observedAboveCriticalPower).toBe(true);
+    expect(energyState.anaerobicReserveJoules).toBe(0);
+    speedImmediatelyAfterDepletion = state.speedMetersPerSecond;
+
+    for (let index = 0; index < 1_200; index += 1) {
+      stepSingleRider(cpState, referenceProfile, referenceEnvironment, dtSeconds);
+      stepSingleRiderWithEnergy(
+        state,
+        energyState,
+        referenceProfile,
+        scenarioEnergyProfile,
+        referenceEnvironment,
+        dtSeconds,
+      );
+      expect(state.requestedPowerWatts).toBe(350);
+      expect(state.producedPowerWatts).toBe(250);
+    }
+
+    expect(state.speedMetersPerSecond).toBeLessThan(speedAtDepletion);
+    expect(state.speedMetersPerSecond).toBeLessThan(speedImmediatelyAfterDepletion);
+    expect(Math.abs(state.speedMetersPerSecond - cpState.speedMetersPerSecond)).toBeLessThanOrEqual(0.05);
   });
 });
