@@ -41,13 +41,13 @@ Contraintes :
 - unités SI dans le moteur ;
 - séparation entre profil physique, profil énergétique, état physique, état énergétique, logique énergétique et orchestration combinée.
 
-## Déploiement de prévisualisation
+## Publication GitHub Pages
 
-Le déploiement de prévisualisation du laboratoire est assuré par le workflow GitHub Actions `.github/workflows/deploy-preview.yml`. Il construit le workspace avec Node.js 24 et pnpm 10.28.1, exécute le typecheck, les tests et le build, vérifie `apps/lab/dist/index.html`, publie `apps/lab/dist` comme artefact, puis synchronise le contenu de ce dossier vers un serveur statique par SSH et `rsync`.
+La publication statique du laboratoire est assurée par le workflow GitHub Actions `.github/workflows/deploy-pages.yml`. Il construit le workspace avec Node.js 24 et pnpm 10.28.1, exécute le typecheck, les tests et le build, vérifie `apps/lab/dist/index.html`, configure GitHub Pages, téléverse `apps/lab/dist` avec `actions/upload-pages-artifact` et déploie l’artefact dans l’environnement `github-pages`.
 
-Le workflow se déclenche manuellement ou lors d’un push sur la branche longue durée `preview`. Il utilise l’environnement GitHub `preview`, valide la présence des secrets de connexion et refuse un chemin de destination vide, relatif ou égal à `/` avant d’exécuter `rsync --delete`.
+Le workflow se déclenche manuellement ou lors d’un push sur `main`. Les Pull Requests utilisent le workflow CI dédié et ne publient pas de déploiement GitHub Pages.
 
-Le laboratoire est déployé à la racine d’un sous-domaine dédié. La base Vite reste donc `/`, et aucun chemin de sous-répertoire n’est introduit dans l’application.
+Le développement local conserve une base Vite `/`. Le workflow GitHub Pages définit `VITE_BASE_PATH` à partir de `GITHUB_REPOSITORY` : `/` pour un dépôt de type `<propriétaire>.github.io`, ou `/<nom-du-dépôt>/` pour un dépôt projet GitHub Pages.
 
 ## Scripts racine
 
