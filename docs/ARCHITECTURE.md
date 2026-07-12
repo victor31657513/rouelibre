@@ -63,7 +63,7 @@ apps/lab → packages/sim-core
 Organisation :
 
 - `src/simulation/labSimulation.ts` contient le contrôleur indépendant de React et du DOM. Il possède les états physique et énergétique, applique CP = 250 W, W' = 20 000 J, une efficacité de récupération de 0,5, un pas fixe `1 / 60 s` et calcule les forces avec la puissance réellement produite.
-- `src/simulation/fixedStepRunner.ts` contient l'adaptateur temporel. Il transforme le temps réel issu de `requestAnimationFrame` en ticks entiers, conserve un reliquat, plafonne le rattrapage après gel et réinitialise sa référence temporelle lors d'une reprise.
+- `src/simulation/fixedStepRunner.ts` contient l'adaptateur temporel. Il transforme le temps réel issu de `requestAnimationFrame` en ticks entiers, conserve un reliquat, plafonne le temps réel rattrapable après une frame longue avant application du multiplicateur, puis réinitialise sa référence temporelle lors d'une reprise. Le multiplicateur ×20 produit vingt secondes simulées par seconde réelle en fonctionnement normal sans modifier le pas fixe `1 / 60 s`.
 - `src/App.tsx` contient les composants React d'affichage et de commande. Les composants ne portent pas la logique de simulation et ne reçoivent que des instantanés copiés et gelés.
 - `src/styles.css` fournit une présentation CSS simple, responsive et lisible.
 

@@ -18,7 +18,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Limitation de la puissance produite lorsque la réserve anaérobie ne permet pas de soutenir la demande.
 - Application `apps/lab` Vite/React permettant de piloter la puissance demandée, le vent longitudinal, l'exécution, la pause, la réinitialisation et l'avance manuelle d'une seconde simulée.
 - Contrôleur de laboratoire indépendant de React et du DOM, utilisant uniquement l'API publique de `@rouelibre/sim-core`.
-- Adaptateur temporel navigateur à pas fixe `1 / 60 s` avec accumulateur, multiplicateurs ×1, ×5 et ×20 et plafonnement du rattrapage après gel.
+- Adaptateur temporel navigateur à pas fixe `1 / 60 s` avec accumulateur, multiplicateurs ×1, ×5 et ×20, et plafonnement du temps réel rattrapable après une frame longue avant application du multiplicateur.
 - Affichage des observables physiques, énergétiques, environnementales et des forces du coureur isolé.
 - Représentation visuelle minimale dérivée de la distance simulée et jauge W'.
 - Vérification CI pour l'installation, le typecheck, les tests et le build sur Pull Request.

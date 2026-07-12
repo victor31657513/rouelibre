@@ -12,8 +12,11 @@ interface FixedStepRunnerOptions {
   readonly now?: NowProvider;
   readonly scheduleFrame?: AnimationScheduler;
   readonly cancelFrame?: AnimationCanceler;
-  readonly maxAccumulatedSeconds?: number;
+  readonly maxRealFrameDeltaSeconds?: number;
 }
+
+const DEFAULT_MAX_REAL_FRAME_DELTA_SECONDS = 0.25;
+const TICK_EPSILON_SECONDS = LAB_TICK_SECONDS / 1_000_000;
 
 export class FixedStepRunner {
   private readonly simulation: Pick<LabSimulation, "stepTicks">;
@@ -22,11 +25,11 @@ export class FixedStepRunner {
   private readonly now: NowProvider;
   private readonly scheduleFrame: AnimationScheduler;
   private readonly cancelFrame: AnimationCanceler;
-  private readonly maxAccumulatedSeconds: number;
+  private readonly maxRealFrameDeltaSeconds: number;
   private frameHandle: number | undefined;
   private running = false;
   private lastTimestampSeconds: number | undefined;
-  private accumulatedSeconds = 0;
+  private accumulatedSimulationSeconds = 0;
   private speed: ObservationSpeed = 1;
 
   constructor(options: FixedStepRunnerOptions) {
@@ -36,7 +39,7 @@ export class FixedStepRunner {
     this.now = options.now ?? (() => performance.now());
     this.scheduleFrame = options.scheduleFrame ?? ((callback) => requestAnimationFrame(callback));
     this.cancelFrame = options.cancelFrame ?? ((handle) => cancelAnimationFrame(handle));
-    this.maxAccumulatedSeconds = options.maxAccumulatedSeconds ?? 0.25;
+    this.maxRealFrameDeltaSeconds = options.maxRealFrameDeltaSeconds ?? DEFAULT_MAX_REAL_FRAME_DELTA_SECONDS;
   }
 
   start(): void {
@@ -49,7 +52,7 @@ export class FixedStepRunner {
   pause(): void {
     this.running = false;
     this.lastTimestampSeconds = undefined;
-    this.accumulatedSeconds = 0;
+    this.accumulatedSimulationSeconds = 0;
     if (this.frameHandle !== undefined) {
       this.cancelFrame(this.frameHandle);
       this.frameHandle = undefined;
@@ -82,13 +85,14 @@ export class FixedStepRunner {
       }
       const elapsedSeconds = Math.max(0, timestampSeconds - this.lastTimestampSeconds);
       this.lastTimestampSeconds = timestampSeconds;
-      this.accumulatedSeconds = Math.min(
-        this.maxAccumulatedSeconds,
-        this.accumulatedSeconds + elapsedSeconds * this.speed,
-      );
-      const tickCount = Math.floor(this.accumulatedSeconds / LAB_TICK_SECONDS);
+      const cappedRealElapsedSeconds = Math.min(elapsedSeconds, this.maxRealFrameDeltaSeconds);
+      this.accumulatedSimulationSeconds += cappedRealElapsedSeconds * this.speed;
+      const tickCount = Math.floor((this.accumulatedSimulationSeconds + TICK_EPSILON_SECONDS) / LAB_TICK_SECONDS);
       if (tickCount > 0) {
-        this.accumulatedSeconds -= tickCount * LAB_TICK_SECONDS;
+        this.accumulatedSimulationSeconds = Math.max(
+          0,
+          this.accumulatedSimulationSeconds - tickCount * LAB_TICK_SECONDS,
+        );
         this.simulation.stepTicks(tickCount);
         this.onAfterStep();
       }

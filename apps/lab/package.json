@@ -11,14 +11,14 @@
   },
   "dependencies": {
     "@rouelibre/sim-core": "workspace:*",
-    "@vitejs/plugin-react": "^5.1.2",
-    "vite": "^7.3.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "jsdom": "^27.3.0"
+    "jsdom": "^27.3.0",
+    "vite": "^7.3.6",
+    "@vitejs/plugin-react": "^5.1.2"
   }
 }

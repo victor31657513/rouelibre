@@ -47,7 +47,7 @@ pnpm build
 
 Le laboratoire permet de régler la puissance demandée de 0 à 1 200 W, le vent longitudinal de -10 à +10 m/s, de démarrer ou mettre en pause l'exécution, de réinitialiser le scénario et d'avancer exactement une seconde simulée lorsque l'exécution est en pause.
 
-Le pas de simulation est fixe (`1 / 60 s`). Le sélecteur ×1, ×5 ou ×20 change uniquement le nombre de ticks exécutés par seconde réelle. La réinitialisation remet le temps, la distance, la vitesse, l'accélération, la réserve W' et les observables du dernier pas à zéro ou à leur capacité maximale, tout en conservant la puissance et le vent sélectionnés pour répéter un scénario.
+Le pas de simulation est fixe (`1 / 60 s`). Le sélecteur ×1, ×5 ou ×20 change uniquement le nombre de ticks exécutés par seconde réelle : en fonctionnement normal, ×20 exécute vingt secondes simulées par seconde réelle sans modifier `dt`. Le plafond de sécurité concerne le temps réel rattrapable après une frame longue avant application du multiplicateur, afin d'éviter un rattrapage illimité après un gel ou un onglet inactif. La réinitialisation remet le temps, la distance, la vitesse, l'accélération, la réserve W' et les observables du dernier pas à zéro ou à leur capacité maximale, tout en conservant la puissance et le vent sélectionnés pour répéter un scénario.
 
 ## Hors périmètre du socle actuel
 
