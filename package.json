@@ -9,7 +9,7 @@
   "scripts": {
     "install:workspace": "pnpm install",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "scripts/test-preview-deployment-validation.sh && pnpm -r test",
     "dev": "pnpm --filter @rouelibre/lab dev",
     "build": "pnpm -r build"
   },
