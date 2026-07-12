@@ -3,7 +3,7 @@ import {
   assertNonNegative,
   assertPositive,
   clamp,
-  stepSingleRiderWithProducedPower,
+  computeSingleRiderStepCandidateAtPower,
   validateFlatRoadEnvironment,
   validateSingleRiderProfile,
   validateSingleRiderState,
@@ -24,6 +24,14 @@ export interface SingleRiderEnergyState {
   anaerobicReserveJoules: number;
   lastAnaerobicPowerWatts: number;
   lastRecoveryPowerWatts: number;
+  isPowerLimitedByEnergy: boolean;
+}
+
+interface SingleRiderEnergyStepResult {
+  producedPowerWatts: number;
+  nextAnaerobicReserveJoules: number;
+  anaerobicPowerWatts: number;
+  recoveryPowerWatts: number;
   isPowerLimitedByEnergy: boolean;
 }
 
@@ -54,6 +62,84 @@ function validateSingleRiderEnergyProfileShape(profile: SingleRiderEnergyProfile
   }
 }
 
+function validateSingleRiderEnergyState(
+  energyState: SingleRiderEnergyState,
+  energyProfile: SingleRiderEnergyProfile,
+): void {
+  assertFinite("energyState.anaerobicReserveJoules", energyState.anaerobicReserveJoules);
+  if (energyState.anaerobicReserveJoules < 0 || energyState.anaerobicReserveJoules > energyProfile.anaerobicCapacityJoules) {
+    throw new RangeError("energyState.anaerobicReserveJoules must be between 0 and energyProfile.anaerobicCapacityJoules");
+  }
+  assertFinite("energyState.lastAnaerobicPowerWatts", energyState.lastAnaerobicPowerWatts);
+  assertFinite("energyState.lastRecoveryPowerWatts", energyState.lastRecoveryPowerWatts);
+}
+
+function validateCriticalPowerLimit(criticalPowerWatts: number, maxPowerWatts: number, maxPowerName: string): void {
+  if (criticalPowerWatts > maxPowerWatts) {
+    throw new RangeError(`energyProfile.criticalPowerWatts must be less than or equal to ${maxPowerName}`);
+  }
+}
+
+function validateEnergyStepResult(result: SingleRiderEnergyStepResult, energyProfile: SingleRiderEnergyProfile): void {
+  assertFinite("energyStep.producedPowerWatts", result.producedPowerWatts);
+  assertFinite("energyStep.nextAnaerobicReserveJoules", result.nextAnaerobicReserveJoules);
+  assertFinite("energyStep.anaerobicPowerWatts", result.anaerobicPowerWatts);
+  assertFinite("energyStep.recoveryPowerWatts", result.recoveryPowerWatts);
+  if (result.nextAnaerobicReserveJoules < 0 || result.nextAnaerobicReserveJoules > energyProfile.anaerobicCapacityJoules) {
+    throw new RangeError("energyStep.nextAnaerobicReserveJoules must be between 0 and energyProfile.anaerobicCapacityJoules");
+  }
+  if (result.producedPowerWatts < 0) {
+    throw new RangeError("energyStep.producedPowerWatts must be greater than or equal to zero");
+  }
+  if (result.anaerobicPowerWatts < 0 || result.recoveryPowerWatts < 0) {
+    throw new RangeError("energyStep power components must be greater than or equal to zero");
+  }
+  if (result.anaerobicPowerWatts > 0 && result.recoveryPowerWatts > 0) {
+    throw new RangeError("energyStep cannot consume and recover during the same step");
+  }
+}
+
+function calculateSingleRiderEnergyStep(
+  requestedPowerWatts: number,
+  physicalMaxPowerWatts: number,
+  energyState: SingleRiderEnergyState,
+  energyProfile: SingleRiderEnergyProfile,
+  dtSeconds: number,
+): SingleRiderEnergyStepResult {
+  const targetPowerWatts = clamp(requestedPowerWatts, 0, physicalMaxPowerWatts);
+  const availableAnaerobicPowerWatts = energyState.anaerobicReserveJoules / dtSeconds;
+  const requestedAnaerobicPowerWatts = Math.max(0, targetPowerWatts - energyProfile.criticalPowerWatts);
+  const producedPowerWatts = targetPowerWatts > energyProfile.criticalPowerWatts
+    ? energyProfile.criticalPowerWatts + Math.min(requestedAnaerobicPowerWatts, availableAnaerobicPowerWatts)
+    : targetPowerWatts;
+  const anaerobicPowerWatts = producedPowerWatts > energyProfile.criticalPowerWatts
+    ? producedPowerWatts - energyProfile.criticalPowerWatts
+    : 0;
+  const potentialRecoveryPowerWatts = producedPowerWatts < energyProfile.criticalPowerWatts
+    ? energyProfile.recoveryEfficiency * (energyProfile.criticalPowerWatts - producedPowerWatts)
+    : 0;
+  const reserveAfterConsumptionJoules = energyState.anaerobicReserveJoules - anaerobicPowerWatts * dtSeconds;
+  const nextAnaerobicReserveJoules = clamp(
+    reserveAfterConsumptionJoules + potentialRecoveryPowerWatts * dtSeconds,
+    0,
+    energyProfile.anaerobicCapacityJoules,
+  );
+  const recoveryPowerWatts = potentialRecoveryPowerWatts > 0
+    ? (nextAnaerobicReserveJoules - reserveAfterConsumptionJoules) / dtSeconds
+    : 0;
+  const result = {
+    producedPowerWatts,
+    nextAnaerobicReserveJoules,
+    anaerobicPowerWatts,
+    recoveryPowerWatts,
+    isPowerLimitedByEnergy: producedPowerWatts < targetPowerWatts,
+  };
+
+  validateEnergyStepResult(result, energyProfile);
+
+  return result;
+}
+
 function validateSingleRiderEnergyInputs(
   physicalState: SingleRiderState,
   energyState: SingleRiderEnergyState,
@@ -67,17 +153,8 @@ function validateSingleRiderEnergyInputs(
   validateFlatRoadEnvironment(environment);
   validateSingleRiderEnergyProfileShape(energyProfile);
   assertPositive("dtSeconds", dtSeconds);
-
-  if (energyProfile.criticalPowerWatts > physicalProfile.maxPowerWatts) {
-    throw new RangeError("energyProfile.criticalPowerWatts must be less than or equal to physicalProfile.maxPowerWatts");
-  }
-
-  assertFinite("energyState.anaerobicReserveJoules", energyState.anaerobicReserveJoules);
-  if (energyState.anaerobicReserveJoules < 0 || energyState.anaerobicReserveJoules > energyProfile.anaerobicCapacityJoules) {
-    throw new RangeError("energyState.anaerobicReserveJoules must be between 0 and energyProfile.anaerobicCapacityJoules");
-  }
-  assertFinite("energyState.lastAnaerobicPowerWatts", energyState.lastAnaerobicPowerWatts);
-  assertFinite("energyState.lastRecoveryPowerWatts", energyState.lastRecoveryPowerWatts);
+  validateCriticalPowerLimit(energyProfile.criticalPowerWatts, physicalProfile.maxPowerWatts, "physicalProfile.maxPowerWatts");
+  validateSingleRiderEnergyState(energyState, energyProfile);
 }
 
 export function stepSingleRiderEnergy(
@@ -91,41 +168,23 @@ export function stepSingleRiderEnergy(
   assertNonNegative("physicalMaxPowerWatts", physicalMaxPowerWatts);
   validateSingleRiderEnergyProfileShape(energyProfile);
   assertPositive("dtSeconds", dtSeconds);
-  if (energyProfile.criticalPowerWatts > physicalMaxPowerWatts) {
-    throw new RangeError("energyProfile.criticalPowerWatts must be less than or equal to physicalMaxPowerWatts");
-  }
-  assertFinite("energyState.anaerobicReserveJoules", energyState.anaerobicReserveJoules);
-  if (energyState.anaerobicReserveJoules < 0 || energyState.anaerobicReserveJoules > energyProfile.anaerobicCapacityJoules) {
-    throw new RangeError("energyState.anaerobicReserveJoules must be between 0 and energyProfile.anaerobicCapacityJoules");
-  }
-  assertFinite("energyState.lastAnaerobicPowerWatts", energyState.lastAnaerobicPowerWatts);
-  assertFinite("energyState.lastRecoveryPowerWatts", energyState.lastRecoveryPowerWatts);
+  validateCriticalPowerLimit(energyProfile.criticalPowerWatts, physicalMaxPowerWatts, "physicalMaxPowerWatts");
+  validateSingleRiderEnergyState(energyState, energyProfile);
 
-  const targetPowerWatts = clamp(requestedPowerWatts, 0, physicalMaxPowerWatts);
-  const availableAnaerobicPowerWatts = energyState.anaerobicReserveJoules / dtSeconds;
-  const requestedAnaerobicPowerWatts = Math.max(0, targetPowerWatts - energyProfile.criticalPowerWatts);
-  const producedPowerWatts = targetPowerWatts > energyProfile.criticalPowerWatts
-    ? energyProfile.criticalPowerWatts + Math.min(requestedAnaerobicPowerWatts, availableAnaerobicPowerWatts)
-    : targetPowerWatts;
-  const lastAnaerobicPowerWatts = producedPowerWatts > energyProfile.criticalPowerWatts
-    ? producedPowerWatts - energyProfile.criticalPowerWatts
-    : 0;
-  const lastRecoveryPowerWatts = producedPowerWatts < energyProfile.criticalPowerWatts
-    ? energyProfile.recoveryEfficiency * (energyProfile.criticalPowerWatts - producedPowerWatts)
-    : 0;
-  const nextReserveJoules = clamp(
-    energyState.anaerobicReserveJoules - lastAnaerobicPowerWatts * dtSeconds + lastRecoveryPowerWatts * dtSeconds,
-    0,
-    energyProfile.anaerobicCapacityJoules,
+  const result = calculateSingleRiderEnergyStep(
+    requestedPowerWatts,
+    physicalMaxPowerWatts,
+    energyState,
+    energyProfile,
+    dtSeconds,
   );
-  const isPowerLimitedByEnergy = producedPowerWatts < targetPowerWatts;
 
-  energyState.anaerobicReserveJoules = nextReserveJoules;
-  energyState.lastAnaerobicPowerWatts = lastAnaerobicPowerWatts;
-  energyState.lastRecoveryPowerWatts = lastRecoveryPowerWatts;
-  energyState.isPowerLimitedByEnergy = isPowerLimitedByEnergy;
+  energyState.anaerobicReserveJoules = result.nextAnaerobicReserveJoules;
+  energyState.lastAnaerobicPowerWatts = result.anaerobicPowerWatts;
+  energyState.lastRecoveryPowerWatts = result.recoveryPowerWatts;
+  energyState.isPowerLimitedByEnergy = result.isPowerLimitedByEnergy;
 
-  return producedPowerWatts;
+  return result.producedPowerWatts;
 }
 
 export function stepSingleRiderWithEnergy(
@@ -138,28 +197,28 @@ export function stepSingleRiderWithEnergy(
 ): void {
   validateSingleRiderEnergyInputs(physicalState, energyState, physicalProfile, energyProfile, environment, dtSeconds);
 
-  const targetPowerWatts = clamp(physicalState.requestedPowerWatts, 0, physicalProfile.maxPowerWatts);
-  const availableAnaerobicPowerWatts = energyState.anaerobicReserveJoules / dtSeconds;
-  const requestedAnaerobicPowerWatts = Math.max(0, targetPowerWatts - energyProfile.criticalPowerWatts);
-  const producedPowerWatts = targetPowerWatts > energyProfile.criticalPowerWatts
-    ? energyProfile.criticalPowerWatts + Math.min(requestedAnaerobicPowerWatts, availableAnaerobicPowerWatts)
-    : targetPowerWatts;
-  const lastAnaerobicPowerWatts = producedPowerWatts > energyProfile.criticalPowerWatts
-    ? producedPowerWatts - energyProfile.criticalPowerWatts
-    : 0;
-  const lastRecoveryPowerWatts = producedPowerWatts < energyProfile.criticalPowerWatts
-    ? energyProfile.recoveryEfficiency * (energyProfile.criticalPowerWatts - producedPowerWatts)
-    : 0;
-  const nextReserveJoules = clamp(
-    energyState.anaerobicReserveJoules - lastAnaerobicPowerWatts * dtSeconds + lastRecoveryPowerWatts * dtSeconds,
-    0,
-    energyProfile.anaerobicCapacityJoules,
+  const energyResult = calculateSingleRiderEnergyStep(
+    physicalState.requestedPowerWatts,
+    physicalProfile.maxPowerWatts,
+    energyState,
+    energyProfile,
+    dtSeconds,
   );
-  const isPowerLimitedByEnergy = producedPowerWatts < targetPowerWatts;
+  const physicalCandidate = computeSingleRiderStepCandidateAtPower(
+    physicalState,
+    physicalProfile,
+    environment,
+    dtSeconds,
+    energyResult.producedPowerWatts,
+  );
 
-  energyState.anaerobicReserveJoules = nextReserveJoules;
-  energyState.lastAnaerobicPowerWatts = lastAnaerobicPowerWatts;
-  energyState.lastRecoveryPowerWatts = lastRecoveryPowerWatts;
-  energyState.isPowerLimitedByEnergy = isPowerLimitedByEnergy;
-  stepSingleRiderWithProducedPower(physicalState, physicalProfile, environment, dtSeconds, producedPowerWatts);
+  energyState.anaerobicReserveJoules = energyResult.nextAnaerobicReserveJoules;
+  energyState.lastAnaerobicPowerWatts = energyResult.anaerobicPowerWatts;
+  energyState.lastRecoveryPowerWatts = energyResult.recoveryPowerWatts;
+  energyState.isPowerLimitedByEnergy = energyResult.isPowerLimitedByEnergy;
+  physicalState.timeSeconds = physicalCandidate.timeSeconds;
+  physicalState.distanceMeters = physicalCandidate.distanceMeters;
+  physicalState.speedMetersPerSecond = physicalCandidate.speedMetersPerSecond;
+  physicalState.accelerationMetersPerSecondSquared = physicalCandidate.accelerationMetersPerSecondSquared;
+  physicalState.producedPowerWatts = physicalCandidate.producedPowerWatts;
 }

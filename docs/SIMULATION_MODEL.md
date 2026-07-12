@@ -49,7 +49,7 @@ Les paramètres de référence exposés par `defaultSingleRiderProfile` et `defa
 | `anaerobicCapacityJoules` | J | capacité maximale de la réserve anaérobie W', positive ou nulle |
 | `recoveryEfficiency` | sans unité | fraction de l'écart sous CP convertie en récupération, comprise entre 0 et 1 |
 
-`SingleRiderEnergyState` contient la réserve restante, la puissance anaérobie du dernier pas, la puissance de récupération du dernier pas et l'indicateur de limitation par épuisement de la réserve.
+`SingleRiderEnergyState` contient la réserve restante, la puissance anaérobie du dernier pas, la puissance de récupération réellement stockée pendant le dernier pas après plafonnement par la capacité, et l'indicateur de limitation par épuisement de la réserve.
 
 La réserve initiale créée par `createSingleRiderEnergyState` est pleine par défaut. Une réserve initiale explicite peut être fournie si elle est finie et comprise entre zéro et la capacité maximale.
 
@@ -69,7 +69,7 @@ Avec modèle énergétique, la puissance cible respecte d'abord la contrainte ph
 P_cible = min(max(P_demandee, 0), P_max)
 ```
 
-La logique CP/W' détermine ensuite `P_produite`, puis la physique longitudinale utilise cette puissance produite sans recalculer une autre limite énergétique.
+La logique CP/W' détermine ensuite `P_produite`, puis la physique longitudinale utilise cette puissance produite sans recalculer une autre limite énergétique. `computeSingleRiderForces` conserve l’usage historique de la puissance demandée bornée. `computeSingleRiderForcesAtPower` utilise une puissance produite explicite et permet d’obtenir les forces correspondant à une puissance déjà limitée, sans modifier temporairement l’état.
 
 ## Consommation au-dessus de CP
 
@@ -93,10 +93,11 @@ Lorsque la puissance produite est inférieure à CP :
 ```text
 P_recuperation = efficacite_recuperation * (CP - P_produite)
 E_recuperee = P_recuperation * dt
-reserve_suivante = min(capacite, reserve + E_recuperee)
+reserve_suivante = min(capacite, reserve + E_recuperee_potentielle)
+P_recuperation_appliquee = (reserve_suivante - reserve) / dt
 ```
 
-À puissance exactement égale à CP, la réserve ne diminue pas et n'augmente pas. Un même pas ne combine pas consommation et récupération.
+À puissance exactement égale à CP, la réserve ne diminue pas et n'augmente pas. Un même pas ne combine pas consommation et récupération. `lastRecoveryPowerWatts` expose la récupération réellement appliquée à la réserve : si la réserve atteint sa capacité pendant le pas, cette valeur est inférieure à la récupération potentielle. Avec une capacité nulle, elle vaut zéro.
 
 ## Convention du vent
 
@@ -158,14 +159,13 @@ a = F_net / m
 `stepSingleRiderWithEnergy` exécute un pas combiné dans cet ordre :
 
 1. validation du profil physique, du profil énergétique, de l'environnement, de l'état physique, de l'état énergétique et du pas temporel ;
-2. calcul de `P_cible` ;
-3. calcul de la consommation ou récupération énergétique ;
-4. calcul de `P_produite` ;
-5. mise à jour de la réserve et des observables énergétiques ;
-6. transmission de `P_produite` au moteur longitudinal ;
-7. mise à jour du temps, de la distance, de la vitesse, de l'accélération appliquée et de `producedPowerWatts`.
+2. calcul pur de `P_cible`, `P_produite`, de la réserve candidate et des observables énergétiques candidats ;
+3. calcul pur du futur état physique à partir de `P_produite` ;
+4. vérification des forces et états candidats finis et conformes aux invariants ;
+5. commit des champs énergétiques ;
+6. commit du temps, de la distance, de la vitesse, de l'accélération appliquée et de `producedPowerWatts`.
 
-Les validations et calculs susceptibles d'échouer précèdent les mutations. Une entrée invalide lève une `RangeError` claire et ne modifie ni l'état physique ni l'état énergétique.
+Les validations et calculs susceptibles d'échouer précèdent les mutations. Une entrée invalide, une force non finie ou un état candidat non fini lève une `RangeError` claire et ne modifie ni l'état physique ni l'état énergétique.
 
 ## Méthode d'intégration
 
@@ -202,7 +202,8 @@ Les tests vérifient :
 - déterminisme exact pour des entrées identiques ;
 - cohérence entre pas de 1 s et pas de 0,5 s sur phases constantes alignées ;
 - validation des entrées invalides sans mutation ;
-- conservation des benchmarks physiques historiques de `stepSingleRider`.
+- conservation des benchmarks physiques historiques de `stepSingleRider` ;
+- rejet des forces non finies et des états candidats non finis sans mutation du pas combiné.
 
 ## Simplifications et limites
 

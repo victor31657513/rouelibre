@@ -6,6 +6,7 @@ export function describeFoundation(): string {
 
 export {
   computeSingleRiderForces,
+  computeSingleRiderForcesAtPower,
   createSingleRiderState,
   defaultFlatRoadEnvironment,
   defaultSingleRiderProfile,

@@ -22,13 +22,14 @@ API exposée :
 - `FlatRoadEnvironment` décrit l'air, le vent longitudinal et la gravité.
 - `SingleRiderState` contient l'état dynamique physique mutable.
 - `createSingleRiderState` crée un état physique initial typé.
-- `computeSingleRiderForces` calcule les forces longitudinales instantanées.
+- `computeSingleRiderForces` calcule les forces longitudinales instantanées en utilisant la puissance demandée bornée, pour les usages historiques sans modèle énergétique.
+- `computeSingleRiderForcesAtPower` calcule les forces longitudinales instantanées avec une puissance produite explicite, utile lorsque la puissance est limitée par le modèle énergétique.
 - `stepSingleRider` valide les entrées publiques puis avance un état physique d'un pas temporel explicite sans modèle énergétique.
 - `SingleRiderEnergyProfile` décrit la puissance critique, la capacité anaérobie W' et l'efficacité de récupération.
 - `SingleRiderEnergyState` contient la réserve anaérobie mutable et les observables du dernier pas énergétique.
 - `createSingleRiderEnergyState` crée un état énergétique initial, plein par défaut ou avec une réserve explicite bornée.
 - `stepSingleRiderEnergy` applique uniquement la logique énergétique CP/W' et retourne la puissance produite autorisée.
-- `stepSingleRiderWithEnergy` orchestre un pas complet : validation, calcul énergétique, mise à jour de la réserve, transmission de la puissance produite au moteur longitudinal et mise à jour de l'état physique.
+- `stepSingleRiderWithEnergy` orchestre un pas complet : validation, calcul énergétique pur, calcul physique candidat pur, validation des candidats, puis commit atomique des états énergétique et physique.
 
 Contraintes :
 

@@ -46,6 +46,14 @@ export interface SingleRiderForces {
   accelerationMetersPerSecondSquared: number;
 }
 
+interface SingleRiderStepCandidate {
+  timeSeconds: number;
+  distanceMeters: number;
+  speedMetersPerSecond: number;
+  accelerationMetersPerSecondSquared: number;
+  producedPowerWatts: number;
+}
+
 export const defaultSingleRiderProfile: SingleRiderProfile = {
   riderMassKg: 75,
   bikeMassKg: 8,
@@ -140,17 +148,41 @@ export function createSingleRiderState(requestedPowerWatts: number): SingleRider
   };
 }
 
-export function computeSingleRiderForces(
+function assertFiniteForces(forces: SingleRiderForces): void {
+  assertFinite("forces.totalMassKg", forces.totalMassKg);
+  assertFinite("forces.producedPowerWatts", forces.producedPowerWatts);
+  assertFinite("forces.propulsiveForceNewtons", forces.propulsiveForceNewtons);
+  assertFinite("forces.relativeAirSpeedMetersPerSecond", forces.relativeAirSpeedMetersPerSecond);
+  assertFinite("forces.aerodynamicDragForceNewtons", forces.aerodynamicDragForceNewtons);
+  assertFinite("forces.rollingResistanceForceNewtons", forces.rollingResistanceForceNewtons);
+  assertFinite("forces.netForceNewtons", forces.netForceNewtons);
+  assertFinite("forces.accelerationMetersPerSecondSquared", forces.accelerationMetersPerSecondSquared);
+}
+
+function assertProducedPowerInRange(producedPowerWatts: number, maxPowerWatts: number): void {
+  assertFinite("producedPowerWatts", producedPowerWatts);
+  if (producedPowerWatts < 0 || producedPowerWatts > maxPowerWatts) {
+    throw new RangeError("producedPowerWatts must be between 0 and profile.maxPowerWatts");
+  }
+}
+
+/**
+ * Calcule les forces longitudinales avec une puissance produite explicite.
+ * Cette fonction sert aux usages où la puissance a déjà été limitée, par
+ * exemple par le modèle énergétique CP/W'.
+ */
+export function computeSingleRiderForcesAtPower(
   state: SingleRiderState,
   profile: SingleRiderProfile,
   environment: FlatRoadEnvironment,
+  producedPowerWatts: number,
 ): SingleRiderForces {
   validateSingleRiderState(state);
   validateSingleRiderProfile(profile);
   validateFlatRoadEnvironment(environment);
+  assertProducedPowerInRange(producedPowerWatts, profile.maxPowerWatts);
 
   const totalMassKg = profile.riderMassKg + profile.bikeMassKg;
-  const producedPowerWatts = clamp(state.requestedPowerWatts, 0, profile.maxPowerWatts);
   const maxPropulsiveForceNewtons = profile.maxPropulsiveForceNewtons;
   const effectivePowerWatts = producedPowerWatts * profile.mechanicalEfficiency;
   const forceFromPowerNewtons = effectivePowerWatts > 0
@@ -169,8 +201,7 @@ export function computeSingleRiderForces(
     * (state.speedMetersPerSecond > 0 || propulsiveForceNewtons > 0 ? 1 : 0);
   const netForceNewtons = propulsiveForceNewtons - aerodynamicDragForceNewtons - rollingResistanceForceNewtons;
   const accelerationMetersPerSecondSquared = netForceNewtons / totalMassKg;
-
-  return {
+  const forces = {
     totalMassKg,
     producedPowerWatts,
     propulsiveForceNewtons,
@@ -179,6 +210,66 @@ export function computeSingleRiderForces(
     rollingResistanceForceNewtons,
     netForceNewtons,
     accelerationMetersPerSecondSquared,
+  };
+
+  assertFiniteForces(forces);
+
+  return forces;
+}
+
+/**
+ * Calcule les forces historiques en bornant `state.requestedPowerWatts` entre
+ * zéro et `profile.maxPowerWatts`. Utiliser `computeSingleRiderForcesAtPower`
+ * lorsque la puissance produite est déjà connue.
+ */
+export function computeSingleRiderForces(
+  state: SingleRiderState,
+  profile: SingleRiderProfile,
+  environment: FlatRoadEnvironment,
+): SingleRiderForces {
+  validateSingleRiderState(state);
+  validateSingleRiderProfile(profile);
+  validateFlatRoadEnvironment(environment);
+
+  return computeSingleRiderForcesAtPower(
+    state,
+    profile,
+    environment,
+    clamp(state.requestedPowerWatts, 0, profile.maxPowerWatts),
+  );
+}
+
+export function computeSingleRiderStepCandidateAtPower(
+  state: SingleRiderState,
+  profile: SingleRiderProfile,
+  environment: FlatRoadEnvironment,
+  dtSeconds: number,
+  producedPowerWatts: number,
+): SingleRiderStepCandidate {
+  validateSingleRiderStepInputs(state, profile, environment, dtSeconds);
+  const forces = computeSingleRiderForcesAtPower(state, profile, environment, producedPowerWatts);
+  const previousSpeedMetersPerSecond = Math.max(0, state.speedMetersPerSecond);
+  const nextSpeedMetersPerSecond = Math.max(
+    0,
+    previousSpeedMetersPerSecond + forces.accelerationMetersPerSecondSquared * dtSeconds,
+  );
+  const nextTimeSeconds = state.timeSeconds + dtSeconds;
+  const nextDistanceMeters = state.distanceMeters
+    + ((previousSpeedMetersPerSecond + nextSpeedMetersPerSecond) / 2) * dtSeconds;
+  const nextAccelerationMetersPerSecondSquared = (nextSpeedMetersPerSecond - previousSpeedMetersPerSecond) / dtSeconds;
+
+  assertFinite("candidate.timeSeconds", nextTimeSeconds);
+  assertFinite("candidate.distanceMeters", nextDistanceMeters);
+  assertFinite("candidate.speedMetersPerSecond", nextSpeedMetersPerSecond);
+  assertFinite("candidate.accelerationMetersPerSecondSquared", nextAccelerationMetersPerSecondSquared);
+  assertFinite("candidate.producedPowerWatts", producedPowerWatts);
+
+  return {
+    timeSeconds: nextTimeSeconds,
+    distanceMeters: nextDistanceMeters,
+    speedMetersPerSecond: nextSpeedMetersPerSecond,
+    accelerationMetersPerSecondSquared: nextAccelerationMetersPerSecondSquared,
+    producedPowerWatts,
   };
 }
 
@@ -189,31 +280,13 @@ export function stepSingleRiderWithProducedPower(
   dtSeconds: number,
   producedPowerWatts: number,
 ): void {
-  validateSingleRiderStepInputs(state, profile, environment, dtSeconds);
-  assertFinite("producedPowerWatts", producedPowerWatts);
-  if (producedPowerWatts < 0 || producedPowerWatts > profile.maxPowerWatts) {
-    throw new RangeError("producedPowerWatts must be between 0 and profile.maxPowerWatts");
-  }
+  const candidate = computeSingleRiderStepCandidateAtPower(state, profile, environment, dtSeconds, producedPowerWatts);
 
-  const forceState: SingleRiderState = { ...state, requestedPowerWatts: producedPowerWatts };
-  const forces = computeSingleRiderForces(forceState, profile, environment);
-  const previousSpeedMetersPerSecond = Math.max(0, state.speedMetersPerSecond);
-  const nextSpeedMetersPerSecond = Math.max(
-    0,
-    previousSpeedMetersPerSecond + forces.accelerationMetersPerSecondSquared * dtSeconds,
-  );
-
-  state.timeSeconds += dtSeconds;
-  state.distanceMeters += ((previousSpeedMetersPerSecond + nextSpeedMetersPerSecond) / 2) * dtSeconds;
-  state.speedMetersPerSecond = nextSpeedMetersPerSecond;
-  state.accelerationMetersPerSecondSquared = (nextSpeedMetersPerSecond - previousSpeedMetersPerSecond) / dtSeconds;
-  state.producedPowerWatts = producedPowerWatts;
-
-  assertFinite("timeSeconds", state.timeSeconds);
-  assertFinite("distanceMeters", state.distanceMeters);
-  assertFinite("speedMetersPerSecond", state.speedMetersPerSecond);
-  assertFinite("accelerationMetersPerSecondSquared", state.accelerationMetersPerSecondSquared);
-  assertFinite("producedPowerWatts", state.producedPowerWatts);
+  state.timeSeconds = candidate.timeSeconds;
+  state.distanceMeters = candidate.distanceMeters;
+  state.speedMetersPerSecond = candidate.speedMetersPerSecond;
+  state.accelerationMetersPerSecondSquared = candidate.accelerationMetersPerSecondSquared;
+  state.producedPowerWatts = candidate.producedPowerWatts;
 }
 
 export function stepSingleRider(
@@ -223,23 +296,17 @@ export function stepSingleRider(
   dtSeconds: number,
 ): void {
   validateSingleRiderStepInputs(state, profile, environment, dtSeconds);
-
-  const forces = computeSingleRiderForces(state, profile, environment);
-  const previousSpeedMetersPerSecond = Math.max(0, state.speedMetersPerSecond);
-  const nextSpeedMetersPerSecond = Math.max(
-    0,
-    previousSpeedMetersPerSecond + forces.accelerationMetersPerSecondSquared * dtSeconds,
+  const candidate = computeSingleRiderStepCandidateAtPower(
+    state,
+    profile,
+    environment,
+    dtSeconds,
+    clamp(state.requestedPowerWatts, 0, profile.maxPowerWatts),
   );
 
-  state.timeSeconds += dtSeconds;
-  state.distanceMeters += ((previousSpeedMetersPerSecond + nextSpeedMetersPerSecond) / 2) * dtSeconds;
-  state.speedMetersPerSecond = nextSpeedMetersPerSecond;
-  state.accelerationMetersPerSecondSquared = (nextSpeedMetersPerSecond - previousSpeedMetersPerSecond) / dtSeconds;
-  state.producedPowerWatts = forces.producedPowerWatts;
-
-  assertFinite("timeSeconds", state.timeSeconds);
-  assertFinite("distanceMeters", state.distanceMeters);
-  assertFinite("speedMetersPerSecond", state.speedMetersPerSecond);
-  assertFinite("accelerationMetersPerSecondSquared", state.accelerationMetersPerSecondSquared);
-  assertFinite("producedPowerWatts", state.producedPowerWatts);
+  state.timeSeconds = candidate.timeSeconds;
+  state.distanceMeters = candidate.distanceMeters;
+  state.speedMetersPerSecond = candidate.speedMetersPerSecond;
+  state.accelerationMetersPerSecondSquared = candidate.accelerationMetersPerSecondSquared;
+  state.producedPowerWatts = candidate.producedPowerWatts;
 }
