@@ -49,6 +49,12 @@ Le laboratoire permet de régler la puissance demandée de 0 à 1 200 W, le vent
 
 Le pas de simulation est fixe (`1 / 60 s`). Le sélecteur ×1, ×5 ou ×20 change uniquement le nombre de ticks exécutés par seconde réelle : en fonctionnement normal, ×20 exécute vingt secondes simulées par seconde réelle sans modifier `dt`. Le plafond de sécurité concerne le temps réel rattrapable après une frame longue avant application du multiplicateur, afin d'éviter un rattrapage illimité après un gel ou un onglet inactif. La réinitialisation remet le temps, la distance, la vitesse, l'accélération, la réserve W' et les observables du dernier pas à zéro ou à leur capacité maximale, tout en conservant la puissance et le vent sélectionnés pour répéter un scénario.
 
+## Déploiement de prévisualisation
+
+Le laboratoire web dispose d’un workflow GitHub Actions de prévisualisation qui construit le workspace, vérifie TypeScript et les tests, publie `apps/lab/dist` comme artefact et synchronise le contenu statique vers un serveur SSH. Le site est servi à la racine d’un sous-domaine dédié avec une base Vite `/`.
+
+Consultez [`docs/PREVIEW_DEPLOYMENT.md`](docs/PREVIEW_DEPLOYMENT.md) pour la branche `preview`, le déclenchement manuel, les secrets de l’environnement GitHub `preview`, les protections sur le chemin distant et le diagnostic des échecs.
+
 ## Hors périmètre du socle actuel
 
-Le dépôt ne contient pas de pente, altitude, GPX, virages, position latérale, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, Three.js, scène 3D, Zustand, Web Worker, moteur de corps rigides, collisions, adhérence, sons, sauvegarde, backend, authentification ou déploiement.
+Le dépôt ne contient pas de pente, altitude, GPX, virages, position latérale, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, Three.js, scène 3D, Zustand, Web Worker, moteur de corps rigides, collisions, adhérence, sons, sauvegarde, backend applicatif ou authentification.
