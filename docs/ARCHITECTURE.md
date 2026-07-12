@@ -2,13 +2,22 @@
 
 ## Vue d'ensemble
 
-Le dépôt est organisé en workspace pnpm. Le socle actuel contient uniquement les éléments nécessaires aux vérifications reproductibles et au futur noyau de simulation.
+Le dépôt est organisé en workspace pnpm. Le socle contient les éléments nécessaires aux vérifications reproductibles et au noyau de simulation longitudinal minimal.
 
 ## Packages
 
 ### `packages/sim-core`
 
-`sim-core` est le package destiné au futur moteur de simulation. Dans l'état actuel, il fournit seulement un marqueur typé vérifié par Vitest afin de valider la chaîne TypeScript et test.
+`sim-core` contient le moteur de simulation sans dépendance graphique, navigateur, DOM, React, Three.js ni moteur de corps rigides.
+
+API exposée :
+
+- `SingleRiderProfile` décrit le couple coureur-vélo avec masses, CdA, coefficient de roulement, rendement mécanique, puissance maximale et limite de force propulsive basse vitesse.
+- `FlatRoadEnvironment` décrit l'air, le vent longitudinal et la gravité.
+- `SingleRiderState` contient l'état dynamique mutable.
+- `createSingleRiderState` crée un état initial typé.
+- `computeSingleRiderForces` calcule les forces longitudinales instantanées.
+- `stepSingleRider` avance un état d'un pas temporel explicite.
 
 Contraintes :
 
@@ -16,7 +25,8 @@ Contraintes :
 - pas de dépendance à Three.js ;
 - pas de dépendance au DOM ou au navigateur ;
 - pas de dépendance graphique ;
-- pas d'utilisation directe de `Math.random()` dans le futur code de simulation.
+- pas d'utilisation directe de `Math.random()` dans le code de simulation ;
+- unités SI dans le moteur.
 
 ## Scripts racine
 
