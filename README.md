@@ -8,6 +8,11 @@ Le dépôt contient le socle minimal pour développer, tester et examiner les fu
 
 Consultez [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) avant toute modification importante.
 
+## Prérequis locaux
+
+- Node.js 24 (`>=24 <25`)
+- pnpm 10.28.1
+
 ## Workspace
 
 Le dépôt utilise un workspace pnpm avec TypeScript strict et Vitest.
