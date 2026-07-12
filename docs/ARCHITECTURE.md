@@ -41,6 +41,14 @@ Contraintes :
 - unités SI dans le moteur ;
 - séparation entre profil physique, profil énergétique, état physique, état énergétique, logique énergétique et orchestration combinée.
 
+## Déploiement de prévisualisation
+
+Le déploiement de prévisualisation du laboratoire est assuré par le workflow GitHub Actions `.github/workflows/deploy-preview.yml`. Il construit le workspace avec Node.js 24 et pnpm 10.28.1, exécute le typecheck, les tests et le build, vérifie `apps/lab/dist/index.html`, publie `apps/lab/dist` comme artefact, puis synchronise le contenu de ce dossier vers un serveur statique par SSH et `rsync`.
+
+Le workflow se déclenche manuellement ou lors d’un push sur la branche longue durée `preview`. Il utilise l’environnement GitHub `preview`, valide la présence des secrets de connexion et refuse un chemin de destination vide, relatif ou égal à `/` avant d’exécuter `rsync --delete`.
+
+Le laboratoire est déployé à la racine d’un sous-domaine dédié. La base Vite reste donc `/`, et aucun chemin de sous-répertoire n’est introduit dans l’application.
+
 ## Scripts racine
 
 - `pnpm install` installe le workspace.
