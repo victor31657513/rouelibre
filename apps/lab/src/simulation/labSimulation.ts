@@ -2,10 +2,10 @@ import {
   computeSingleRiderForcesAtPower,
   createSingleRiderEnergyState,
   createSingleRiderState,
-  defaultFlatRoadEnvironment,
+  defaultLongitudinalEnvironment,
   defaultSingleRiderProfile,
   stepSingleRiderWithEnergy,
-  type FlatRoadEnvironment,
+  type LongitudinalEnvironment,
   type SingleRiderEnergyProfile,
   type SingleRiderEnergyState,
   type SingleRiderForces,
@@ -14,6 +14,7 @@ import {
 
 export const LAB_TICK_SECONDS = 1 / 60;
 export const LAB_INITIAL_REQUESTED_POWER_WATTS = 250;
+export const LAB_INITIAL_ROAD_GRADE_PERCENT = 0;
 export const LAB_ENERGY_PROFILE: Readonly<SingleRiderEnergyProfile> = Object.freeze({
   criticalPowerWatts: 250,
   anaerobicCapacityJoules: 20_000,
@@ -24,7 +25,7 @@ export interface LabSimulationSnapshot {
   readonly physicalState: Readonly<SingleRiderState>;
   readonly energyState: Readonly<SingleRiderEnergyState>;
   readonly energyProfile: Readonly<SingleRiderEnergyProfile>;
-  readonly environment: Readonly<FlatRoadEnvironment>;
+  readonly environment: Readonly<LongitudinalEnvironment>;
   readonly forces: Readonly<SingleRiderForces>;
   readonly tickSeconds: number;
 }
@@ -32,6 +33,7 @@ export interface LabSimulationSnapshot {
 export interface LabSimulation {
   setRequestedPowerWatts(value: number): void;
   setWindSpeedMetersPerSecond(value: number): void;
+  setRoadGradePercent(value: number): void;
   stepTicks(count: number): void;
   reset(): void;
   getSnapshot(): LabSimulationSnapshot;
@@ -57,14 +59,14 @@ function copyEnergyState(state: SingleRiderEnergyState): SingleRiderEnergyState 
   return { ...state };
 }
 
-function copyEnvironment(environment: FlatRoadEnvironment): FlatRoadEnvironment {
+function copyEnvironment(environment: LongitudinalEnvironment): LongitudinalEnvironment {
   return { ...environment };
 }
 
 function snapshotFrom(
   physicalState: SingleRiderState,
   energyState: SingleRiderEnergyState,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
 ): LabSimulationSnapshot {
   const physicalStateCopy = copyPhysicalState(physicalState);
   const energyStateCopy = copyEnergyState(energyState);
@@ -88,7 +90,7 @@ function snapshotFrom(
 export function createLabSimulation(): LabSimulation {
   let physicalState = createSingleRiderState(LAB_INITIAL_REQUESTED_POWER_WATTS);
   let energyState = createSingleRiderEnergyState(LAB_ENERGY_PROFILE);
-  let environment: FlatRoadEnvironment = { ...defaultFlatRoadEnvironment };
+  let environment: LongitudinalEnvironment = { ...defaultLongitudinalEnvironment };
 
   return {
     setRequestedPowerWatts(value: number): void {
@@ -98,6 +100,10 @@ export function createLabSimulation(): LabSimulation {
     setWindSpeedMetersPerSecond(value: number): void {
       assertFiniteControl("windSpeedMetersPerSecond", value);
       environment = { ...environment, windSpeedMetersPerSecond: value };
+    },
+    setRoadGradePercent(value: number): void {
+      assertFiniteControl("roadGradePercent", value);
+      environment = { ...environment, roadGrade: value / 100 };
     },
     stepTicks(count: number): void {
       assertTickCount(count);

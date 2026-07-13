@@ -12,14 +12,14 @@ Le dépôt est organisé en workspace pnpm. Le socle contient les éléments né
 
 Organisation interne :
 
-- `src/longitudinal.ts` contient le profil physique, l'environnement plat, l'état physique, les forces longitudinales et le pas physique historique.
+- `src/longitudinal.ts` contient le profil physique, l'environnement longitudinal à pente constante, l'état physique, les forces longitudinales et le pas physique historique.
 - `src/energy.ts` contient le profil énergétique CP/W', l'état énergétique, la logique de consommation/récupération et l'orchestration énergie puis physique.
 - `src/index.ts` expose uniquement l'API publique nécessaire aux consommateurs du package.
 
 API exposée :
 
 - `SingleRiderProfile` décrit le couple coureur-vélo avec masses, CdA, coefficient de roulement, rendement mécanique, puissance maximale et limite de force propulsive basse vitesse.
-- `FlatRoadEnvironment` décrit l'air, le vent longitudinal et la gravité.
+- `LongitudinalEnvironment` décrit l'air, le vent longitudinal et la gravité.
 - `SingleRiderState` contient l'état dynamique physique mutable.
 - `createSingleRiderState` crée un état physique initial typé.
 - `computeSingleRiderForces` calcule les forces longitudinales instantanées en utilisant la puissance demandée bornée, pour les usages historiques sans modèle énergétique.
@@ -77,7 +77,7 @@ Organisation :
 
 Choix temporaires et réversibles :
 
-- Three.js est reporté parce qu'une route plate et un bloc cycliste suffisent à observer un seul coureur isolé.
+- Three.js est reporté parce qu'une route à pente constante et un bloc cycliste suffisent à observer un seul coureur isolé.
 - Zustand est reporté parce qu'une page unique peut rester pilotée par l'état React local et un contrôleur explicite.
 - Web Worker est reporté parce qu'un seul coureur à 60 Hz ne justifie pas encore un protocole de messages dédié. La séparation entre contrôleur, adaptateur temporel et UI permet de déplacer ultérieurement l'exécution dans un Web Worker sans modifier `sim-core`.
 - Les bibliothèques de graphiques, de composants et les frameworks CSS sont reportés parce que les observables sont des valeurs numériques et des jauges simples.

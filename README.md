@@ -4,7 +4,7 @@ Roue libre est un projet de simulation cycliste en phase de fondation technique,
 
 ## État du projet
 
-Le dépôt contient un moteur longitudinal déterministe plat pour un coureur isolé, un modèle énergétique minimal CP/W' et une application web de laboratoire destinée à observer ces modèles. Le laboratoire expose les modèles implémentés et testés ; il ne valide pas de fonctionnalité hors périmètre comme la pente, le GPX, les virages, l'aspiration ou plusieurs coureurs.
+Le dépôt contient un moteur longitudinal déterministe pour un coureur isolé sur route à pente constante, un modèle énergétique minimal CP/W' et une application web de laboratoire destinée à observer ces modèles. Le laboratoire expose les modèles implémentés et testés ; il ne valide pas de fonctionnalité hors périmètre comme le GPX, les virages, l'aspiration ou plusieurs coureurs.
 
 Consultez [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) avant toute modification importante.
 
@@ -59,4 +59,4 @@ Consultez [`docs/GITHUB_PAGES_DEPLOYMENT.md`](docs/GITHUB_PAGES_DEPLOYMENT.md) p
 
 ## Hors périmètre du socle actuel
 
-Le dépôt ne contient pas de pente, altitude, GPX, virages, position latérale, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, Three.js, scène 3D, Zustand, Web Worker, moteur de corps rigides, collisions, adhérence, sons, sauvegarde, backend applicatif ou authentification.
+Le dépôt ne contient pas de GPX, altitude issue d'un parcours, profil variable, virages, position latérale, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, Three.js, scène 3D, Zustand, Web Worker, moteur de corps rigides, collisions, adhérence, sons, sauvegarde, backend applicatif ou authentification.

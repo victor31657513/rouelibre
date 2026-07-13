@@ -4,10 +4,10 @@ import {
   assertPositive,
   clamp,
   computeSingleRiderStepCandidateAtPower,
-  validateFlatRoadEnvironment,
+  validateLongitudinalEnvironment,
   validateSingleRiderProfile,
   validateSingleRiderState,
-  type FlatRoadEnvironment,
+  type LongitudinalEnvironment,
   type SingleRiderProfile,
   type SingleRiderState,
 } from "./longitudinal.js";
@@ -145,12 +145,12 @@ function validateSingleRiderEnergyInputs(
   energyState: SingleRiderEnergyState,
   physicalProfile: SingleRiderProfile,
   energyProfile: SingleRiderEnergyProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   dtSeconds: number,
 ): void {
   validateSingleRiderState(physicalState);
   validateSingleRiderProfile(physicalProfile);
-  validateFlatRoadEnvironment(environment);
+  validateLongitudinalEnvironment(environment);
   validateSingleRiderEnergyProfileShape(energyProfile);
   assertPositive("dtSeconds", dtSeconds);
   validateCriticalPowerLimit(energyProfile.criticalPowerWatts, physicalProfile.maxPowerWatts, "physicalProfile.maxPowerWatts");
@@ -192,7 +192,7 @@ export function stepSingleRiderWithEnergy(
   energyState: SingleRiderEnergyState,
   physicalProfile: SingleRiderProfile,
   energyProfile: SingleRiderEnergyProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   dtSeconds: number,
 ): void {
   validateSingleRiderEnergyInputs(physicalState, energyState, physicalProfile, energyProfile, environment, dtSeconds);
