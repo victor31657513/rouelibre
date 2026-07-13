@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  computeSingleRiderForces,
   createSingleRiderState,
-  defaultFlatRoadEnvironment,
+  defaultLongitudinalEnvironment,
   defaultSingleRiderProfile,
   stepSingleRider,
-  type FlatRoadEnvironment,
+  type LongitudinalEnvironment,
   type SingleRiderProfile,
   type SingleRiderState,
 } from "../src/index.js";
@@ -21,8 +22,8 @@ const referenceProfile: SingleRiderProfile = {
   maxPropulsiveForceNewtons: 200,
 };
 
-const referenceEnvironment: FlatRoadEnvironment = {
-  ...defaultFlatRoadEnvironment,
+const referenceEnvironment: LongitudinalEnvironment = {
+  ...defaultLongitudinalEnvironment,
   airDensityKgPerCubicMeter: 1.225,
   windSpeedMetersPerSecond: 0,
   gravityMetersPerSecondSquared: 9.80665,
@@ -48,7 +49,7 @@ function simulate(
   powerWatts: number,
   durationSeconds: number,
   dtSeconds: number,
-  environment: FlatRoadEnvironment = referenceEnvironment,
+  environment: LongitudinalEnvironment = referenceEnvironment,
   checkInvariants = false,
 ): SingleRiderState {
   const state = createSingleRiderState(powerWatts);
@@ -72,7 +73,7 @@ function simulateWithPreviousSpeed(
   powerWatts: number,
   durationSeconds: number,
   dtSeconds: number,
-  environment: FlatRoadEnvironment = referenceEnvironment,
+  environment: LongitudinalEnvironment = referenceEnvironment,
   previousWindowSeconds = 60,
 ): { finalState: SingleRiderState; previousWindowSpeed: number } {
   const state = createSingleRiderState(powerWatts);
@@ -265,5 +266,80 @@ describe("single rider input validation", () => {
       stepSingleRider(state, referenceProfile, referenceEnvironment, 0.5);
     }).toThrow(/state\.distanceMeters/);
     expect(state).toStrictEqual(before);
+  });
+});
+
+describe("single rider constant road grade", () => {
+  it("keeps zero grade identical to historical flat equations", () => {
+    const state = createSingleRiderState(250);
+    state.speedMetersPerSecond = 10;
+    const forces = computeSingleRiderForces(state, referenceProfile, referenceEnvironment);
+
+    expect(Math.atan(referenceEnvironment.roadGrade)).toBe(0);
+    expect(forces.gravityForceNewtons).toBe(0);
+    expect(forces.rollingResistanceForceNewtons).toBe(
+      referenceProfile.rollingResistanceCoefficient
+        * (referenceProfile.riderMassKg + referenceProfile.bikeMassKg)
+        * referenceEnvironment.gravityMetersPerSecondSquared,
+    );
+  });
+
+  it("applies positive grade as resistance and negative grade as assistance", () => {
+    const flat = simulate(250, 120, 0.5, referenceEnvironment);
+    const uphillEnvironment = { ...referenceEnvironment, roadGrade: 0.05 };
+    const downhillEnvironment = { ...referenceEnvironment, roadGrade: -0.05 };
+    const uphill = simulate(250, 120, 0.5, uphillEnvironment);
+    const downhill = simulate(250, 120, 0.5, downhillEnvironment);
+    const state = createSingleRiderState(250);
+    state.speedMetersPerSecond = 8;
+    const flatForces = computeSingleRiderForces(state, referenceProfile, referenceEnvironment);
+    const uphillForces = computeSingleRiderForces(state, referenceProfile, uphillEnvironment);
+    const downhillForces = computeSingleRiderForces(state, referenceProfile, downhillEnvironment);
+
+    expect(uphillForces.gravityForceNewtons).toBeGreaterThan(0);
+    expect(uphillForces.netForceNewtons).toBeLessThan(flatForces.netForceNewtons);
+    expect(uphill.speedMetersPerSecond).toBeLessThan(flat.speedMetersPerSecond);
+    expect(downhillForces.gravityForceNewtons).toBeLessThan(0);
+    expect(downhillForces.netForceNewtons).toBeGreaterThan(flatForces.netForceNewtons);
+    expect(downhill.speedMetersPerSecond).toBeGreaterThan(flat.speedMetersPerSecond);
+  });
+
+  it("uses cos(atan(grade)) for non-negative rolling resistance", () => {
+    const state = createSingleRiderState(250);
+    state.speedMetersPerSecond = 8;
+    const environment = { ...referenceEnvironment, roadGrade: 0.12 };
+    const forces = computeSingleRiderForces(state, referenceProfile, environment);
+    const expected = referenceProfile.rollingResistanceCoefficient
+      * (referenceProfile.riderMassKg + referenceProfile.bikeMassKg)
+      * environment.gravityMetersPerSecondSquared
+      * Math.cos(Math.atan(environment.roadGrade));
+
+    expect(forces.rollingResistanceForceNewtons).toBeCloseTo(expected, 12);
+    expect(forces.rollingResistanceForceNewtons).toBeGreaterThanOrEqual(0);
+  });
+
+  it("allows coasting acceleration downhill without negative uphill speed", () => {
+    const downhill = createSingleRiderState(0);
+    stepSingleRider(downhill, referenceProfile, { ...referenceEnvironment, roadGrade: -0.05 }, 1);
+    expect(downhill.speedMetersPerSecond).toBeGreaterThan(0);
+
+    const uphill = createSingleRiderState(0);
+    stepSingleRider(uphill, referenceProfile, { ...referenceEnvironment, roadGrade: 0.05 }, 1);
+    expect(uphill.speedMetersPerSecond).toBe(0);
+    expect(uphill.accelerationMetersPerSecondSquared).toBe(0);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])("rejects invalid road grade without mutation", (roadGrade) => {
+    const state = createSingleRiderState(250);
+    const before = cloneState(state);
+
+    expect(() => stepSingleRider(state, referenceProfile, { ...referenceEnvironment, roadGrade }, 0.5)).toThrow(/environment\.roadGrade/);
+    expect(state).toStrictEqual(before);
+  });
+
+  it("is deterministic for identical grade inputs", () => {
+    expect(simulate(250, 300, 0.5, { ...referenceEnvironment, roadGrade: 0.035 })).toStrictEqual(
+      simulate(250, 300, 0.5, { ...referenceEnvironment, roadGrade: 0.035 }),
+    );
   });
 });

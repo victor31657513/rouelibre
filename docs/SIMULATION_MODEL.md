@@ -2,7 +2,7 @@
 
 ## Statut
 
-Le modèle implémenté couvre la physique longitudinale minimale d'un coureur isolé sur route plate et un modèle énergétique minimal CP/W'. La physique calcule l'évolution de la vitesse et de la distance à partir de la puissance produite, du profil coureur-vélo, de l'environnement et d'un pas de temps explicite. Le modèle énergétique limite la puissance produite à partir de la puissance demandée, de la puissance critique et de la réserve anaérobie.
+Le modèle implémenté couvre la physique longitudinale minimale d'un coureur isolé sur route à pente longitudinale constante et un modèle énergétique minimal CP/W'. La physique calcule l'évolution de la vitesse et de la distance à partir de la puissance produite, du profil coureur-vélo, de l'environnement et d'un pas de temps explicite. Le modèle énergétique limite la puissance produite à partir de la puissance demandée, de la puissance critique et de la réserve anaérobie.
 
 ## Unités
 
@@ -18,13 +18,14 @@ Le moteur utilise les unités SI :
 - force : newton (`N`) ;
 - densité de l'air : kilogramme par mètre cube (`kg/m³`) ;
 - gravité : mètre par seconde carrée (`m/s²`) ;
+- pente longitudinale : ratio sans unité (`dénivelé vertical / distance horizontale`) ;
 - CdA : mètre carré (`m²`).
 
 CP et W' représentent ici de la puissance et du travail mécaniques externes. Le rendement mécanique du profil physique reste appliqué ensuite par le moteur longitudinal pour calculer la puissance transmise à la roue.
 
 ## Paramètres par défaut physiques
 
-Les paramètres de référence exposés par `defaultSingleRiderProfile` et `defaultFlatRoadEnvironment` sont :
+Les paramètres de référence exposés par `defaultSingleRiderProfile` et `defaultLongitudinalEnvironment` sont :
 
 | Paramètre | Valeur |
 | --- | ---: |
@@ -38,6 +39,7 @@ Les paramètres de référence exposés par `defaultSingleRiderProfile` et `defa
 | Densité de l'air | 1,225 kg/m³ |
 | Vent longitudinal | 0 m/s |
 | Gravité | 9,80665 m/s² |
+| Pente longitudinale | 0,00 |
 
 ## Profil énergétique CP/W'
 
@@ -115,6 +117,28 @@ v_air = v + v_vent
 
 avec `v` la vitesse du coureur et `v_vent` le vent longitudinal.
 
+## Convention de la pente
+
+La pente longitudinale du moteur est `roadGrade`, un ratio sans unité :
+
+```text
+grade = dénivelé vertical / distance horizontale
+```
+
+Le laboratoire expose une valeur en pourcentage et la convertit à sa frontière :
+
+```text
+grade = gradePercent / 100
+```
+
+Convention : valeur positive pour une montée dans le sens de déplacement, valeur négative pour une descente, zéro pour un profil plat. L'angle physique de la route est calculé depuis ce ratio :
+
+```text
+theta = atan(grade)
+```
+
+Une pente de 5 % correspond donc à `grade = 0,05` et non à un angle de 5 degrés.
+
 ## Équations physiques longitudinales
 
 La masse totale est :
@@ -141,16 +165,22 @@ Si `P_roue` vaut zéro, `F_prop` vaut zéro. La traînée aérodynamique signée
 F_aero = 0,5 * rho * CdA * v_air * abs(v_air)
 ```
 
-La résistance au roulement sur route plate est :
+La force gravitationnelle longitudinale signée est :
 
 ```text
-F_rr = Crr * m * g
+F_gravite = m * g * sin(theta)
 ```
 
-La force nette et l'accélération sont :
+Elle est positive en montée et s'oppose au déplacement ; elle est négative en descente et favorise le déplacement. La résistance au roulement utilise la force normale :
 
 ```text
-F_net = F_prop - F_aero - F_rr
+F_rr = Crr * m * g * cos(theta)
+```
+
+À pente nulle, `theta = 0`, `F_gravite = 0` et `F_rr = Crr * m * g`. La force nette et l'accélération sont :
+
+```text
+F_net = F_prop - F_aero - F_rr - F_gravite
 a = F_net / m
 ```
 
@@ -169,7 +199,7 @@ Les validations et calculs susceptibles d'échouer précèdent les mutations. Un
 
 ## Méthode d'intégration
 
-Chaque pas utilise un pas temporel explicite `dt` strictement positif. La vitesse suivante est calculée par Euler explicite puis bornée à zéro :
+Chaque pas utilise un pas temporel explicite `dt` strictement positif. La vitesse suivante est calculée par Euler explicite puis bornée à zéro. Le modèle ne permet pas au coureur de repartir en marche arrière :
 
 ```text
 v_suivante = max(0, v + a * dt)
@@ -185,7 +215,7 @@ Le temps simulé augmente de `dt`. L'accélération exposée correspond à l'acc
 
 ## Validation des entrées
 
-Les contraintes minimales sont : masse coureur strictement positive, masse vélo positive ou nulle, masse totale strictement positive, CdA positif ou nul, coefficient de roulement positif ou nul, rendement mécanique entre 0 et 1, puissance maximale positive ou nulle, force propulsive maximale strictement positive, densité de l'air positive ou nulle, gravité strictement positive, vent fini, état physique fini, temps, distance et vitesse non négatifs, puissance demandée finie, CP finie et strictement positive, CP inférieure ou égale à la puissance maximale physique, capacité W' finie et positive ou nulle, efficacité de récupération entre 0 et 1, réserve finie et comprise entre zéro et la capacité, observables énergétiques finis et `dt` strictement positif.
+Les contraintes minimales sont : masse coureur strictement positive, masse vélo positive ou nulle, masse totale strictement positive, CdA positif ou nul, coefficient de roulement positif ou nul, rendement mécanique entre 0 et 1, puissance maximale positive ou nulle, force propulsive maximale strictement positive, densité de l'air positive ou nulle, gravité strictement positive, vent fini, pente finie, état physique fini, temps, distance et vitesse non négatifs, puissance demandée finie, CP finie et strictement positive, CP inférieure ou égale à la puissance maximale physique, capacité W' finie et positive ou nulle, efficacité de récupération entre 0 et 1, réserve finie et comprise entre zéro et la capacité, observables énergétiques finis et `dt` strictement positif.
 
 ## Invariants couverts par les tests
 
@@ -207,4 +237,4 @@ Les tests vérifient :
 
 ## Simplifications et limites
 
-Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique ne couvre pas la pente, l'altitude, les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, le freinage, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.
+Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale constante, sans freinage et sans changement de pente selon la distance. Il ne couvre pas l'altitude issue d'un parcours, le profil variable, les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, le freinage, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.

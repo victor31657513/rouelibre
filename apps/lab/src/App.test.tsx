@@ -16,9 +16,10 @@ const click = (text: string) => act(() => { (Array.from(document.querySelectorAl
 const change = (el: HTMLInputElement, value: string) => act(() => { el.value = value; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); });
 
 describe("App", () => {
-  it("renders essential controls and observables", () => { render(<App />); expect(document.body.textContent).toContain("Puissance demandée"); expect(document.body.textContent).toContain("Vent longitudinal"); expect(document.body.textContent).toContain("État physique"); expect(document.body.textContent).toContain("Force nette"); });
+  it("renders essential controls and observables", () => { render(<App />); expect(document.body.textContent).toContain("Puissance demandée"); expect(document.body.textContent).toContain("Vent longitudinal"); expect(document.body.textContent).toContain("Pente longitudinale"); expect(document.body.textContent).toContain("État physique"); expect(document.body.textContent).toContain("Force nette"); });
   it("changes requested power", () => { render(<App />); change(input("Puissance demandée"), "350"); expect(document.body.textContent).toContain("350 W"); });
   it("changes wind", () => { render(<App />); change(input("Vent longitudinal"), "3"); expect(document.body.textContent).toContain("3.0 m/s"); });
+  it("changes longitudinal grade", () => { render(<App />); change(input("Pente longitudinale"), "5"); expect(document.body.textContent).toContain("+5.0 %"); expect(document.body.textContent).toContain("Force gravitationnelle longitudinale"); });
   it("starts and pauses", () => { render(<App />); click("Démarrer"); expect((Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Démarrer") as HTMLButtonElement).disabled).toBe(true); click("Pause"); expect((Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Démarrer") as HTMLButtonElement).disabled).toBe(false); });
   it("advances manually by one second", () => { render(<App />); click("Avancer 1 s simulée"); expect(document.body.textContent).toContain("1.00 s"); });
   it("resets after progression", () => { render(<App />); click("Avancer 1 s simulée"); click("Réinitialiser"); expect(document.body.textContent).toContain("0.00 s"); });

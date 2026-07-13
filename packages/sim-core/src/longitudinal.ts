@@ -13,8 +13,8 @@ export interface SingleRiderProfile {
   maxPropulsiveForceNewtons: number;
 }
 
-/** Environnement longitudinal plat, en unités SI. */
-export interface FlatRoadEnvironment {
+/** Environnement longitudinal à pente constante, en unités SI. */
+export interface LongitudinalEnvironment {
   airDensityKgPerCubicMeter: number;
   /**
    * Vent longitudinal en m/s. Convention: valeur positive = vent de face,
@@ -23,6 +23,8 @@ export interface FlatRoadEnvironment {
    */
   windSpeedMetersPerSecond: number;
   gravityMetersPerSecondSquared: number;
+  /** Pente longitudinale signée, ratio sans unité: dénivelé vertical / distance horizontale. */
+  roadGrade: number;
 }
 
 /** État dynamique mutable d'un coureur isolé, en unités SI. */
@@ -42,6 +44,7 @@ export interface SingleRiderForces {
   relativeAirSpeedMetersPerSecond: number;
   aerodynamicDragForceNewtons: number;
   rollingResistanceForceNewtons: number;
+  gravityForceNewtons: number;
   netForceNewtons: number;
   accelerationMetersPerSecondSquared: number;
 }
@@ -64,10 +67,11 @@ export const defaultSingleRiderProfile: SingleRiderProfile = {
   maxPropulsiveForceNewtons: 200,
 };
 
-export const defaultFlatRoadEnvironment: FlatRoadEnvironment = {
+export const defaultLongitudinalEnvironment: LongitudinalEnvironment = {
   airDensityKgPerCubicMeter: 1.225,
   windSpeedMetersPerSecond: 0,
   gravityMetersPerSecondSquared: 9.80665,
+  roadGrade: 0,
 };
 
 export function assertFinite(name: string, value: number): void {
@@ -104,10 +108,11 @@ export function validateSingleRiderProfile(profile: SingleRiderProfile): void {
   assertPositive("profile.maxPropulsiveForceNewtons", profile.maxPropulsiveForceNewtons);
 }
 
-export function validateFlatRoadEnvironment(environment: FlatRoadEnvironment): void {
+export function validateLongitudinalEnvironment(environment: LongitudinalEnvironment): void {
   assertNonNegative("environment.airDensityKgPerCubicMeter", environment.airDensityKgPerCubicMeter);
   assertFinite("environment.windSpeedMetersPerSecond", environment.windSpeedMetersPerSecond);
   assertPositive("environment.gravityMetersPerSecondSquared", environment.gravityMetersPerSecondSquared);
+  assertFinite("environment.roadGrade", environment.roadGrade);
 }
 
 export function validateSingleRiderState(state: SingleRiderState): void {
@@ -122,12 +127,12 @@ export function validateSingleRiderState(state: SingleRiderState): void {
 export function validateSingleRiderStepInputs(
   state: SingleRiderState,
   profile: SingleRiderProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   dtSeconds: number,
 ): void {
   validateSingleRiderState(state);
   validateSingleRiderProfile(profile);
-  validateFlatRoadEnvironment(environment);
+  validateLongitudinalEnvironment(environment);
   assertPositive("dtSeconds", dtSeconds);
 }
 
@@ -155,6 +160,7 @@ function assertFiniteForces(forces: SingleRiderForces): void {
   assertFinite("forces.relativeAirSpeedMetersPerSecond", forces.relativeAirSpeedMetersPerSecond);
   assertFinite("forces.aerodynamicDragForceNewtons", forces.aerodynamicDragForceNewtons);
   assertFinite("forces.rollingResistanceForceNewtons", forces.rollingResistanceForceNewtons);
+  assertFinite("forces.gravityForceNewtons", forces.gravityForceNewtons);
   assertFinite("forces.netForceNewtons", forces.netForceNewtons);
   assertFinite("forces.accelerationMetersPerSecondSquared", forces.accelerationMetersPerSecondSquared);
 }
@@ -174,12 +180,12 @@ function assertProducedPowerInRange(producedPowerWatts: number, maxPowerWatts: n
 export function computeSingleRiderForcesAtPower(
   state: SingleRiderState,
   profile: SingleRiderProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   producedPowerWatts: number,
 ): SingleRiderForces {
   validateSingleRiderState(state);
   validateSingleRiderProfile(profile);
-  validateFlatRoadEnvironment(environment);
+  validateLongitudinalEnvironment(environment);
   assertProducedPowerInRange(producedPowerWatts, profile.maxPowerWatts);
 
   const totalMassKg = profile.riderMassKg + profile.bikeMassKg;
@@ -195,11 +201,16 @@ export function computeSingleRiderForcesAtPower(
     * profile.cdaSquareMeters
     * relativeAirSpeedMetersPerSecond
     * Math.abs(relativeAirSpeedMetersPerSecond);
+  const roadAngleRadians = Math.atan(environment.roadGrade);
   const rollingResistanceForceNewtons = profile.rollingResistanceCoefficient
     * totalMassKg
     * environment.gravityMetersPerSecondSquared
+    * Math.cos(roadAngleRadians)
     * (state.speedMetersPerSecond > 0 || propulsiveForceNewtons > 0 ? 1 : 0);
-  const netForceNewtons = propulsiveForceNewtons - aerodynamicDragForceNewtons - rollingResistanceForceNewtons;
+  const gravityForceNewtons = totalMassKg
+    * environment.gravityMetersPerSecondSquared
+    * Math.sin(roadAngleRadians);
+  const netForceNewtons = propulsiveForceNewtons - aerodynamicDragForceNewtons - rollingResistanceForceNewtons - gravityForceNewtons;
   const accelerationMetersPerSecondSquared = netForceNewtons / totalMassKg;
   const forces = {
     totalMassKg,
@@ -208,6 +219,7 @@ export function computeSingleRiderForcesAtPower(
     relativeAirSpeedMetersPerSecond,
     aerodynamicDragForceNewtons,
     rollingResistanceForceNewtons,
+    gravityForceNewtons,
     netForceNewtons,
     accelerationMetersPerSecondSquared,
   };
@@ -225,11 +237,11 @@ export function computeSingleRiderForcesAtPower(
 export function computeSingleRiderForces(
   state: SingleRiderState,
   profile: SingleRiderProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
 ): SingleRiderForces {
   validateSingleRiderState(state);
   validateSingleRiderProfile(profile);
-  validateFlatRoadEnvironment(environment);
+  validateLongitudinalEnvironment(environment);
 
   return computeSingleRiderForcesAtPower(
     state,
@@ -242,7 +254,7 @@ export function computeSingleRiderForces(
 export function computeSingleRiderStepCandidateAtPower(
   state: SingleRiderState,
   profile: SingleRiderProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   dtSeconds: number,
   producedPowerWatts: number,
 ): SingleRiderStepCandidate {
@@ -276,7 +288,7 @@ export function computeSingleRiderStepCandidateAtPower(
 export function stepSingleRiderWithProducedPower(
   state: SingleRiderState,
   profile: SingleRiderProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   dtSeconds: number,
   producedPowerWatts: number,
 ): void {
@@ -292,7 +304,7 @@ export function stepSingleRiderWithProducedPower(
 export function stepSingleRider(
   state: SingleRiderState,
   profile: SingleRiderProfile,
-  environment: FlatRoadEnvironment,
+  environment: LongitudinalEnvironment,
   dtSeconds: number,
 ): void {
   validateSingleRiderStepInputs(state, profile, environment, dtSeconds);

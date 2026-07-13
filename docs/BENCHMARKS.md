@@ -1,6 +1,6 @@
 # Benchmarks
 
-## Scénario de référence : coureur isolé sur route plate
+## Scénario de référence : coureur isolé sur route à pente constante
 
 Le scénario de référence exécute le moteur longitudinal minimal pendant 7 200 s avec un pas de 0,5 s. Les vitesses reportées correspondent à l'état final, utilisé comme approximation de vitesse stabilisée pour ces paramètres.
 
@@ -22,10 +22,11 @@ Paramètres environnement :
 | --- | ---: |
 | Densité de l'air | 1,225 kg/m³ |
 | Gravité | 9,80665 m/s² |
+| Pente longitudinale par défaut | 0,00 (0 %) |
 | Durée | 7 200 s |
 | Pas de temps | 0,5 s |
 
-Convention du vent : valeur positive pour un vent de face, valeur négative pour un vent arrière.
+Convention du vent : valeur positive pour un vent de face, valeur négative pour un vent arrière. Convention de pente : ratio sans unité, positif en montée, négatif en descente.
 
 | Cas | Vent | Vitesse stabilisée | Vitesse stabilisée |
 | --- | ---: | ---: | ---: |
@@ -35,9 +36,20 @@ Convention du vent : valeur positive pour un vent de face, valeur négative pour
 | 250 W avec vent de face | +3 m/s | 8,418 m/s | 30,30 km/h |
 | 250 W avec vent arrière | -3 m/s | 12,206 m/s | 43,94 km/h |
 
+
+## Scénario de référence : pente longitudinale constante
+
+Le scénario de pente utilise les mêmes paramètres, la même durée de 7 200 s et le même pas de 0,5 s que le scénario de référence. Les résultats proviennent d'une exécution reproductible du moteur avec `defaultSingleRiderProfile`, une puissance demandée de 250 W, un vent nul et les pentes indiquées.
+
+| Cas | Vent | Pente moteur | Pente affichée | Vitesse finale | Vitesse finale | Force gravitationnelle |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 250 W descente constante | 0 m/s | -0,05 | -5 % | 16,327 m/s | 58,78 km/h | -40,647 N |
+| 250 W sans vent | 0 m/s | 0,00 | 0 % | 10,220 m/s | 36,79 km/h | 0,000 N |
+| 250 W montée constante | 0 m/s | 0,05 | +5 % | 4,974 m/s | 17,91 km/h | 40,647 N |
+
 ## Limites d'interprétation
 
-Ces résultats valident uniquement le comportement numérique du modèle longitudinal plat avec les paramètres indiqués. Ils ne constituent pas une validation physiologique ou aérodynamique complète.
+Ces résultats valident uniquement le comportement numérique du modèle longitudinal à pente constante avec les paramètres indiqués. Ils ne constituent pas une validation physiologique ou aérodynamique complète.
 
 ## Scénario de référence : énergie CP/W' du coureur isolé
 

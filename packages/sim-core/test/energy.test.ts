@@ -4,7 +4,7 @@ import {
   computeSingleRiderForcesAtPower,
   createSingleRiderEnergyState,
   createSingleRiderState,
-  defaultFlatRoadEnvironment,
+  defaultLongitudinalEnvironment,
   defaultSingleRiderProfile,
   stepSingleRider,
   stepSingleRiderEnergy,
@@ -165,7 +165,7 @@ describe("single rider energy and physics integration", () => {
     const physicalState = createSingleRiderState(350);
     const energyState = createSingleRiderEnergyState(energyProfile, 0);
 
-    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
+    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
 
     expect(physicalState.requestedPowerWatts).toBe(350);
     expect(physicalState.producedPowerWatts).toBe(250);
@@ -174,26 +174,26 @@ describe("single rider energy and physics integration", () => {
   it("computes explicit forces at the produced power after energy limitation", () => {
     const physicalState = createSingleRiderState(350);
     const energyState = createSingleRiderEnergyState(energyProfile, 0);
-    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
+    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
     const cpEquivalentState = { ...physicalState, requestedPowerWatts: 250, producedPowerWatts: 250 };
     const requestedEquivalentState = { ...physicalState, requestedPowerWatts: 350, producedPowerWatts: 350 };
 
     const limitedForces = computeSingleRiderForcesAtPower(
       physicalState,
       physicalProfile,
-      defaultFlatRoadEnvironment,
+      defaultLongitudinalEnvironment,
       physicalState.producedPowerWatts,
     );
     const cpForces = computeSingleRiderForcesAtPower(
       cpEquivalentState,
       physicalProfile,
-      defaultFlatRoadEnvironment,
+      defaultLongitudinalEnvironment,
       250,
     );
     const requestedForces = computeSingleRiderForcesAtPower(
       requestedEquivalentState,
       physicalProfile,
-      defaultFlatRoadEnvironment,
+      defaultLongitudinalEnvironment,
       350,
     );
 
@@ -207,13 +207,13 @@ describe("single rider energy and physics integration", () => {
     const physicalState = createSingleRiderState(350);
     const energyState = createSingleRiderEnergyState(energyProfile, 100);
 
-    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 0.5);
+    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 0.5);
     expect(physicalState.producedPowerWatts).toBe(350);
 
-    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 0.5);
+    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 0.5);
     expect(physicalState.producedPowerWatts).toBe(350);
 
-    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
+    stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
     expect(physicalState.producedPowerWatts).toBe(250);
   });
 
@@ -223,8 +223,8 @@ describe("single rider energy and physics integration", () => {
     const energyState = createSingleRiderEnergyState(energyProfile, 0);
 
     for (let index = 0; index < 120; index += 1) {
-      stepSingleRiderWithEnergy(energyLimited, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
-      stepSingleRider(cpOnly, physicalProfile, defaultFlatRoadEnvironment, 1);
+      stepSingleRiderWithEnergy(energyLimited, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
+      stepSingleRider(cpOnly, physicalProfile, defaultLongitudinalEnvironment, 1);
     }
 
     expectClose(energyLimited.speedMetersPerSecond, cpOnly.speedMetersPerSecond);
@@ -238,8 +238,8 @@ describe("single rider energy and physics integration", () => {
     let speedAtExhaustion = 0;
 
     for (let index = 0; index < 200; index += 1) {
-      stepSingleRiderWithEnergy(limitedState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
-      stepSingleRider(cpReferenceState, physicalProfile, defaultFlatRoadEnvironment, 1);
+      stepSingleRiderWithEnergy(limitedState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
+      stepSingleRider(cpReferenceState, physicalProfile, defaultLongitudinalEnvironment, 1);
       expect(limitedState.requestedPowerWatts).toBe(350);
       expect(limitedState.producedPowerWatts).toBeGreaterThan(energyProfile.criticalPowerWatts);
     }
@@ -247,16 +247,16 @@ describe("single rider energy and physics integration", () => {
     speedAtExhaustion = limitedState.speedMetersPerSecond;
     expect(energyState.anaerobicReserveJoules).toBe(0);
 
-    stepSingleRiderWithEnergy(limitedState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
-    stepSingleRider(cpReferenceState, physicalProfile, defaultFlatRoadEnvironment, 1);
+    stepSingleRiderWithEnergy(limitedState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
+    stepSingleRider(cpReferenceState, physicalProfile, defaultLongitudinalEnvironment, 1);
     expect(limitedState.requestedPowerWatts).toBe(350);
     expect(limitedState.producedPowerWatts).toBe(250);
     expect(limitedState.speedMetersPerSecond).toBeLessThan(speedAtExhaustion);
 
     let previousDifference = Math.abs(limitedState.speedMetersPerSecond - cpReferenceState.speedMetersPerSecond);
     for (let index = 0; index < 3_600; index += 1) {
-      stepSingleRiderWithEnergy(limitedState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
-      stepSingleRider(cpReferenceState, physicalProfile, defaultFlatRoadEnvironment, 1);
+      stepSingleRiderWithEnergy(limitedState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
+      stepSingleRider(cpReferenceState, physicalProfile, defaultLongitudinalEnvironment, 1);
       expect(limitedState.requestedPowerWatts).toBe(350);
       expect(limitedState.producedPowerWatts).toBe(250);
     }
@@ -272,7 +272,7 @@ describe("single rider energy and physics integration", () => {
     const state = createSingleRiderState(250);
 
     for (let index = 0; index < 14_400; index += 1) {
-      stepSingleRider(state, physicalProfile, defaultFlatRoadEnvironment, 0.5);
+      stepSingleRider(state, physicalProfile, defaultLongitudinalEnvironment, 0.5);
     }
 
     expect(Math.abs(state.speedMetersPerSecond - 10.220)).toBeLessThanOrEqual(0.001);
@@ -283,7 +283,7 @@ describe("single rider energy and physics integration", () => {
       const physicalState = createSingleRiderState(350);
       const energyState = createSingleRiderEnergyState(energyProfile);
       for (let index = 0; index < 1_000; index += 1) {
-        stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 0.5);
+        stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 0.5);
       }
       return { physicalState, energyState };
     };
@@ -296,7 +296,7 @@ describe("single rider energy and physics integration", () => {
     const energyState = createSingleRiderEnergyState(energyProfile, 10_000);
 
     for (let index = 0; index < 86_400; index += 1) {
-      stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultFlatRoadEnvironment, 1);
+      stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, defaultLongitudinalEnvironment, 1);
       expect(Number.isFinite(physicalState.speedMetersPerSecond)).toBe(true);
       expect(Number.isFinite(energyState.anaerobicReserveJoules)).toBe(true);
     }
@@ -314,7 +314,7 @@ describe("single rider energy and physics integration", () => {
         energyState,
         physicalProfile,
         energyProfile,
-        defaultFlatRoadEnvironment,
+        defaultLongitudinalEnvironment,
         Number.MAX_VALUE,
       );
     }).toThrow(/candidate\.(timeSeconds|distanceMeters|speedMetersPerSecond|accelerationMetersPerSecondSquared)|forces\./);
@@ -329,7 +329,7 @@ describe("single rider energy and physics integration", () => {
     const physicalBefore = clonePhysicalState(physicalState);
     const energyBefore = cloneEnergyState(energyState);
     const extremeEnvironment = {
-      ...defaultFlatRoadEnvironment,
+      ...defaultLongitudinalEnvironment,
       airDensityKgPerCubicMeter: Number.MAX_VALUE,
     };
 
@@ -377,11 +377,34 @@ describe("single rider energy and physics integration", () => {
         testedEnergyState,
         physicalProfile,
         testedEnergyProfile,
-        defaultFlatRoadEnvironment,
+        defaultLongitudinalEnvironment,
         dtSeconds ?? 1,
       );
     }).toThrow(expectedMessage);
     expect(physicalState).toStrictEqual(physicalBefore);
     expect(testedEnergyState).toStrictEqual(energyBefore);
   });
+});
+
+it("keeps W' evolution independent from road grade for the same produced power sequence", () => {
+  const runGrade = (roadGrade: number) => {
+    const physicalState = createSingleRiderState(350);
+    const energyState = createSingleRiderEnergyState(energyProfile);
+    const environment = { ...defaultLongitudinalEnvironment, roadGrade };
+    for (let index = 0; index < 120; index += 1) {
+      stepSingleRiderWithEnergy(physicalState, energyState, physicalProfile, energyProfile, environment, 1);
+    }
+    return { physicalState, energyState };
+  };
+
+  const flat = runGrade(0);
+  const uphill = runGrade(0.05);
+  const downhill = runGrade(-0.05);
+
+  expect(uphill.energyState).toStrictEqual(flat.energyState);
+  expect(downhill.energyState).toStrictEqual(flat.energyState);
+  expect(uphill.physicalState.speedMetersPerSecond).not.toBe(flat.physicalState.speedMetersPerSecond);
+  expect(downhill.physicalState.speedMetersPerSecond).not.toBe(flat.physicalState.speedMetersPerSecond);
+  expect(uphill.physicalState.distanceMeters).not.toBe(flat.physicalState.distanceMeters);
+  expect(downhill.physicalState.distanceMeters).not.toBe(flat.physicalState.distanceMeters);
 });
