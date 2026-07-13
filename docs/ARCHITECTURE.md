@@ -19,7 +19,7 @@ Organisation interne :
 API exposée :
 
 - `SingleRiderProfile` décrit le couple coureur-vélo avec masses, CdA, coefficient de roulement, rendement mécanique, puissance maximale et limite de force propulsive basse vitesse.
-- `LongitudinalEnvironment` décrit l'air, le vent longitudinal et la gravité.
+- `LongitudinalEnvironment` décrit l'air, la densité de l'air, le vent longitudinal, la gravité et la pente longitudinale constante `roadGrade`. `roadGrade` est exprimée comme un ratio sans unité, positif en montée, négatif en descente et nul par défaut.
 - `SingleRiderState` contient l'état dynamique physique mutable.
 - `createSingleRiderState` crée un état physique initial typé.
 - `computeSingleRiderForces` calcule les forces longitudinales instantanées en utilisant la puissance demandée bornée, pour les usages historiques sans modèle énergétique.
