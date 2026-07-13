@@ -354,6 +354,7 @@ describe("single rider energy and physics integration", () => {
     label: string;
     energyProfilePatch?: Partial<SingleRiderEnergyProfile>;
     energyStatePatch?: Partial<SingleRiderEnergyState>;
+    environmentPatch?: Partial<typeof defaultLongitudinalEnvironment>;
     dtSeconds?: number;
     expectedMessage: RegExp;
   }>([
@@ -363,27 +364,52 @@ describe("single rider energy and physics integration", () => {
     { label: "efficiency above one", energyProfilePatch: { recoveryEfficiency: 1.1 }, expectedMessage: /recoveryEfficiency/ },
     { label: "reserve above capacity", energyStatePatch: { anaerobicReserveJoules: 20_001 }, expectedMessage: /anaerobicReserveJoules/ },
     { label: "NaN reserve", energyStatePatch: { anaerobicReserveJoules: Number.NaN }, expectedMessage: /anaerobicReserveJoules/ },
+    { label: "NaN road grade", environmentPatch: { roadGrade: Number.NaN }, expectedMessage: /environment\.roadGrade/ },
+    {
+      label: "positive infinite road grade",
+      environmentPatch: { roadGrade: Number.POSITIVE_INFINITY },
+      expectedMessage: /environment\.roadGrade/,
+    },
+    {
+      label: "negative infinite road grade",
+      environmentPatch: { roadGrade: Number.NEGATIVE_INFINITY },
+      expectedMessage: /environment\.roadGrade/,
+    },
     { label: "invalid dt", dtSeconds: 0, expectedMessage: /dtSeconds/ },
-  ])("rejects invalid configuration without mutating either state: $label", ({ energyProfilePatch, energyStatePatch, dtSeconds, expectedMessage }) => {
-    const physicalState = createSingleRiderState(350);
-    const testedEnergyState = { ...createSingleRiderEnergyState(energyProfile), ...energyStatePatch };
-    const physicalBefore = clonePhysicalState(physicalState);
-    const energyBefore = cloneEnergyState(testedEnergyState);
-    const testedEnergyProfile = { ...energyProfile, ...energyProfilePatch };
+  ])(
+    "rejects invalid configuration without mutating either state: $label",
+    ({ energyProfilePatch, energyStatePatch, environmentPatch, dtSeconds, expectedMessage }) => {
+      const physicalState = createSingleRiderState(350);
+      const testedEnergyState = { ...createSingleRiderEnergyState(energyProfile), ...energyStatePatch };
+      const physicalBefore = clonePhysicalState(physicalState);
+      const energyBefore = cloneEnergyState(testedEnergyState);
+      const testedEnergyProfile = { ...energyProfile, ...energyProfilePatch };
+      const testedEnvironment = { ...defaultLongitudinalEnvironment, ...environmentPatch };
 
-    expect(() => {
-      stepSingleRiderWithEnergy(
-        physicalState,
-        testedEnergyState,
-        physicalProfile,
-        testedEnergyProfile,
-        defaultLongitudinalEnvironment,
-        dtSeconds ?? 1,
-      );
-    }).toThrow(expectedMessage);
-    expect(physicalState).toStrictEqual(physicalBefore);
-    expect(testedEnergyState).toStrictEqual(energyBefore);
-  });
+      expect(() => {
+        stepSingleRiderWithEnergy(
+          physicalState,
+          testedEnergyState,
+          physicalProfile,
+          testedEnergyProfile,
+          testedEnvironment,
+          dtSeconds ?? 1,
+        );
+      }).toThrow(RangeError);
+      expect(() => {
+        stepSingleRiderWithEnergy(
+          physicalState,
+          testedEnergyState,
+          physicalProfile,
+          testedEnergyProfile,
+          testedEnvironment,
+          dtSeconds ?? 1,
+        );
+      }).toThrow(expectedMessage);
+      expect(physicalState).toStrictEqual(physicalBefore);
+      expect(testedEnergyState).toStrictEqual(energyBefore);
+    },
+  );
 });
 
 it("keeps W' evolution independent from road grade for the same produced power sequence", () => {

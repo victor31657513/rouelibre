@@ -28,4 +28,4 @@
 
 ## Hors périmètre actuel
 
-Les sujets suivants ne font pas partie du périmètre disponible : altitude issue d'un parcours, profil variable, GPX, virages, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, scène 3D, Three.js, Zustand, Web Worker, Rapier, collisions, adhérence, sons, sauvegarde, backend, authentification et déploiement.
+Les sujets suivants ne font pas partie du périmètre disponible : altitude issue d'un parcours, profil variable, GPX, virages, aspiration, plusieurs coureurs, intelligence artificielle, tactique, psychologie, scène 3D, Three.js, Zustand, Web Worker, Rapier, collisions, adhérence, sons, sauvegarde, backend et authentification.
