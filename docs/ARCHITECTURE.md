@@ -14,7 +14,7 @@ Les décisions d'architecture sont consignées dans [`docs/decisions/`](decision
 
 Organisation interne :
 
-- `src/course.ts` contient le domaine de parcours longitudinal : validation, copie défensive, segments ordonnés immuables et résolution binaire de pente depuis une distance. Il ne dépend ni de la physique, ni de l’énergie, ni de React, du DOM ou du navigateur.
+- `src/course.ts` contient le domaine de parcours longitudinal : validation, copie défensive, segments ordonnés immuables, longueur totale optionnelle, progression pure et résolution binaire de pente depuis une distance. Il ne dépend ni de la physique, ni de l’énergie, ni de React, du DOM ou du navigateur.
 - `src/longitudinal.ts` contient le profil physique, l'environnement longitudinal à pente instantanée, l'état physique, les forces longitudinales et le pas physique historique.
 - `src/energy.ts` contient le profil énergétique CP/W', l'état énergétique, la logique de consommation/récupération et l'orchestration énergie puis physique.
 - `src/index.ts` expose uniquement l'API publique nécessaire aux consommateurs du package.
@@ -24,7 +24,7 @@ API exposée :
 - `SingleRiderProfile` décrit le couple coureur-vélo avec masses, CdA, coefficient de roulement, rendement mécanique, puissance maximale et limite de force propulsive basse vitesse.
 - `LongitudinalEnvironment` décrit l'air, la densité de l'air, le vent longitudinal, la gravité et la pente longitudinale instantanée `roadGrade`. `roadGrade` est exprimée comme un ratio sans unité, positif en montée, négatif en descente et nul par défaut.
 - `LongitudinalCourseSegment` décrit le début en mètres et la pente d'un segment de parcours ; `LongitudinalCourse` contient ses segments ordonnés immuables ; `LongitudinalCoursePosition` expose le segment résolu et les distances utiles à l'observation.
-- `createLongitudinalCourse` valide et copie défensivement les segments. `getLongitudinalCourseSegmentIndexAtDistance` et `getLongitudinalCourseRoadGradeAtDistance` résolvent sans allocation l'index et la pente actifs. `getLongitudinalCoursePositionAtDistance` produit les informations détaillées réservées aux observateurs.
+- `createLongitudinalCourse` valide et copie défensivement les segments et son option explicite `totalLengthMeters`. `getLongitudinalCourseSegmentIndexAtDistance` et `getLongitudinalCourseRoadGradeAtDistance` résolvent sans allocation l'index et la pente actifs. `getLongitudinalCoursePositionAtDistance` produit les informations détaillées réservées aux observateurs.
 - `SingleRiderState` contient l'état dynamique physique mutable.
 - `createSingleRiderState` crée un état physique initial typé.
 - `computeSingleRiderForces` calcule les forces longitudinales instantanées en utilisant la puissance demandée bornée, pour les usages historiques sans modèle énergétique.
@@ -75,7 +75,7 @@ apps/lab → course + energy + longitudinal
 
 Organisation :
 
-- `src/simulation/labSimulation.ts` contient le contrôleur indépendant de React et du DOM. Il possède les états physique et énergétique, le mode de parcours, la pente constante sélectionnée et le parcours segmenté de démonstration. Au début de chaque tick, il résout la pente depuis la distance et la copie dans `environment.roadGrade`, puis applique CP = 250 W, W' = 20 000 J, une efficacité de récupération de 0,5, un pas fixe `1 / 60 s` et calcule les forces avec la puissance réellement produite.
+- `src/simulation/labSimulation.ts` contient le contrôleur indépendant de React et du DOM. Il possède les états physique et énergétique, un état d’arrivée, le mode de parcours, la pente constante sélectionnée et le parcours segmenté de démonstration. Au début de chaque tick, il résout la pente depuis la distance et la copie dans `environment.roadGrade`, puis applique CP = 250 W, W' = 20 000 J, une efficacité de récupération de 0,5, un pas fixe `1 / 60 s` et calcule les forces avec la puissance réellement produite.
 - `src/simulation/fixedStepRunner.ts` contient l'adaptateur temporel. Il transforme le temps réel issu de `requestAnimationFrame` en ticks entiers, conserve un reliquat, plafonne le temps réel rattrapable après une frame longue avant application du multiplicateur, puis réinitialise sa référence temporelle lors d'une reprise. Le multiplicateur ×20 produit vingt secondes simulées par seconde réelle en fonctionnement normal sans modifier le pas fixe `1 / 60 s`.
 - `src/App.tsx` contient les composants React d'affichage et de commande. Les composants ne portent pas la logique de simulation et ne reçoivent que des instantanés copiés et gelés.
 - `src/styles.css` fournit une présentation CSS simple, responsive et lisible.

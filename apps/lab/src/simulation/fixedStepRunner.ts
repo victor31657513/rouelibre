@@ -6,7 +6,7 @@ export type AnimationCanceler = (handle: number) => void;
 export type NowProvider = () => number;
 
 interface FixedStepRunnerOptions {
-  readonly simulation: Pick<LabSimulation, "stepTicks">;
+  readonly simulation: Pick<LabSimulation, "stepTicks" | "getSnapshot">;
   readonly onAfterStep: () => void;
   readonly onError: (error: unknown) => void;
   readonly now?: NowProvider;
@@ -19,7 +19,7 @@ const DEFAULT_MAX_REAL_FRAME_DELTA_SECONDS = 0.25;
 const TICK_EPSILON_SECONDS = LAB_TICK_SECONDS / 1_000_000;
 
 export class FixedStepRunner {
-  private readonly simulation: Pick<LabSimulation, "stepTicks">;
+  private readonly simulation: Pick<LabSimulation, "stepTicks" | "getSnapshot">;
   private readonly onAfterStep: () => void;
   private readonly onError: (error: unknown) => void;
   private readonly now: NowProvider;
@@ -44,6 +44,7 @@ export class FixedStepRunner {
 
   start(): void {
     if (this.running) return;
+    if (this.simulation.getSnapshot().courseProgress.isFinished === true) return;
     this.running = true;
     this.lastTimestampSeconds = this.now() / 1_000;
     this.frameHandle = this.scheduleFrame(this.handleFrame);
@@ -68,6 +69,7 @@ export class FixedStepRunner {
   }
 
   stepOneSimulatedSecond(): void {
+    if (this.simulation.getSnapshot().courseProgress.isFinished === true) return;
     this.simulation.stepTicks(60);
     this.onAfterStep();
   }
@@ -95,6 +97,10 @@ export class FixedStepRunner {
         );
         this.simulation.stepTicks(tickCount);
         this.onAfterStep();
+        if (this.simulation.getSnapshot().courseProgress.isFinished === true) {
+          this.pause();
+          return;
+        }
       }
       this.frameHandle = this.scheduleFrame(this.handleFrame);
     } catch (error) {

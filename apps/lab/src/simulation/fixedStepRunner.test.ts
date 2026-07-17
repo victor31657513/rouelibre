@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LAB_TICK_SECONDS } from "./labSimulation.js";
+import { LAB_TICK_SECONDS, type LabSimulationSnapshot } from "./labSimulation.js";
 import { FixedStepRunner, type ObservationSpeed } from "./fixedStepRunner.js";
 
 interface Harness {
@@ -26,6 +26,7 @@ function setup(stepTicks?: (count: number) => void): Harness {
         ticks += count;
         stepTicks?.(count);
       },
+      getSnapshot: () => ({ courseProgress: { isFinished: false } } as unknown as LabSimulationSnapshot),
     },
     onAfterStep,
     onError,
@@ -162,5 +163,21 @@ describe("fixed step runner", () => {
     expect(harness.getErrorCalls()).toBe(1);
     expect(harness.getAfterStepCalls()).toBe(0);
     expect(harness.getStepCalls()).toEqual([1]);
+  });
+
+  it("stops scheduling frames when the controller reports arrival", () => {
+    let finished = false;
+    const callbacks: FrameRequestCallback[] = [];
+    const runner = new FixedStepRunner({
+      simulation: { stepTicks: () => { finished = true; }, getSnapshot: () => ({ courseProgress: { isFinished: finished } }) } as unknown as Pick<import("./labSimulation.js").LabSimulation, "stepTicks" | "getSnapshot">,
+      onAfterStep: () => undefined,
+      onError: () => undefined,
+      now: () => 0,
+      scheduleFrame: (callback) => { callbacks.push(callback); return callbacks.length; },
+      cancelFrame: () => undefined,
+    });
+    runner.start();
+    latestCallback(callbacks)(1_000 / 60);
+    expect(callbacks).toHaveLength(1);
   });
 });
