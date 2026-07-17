@@ -2,7 +2,7 @@
 
 ## Statut
 
-Le modèle implémenté couvre la physique longitudinale minimale d'un coureur isolé sur route à pente longitudinale constante et un modèle énergétique minimal CP/W'. La physique calcule l'évolution de la vitesse et de la distance à partir de la puissance produite, du profil coureur-vélo, de l'environnement et d'un pas de temps explicite. Le modèle énergétique limite la puissance produite à partir de la puissance demandée, de la puissance critique et de la réserve anaérobie.
+Le modèle implémenté couvre la physique longitudinale minimale d'un coureur isolé sur route à pente longitudinale instantanée et un parcours segmenté minimal, ainsi qu’un modèle énergétique minimal CP/W'. La physique calcule l'évolution de la vitesse et de la distance à partir de la puissance produite, du profil coureur-vélo, de l'environnement et d'un pas de temps explicite. Le modèle énergétique limite la puissance produite à partir de la puissance demandée, de la puissance critique et de la réserve anaérobie.
 
 ## Unités
 
@@ -139,6 +139,12 @@ theta = atan(grade)
 
 Une pente de 5 % correspond donc à `grade = 0,05` et non à un angle de 5 degrés.
 
+## Parcours longitudinal segmenté
+
+Un `LongitudinalCourse` contient des segments immuables `{ startDistanceMeters, roadGrade }`. La distance de début est en mètres et la pente est un ratio sans unité. Le premier segment commence exactement à 0 m ; les débuts sont finis et strictement croissants. Le segment `i` couvre `[début_i, début_suivant[` : une frontière exacte sélectionne le nouveau segment. Le dernier segment se prolonge indéfiniment.
+
+Au début de chaque tick fixe, le contrôleur résout le segment depuis `distanceMeters`, copie sa pente dans `LongitudinalEnvironment.roadGrade`, puis appelle l’étape énergie et physique existante. Un franchissement pendant le tick utilise donc encore l’ancienne pente pendant ce tick ; la nouvelle pente s’applique au tick suivant. Avec `dt = 1 / 60 s`, le retard maximal est un tick. La première version ne contient ni longueur totale, ni arrivée, ni GPX, ni altitude de parcours, ni virages.
+
 ## Équations physiques longitudinales
 
 La masse totale est :
@@ -237,4 +243,4 @@ Les tests vérifient :
 
 ## Simplifications et limites
 
-Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale constante, sans freinage et sans changement de pente selon la distance. Il ne couvre pas l'altitude issue d'un parcours, le profil variable, les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.
+Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale instantanée, sans freinage. Le parcours segmenté ne couvre ni GPX, ni altitude, ni virages, ni longueur totale ou arrivée. Il ne couvre pas l'altitude issue d'un parcours, les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.

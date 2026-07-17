@@ -7,17 +7,18 @@
 - Puissance, vitesse, vent longitudinal et énergie CP/W'.
 - Laboratoire visuel minimal.
 - Pente longitudinale constante.
+- Parcours longitudinal segmenté à pente constante par segment.
 - Publication GitHub Pages.
 
 ## Prochaine tâche unique
 
-Introduire un parcours longitudinal minimal composé de segments à pente constante, sans GPX ni virages.
+Ajouter une longueur totale finie et un état d’arrivée minimal au parcours longitudinal segmenté, sans classement ni plusieurs coureurs.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. parcours longitudinal segmenté ;
+1. longueur totale finie et état d’arrivée minimal ;
 2. GPX précompilé, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;

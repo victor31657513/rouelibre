@@ -24,3 +24,13 @@ export {
   type SingleRiderEnergyProfile,
   type SingleRiderEnergyState,
 } from "./energy.js";
+
+export {
+  createLongitudinalCourse,
+  getLongitudinalCoursePositionAtDistance,
+  getLongitudinalCourseRoadGradeAtDistance,
+  getLongitudinalCourseSegmentIndexAtDistance,
+  type LongitudinalCourse,
+  type LongitudinalCoursePosition,
+  type LongitudinalCourseSegment,
+} from "./course.js";

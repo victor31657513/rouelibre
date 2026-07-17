@@ -1,10 +1,15 @@
 import {
   computeSingleRiderForcesAtPower,
+  createLongitudinalCourse,
   createSingleRiderEnergyState,
   createSingleRiderState,
   defaultLongitudinalEnvironment,
   defaultSingleRiderProfile,
+  getLongitudinalCoursePositionAtDistance,
+  getLongitudinalCourseRoadGradeAtDistance,
   stepSingleRiderWithEnergy,
+  type LongitudinalCourse,
+  type LongitudinalCoursePosition,
   type LongitudinalEnvironment,
   type SingleRiderEnergyProfile,
   type SingleRiderEnergyState,
@@ -20,6 +25,14 @@ export const LAB_ENERGY_PROFILE: Readonly<SingleRiderEnergyProfile> = Object.fre
   anaerobicCapacityJoules: 20_000,
   recoveryEfficiency: 0.5,
 });
+export const LAB_DEMONSTRATION_COURSE = createLongitudinalCourse([
+  { startDistanceMeters: 0, roadGrade: 0 },
+  { startDistanceMeters: 200, roadGrade: 0.05 },
+  { startDistanceMeters: 400, roadGrade: -0.05 },
+  { startDistanceMeters: 600, roadGrade: 0 },
+]);
+
+export type LabCourseMode = "constant" | "demonstration";
 
 export interface LabSimulationSnapshot {
   readonly physicalState: Readonly<SingleRiderState>;
@@ -27,6 +40,9 @@ export interface LabSimulationSnapshot {
   readonly energyProfile: Readonly<SingleRiderEnergyProfile>;
   readonly environment: Readonly<LongitudinalEnvironment>;
   readonly forces: Readonly<SingleRiderForces>;
+  readonly courseMode: LabCourseMode;
+  readonly course: LongitudinalCourse;
+  readonly coursePosition: LongitudinalCoursePosition;
   readonly tickSeconds: number;
 }
 
@@ -34,15 +50,14 @@ export interface LabSimulation {
   setRequestedPowerWatts(value: number): void;
   setWindSpeedMetersPerSecond(value: number): void;
   setRoadGradePercent(value: number): void;
+  setCourseMode(mode: LabCourseMode): void;
   stepTicks(count: number): void;
   reset(): void;
   getSnapshot(): LabSimulationSnapshot;
 }
 
 function assertFiniteControl(name: string, value: number): void {
-  if (!Number.isFinite(value)) {
-    throw new RangeError(`${name} must be finite`);
-  }
+  if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite`);
 }
 
 function assertTickCount(count: number): void {
@@ -51,38 +66,37 @@ function assertTickCount(count: number): void {
   }
 }
 
-function copyPhysicalState(state: SingleRiderState): SingleRiderState {
-  return { ...state };
-}
-
-function copyEnergyState(state: SingleRiderEnergyState): SingleRiderEnergyState {
-  return { ...state };
-}
-
-function copyEnvironment(environment: LongitudinalEnvironment): LongitudinalEnvironment {
-  return { ...environment };
+function createConstantCourse(roadGradePercent: number): LongitudinalCourse {
+  return createLongitudinalCourse([{ startDistanceMeters: 0, roadGrade: roadGradePercent / 100 }]);
 }
 
 function snapshotFrom(
   physicalState: SingleRiderState,
   energyState: SingleRiderEnergyState,
   environment: LongitudinalEnvironment,
+  courseMode: LabCourseMode,
+  course: LongitudinalCourse,
 ): LabSimulationSnapshot {
-  const physicalStateCopy = copyPhysicalState(physicalState);
-  const energyStateCopy = copyEnergyState(energyState);
-  const environmentCopy = copyEnvironment(environment);
+  const physicalStateCopy = { ...physicalState };
+  const energyStateCopy = { ...energyState };
+  const coursePosition = getLongitudinalCoursePositionAtDistance(course, physicalState.distanceMeters);
+  const environmentCopy = { ...environment, roadGrade: coursePosition.roadGrade };
   const forces = computeSingleRiderForcesAtPower(
     physicalStateCopy,
     defaultSingleRiderProfile,
     environmentCopy,
     physicalStateCopy.producedPowerWatts,
   );
+
   return Object.freeze({
     physicalState: Object.freeze(physicalStateCopy),
     energyState: Object.freeze(energyStateCopy),
     energyProfile: LAB_ENERGY_PROFILE,
     environment: Object.freeze(environmentCopy),
     forces: Object.freeze({ ...forces }),
+    courseMode,
+    course,
+    coursePosition,
     tickSeconds: LAB_TICK_SECONDS,
   });
 }
@@ -90,7 +104,21 @@ function snapshotFrom(
 export function createLabSimulation(): LabSimulation {
   let physicalState = createSingleRiderState(LAB_INITIAL_REQUESTED_POWER_WATTS);
   let energyState = createSingleRiderEnergyState(LAB_ENERGY_PROFILE);
-  let environment: LongitudinalEnvironment = { ...defaultLongitudinalEnvironment };
+  const environment: LongitudinalEnvironment = { ...defaultLongitudinalEnvironment };
+  let constantCourse = createConstantCourse(LAB_INITIAL_ROAD_GRADE_PERCENT);
+  let courseMode: LabCourseMode = "constant";
+
+  const activeCourse = (): LongitudinalCourse => (
+    courseMode === "constant" ? constantCourse : LAB_DEMONSTRATION_COURSE
+  );
+  const synchronizeEnvironmentRoadGrade = (): void => {
+    environment.roadGrade = getLongitudinalCourseRoadGradeAtDistance(
+      activeCourse(),
+      physicalState.distanceMeters,
+    );
+  };
+
+  synchronizeEnvironmentRoadGrade();
 
   return {
     setRequestedPowerWatts(value: number): void {
@@ -99,15 +127,24 @@ export function createLabSimulation(): LabSimulation {
     },
     setWindSpeedMetersPerSecond(value: number): void {
       assertFiniteControl("windSpeedMetersPerSecond", value);
-      environment = { ...environment, windSpeedMetersPerSecond: value };
+      environment.windSpeedMetersPerSecond = value;
     },
     setRoadGradePercent(value: number): void {
       assertFiniteControl("roadGradePercent", value);
-      environment = { ...environment, roadGrade: value / 100 };
+      constantCourse = createConstantCourse(value);
+      synchronizeEnvironmentRoadGrade();
+    },
+    setCourseMode(mode: LabCourseMode): void {
+      if (mode !== "constant" && mode !== "demonstration") {
+        throw new RangeError("courseMode must be constant or demonstration");
+      }
+      courseMode = mode;
+      synchronizeEnvironmentRoadGrade();
     },
     stepTicks(count: number): void {
       assertTickCount(count);
       for (let index = 0; index < count; index += 1) {
+        synchronizeEnvironmentRoadGrade();
         stepSingleRiderWithEnergy(
           physicalState,
           energyState,
@@ -122,9 +159,10 @@ export function createLabSimulation(): LabSimulation {
       const requestedPowerWatts = physicalState.requestedPowerWatts;
       physicalState = createSingleRiderState(requestedPowerWatts);
       energyState = createSingleRiderEnergyState(LAB_ENERGY_PROFILE);
+      synchronizeEnvironmentRoadGrade();
     },
     getSnapshot(): LabSimulationSnapshot {
-      return snapshotFrom(physicalState, energyState, environment);
+      return snapshotFrom(physicalState, energyState, environment, courseMode, activeCourse());
     },
   };
 }
