@@ -138,10 +138,12 @@ export function createLabSimulation(): LabSimulation {
   return {
     setRequestedPowerWatts(value: number): void {
       assertFiniteControl("requestedPowerWatts", value);
+      if (isFinished) return;
       physicalState.requestedPowerWatts = value;
     },
     setWindSpeedMetersPerSecond(value: number): void {
       assertFiniteControl("windSpeedMetersPerSecond", value);
+      if (isFinished) return;
       environment.windSpeedMetersPerSecond = value;
     },
     setRoadGradePercent(value: number): void {

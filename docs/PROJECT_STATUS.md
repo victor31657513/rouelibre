@@ -31,7 +31,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 
 ## Limites
 
-Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. Après une arrivée, le contrôleur borne la distance à la ligne et fige tous les observables ; la réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
+Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. Après une arrivée, le contrôleur borne la distance à la ligne et fige tous les observables, y compris les commandes de puissance et de vent ; le passage vers le parcours à pente constante sans arrivée les réactive. La réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
 
 ## Non existant
 
@@ -39,4 +39,4 @@ Le projet ne contient pas de GPX, altitude issue d'un parcours, virages, positio
 
 ## Prochaine tâche unique
 
-Ajouter un premier chronométrage intermédiaire pour un coureur isolé sur parcours fini, sans classement ni plusieurs coureurs.
+Définir un premier format interne précompilé de parcours capable de représenter une suite ordonnée d’échantillons longitudinaux avec distance et altitude, sans importer de fichier GPX ni ajouter les virages.

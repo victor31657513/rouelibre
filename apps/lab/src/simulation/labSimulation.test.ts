@@ -261,15 +261,21 @@ describe("lab simulation controller", () => {
     simulation.setCourseMode("demonstration");
     simulation.stepTicks(10_000);
     const arrived = simulation.getSnapshot();
+    simulation.setRequestedPowerWatts(1_200);
+    simulation.setWindSpeedMetersPerSecond(-10);
     simulation.stepTicks(100);
     expect(simulation.getSnapshot()).toEqual(arrived);
     simulation.reset();
     expect(simulation.getSnapshot().courseProgress).toMatchObject({ isFinished: false, remainingDistanceMeters: 800, progress: 0 });
 
     simulation.setCourseMode("constant");
+    simulation.setRequestedPowerWatts(1_200);
+    simulation.setWindSpeedMetersPerSecond(-10);
     simulation.stepTicks(10_000);
     expect(simulation.getSnapshot().courseProgress.isFinished).toBeUndefined();
     expect(simulation.getSnapshot().physicalState.distanceMeters).toBeGreaterThan(800);
+    expect(simulation.getSnapshot().physicalState.requestedPowerWatts).toBe(1_200);
+    expect(simulation.getSnapshot().environment.windSpeedMetersPerSecond).toBe(-10);
     simulation.setCourseMode("demonstration");
     expect(simulation.getSnapshot().physicalState.distanceMeters).toBe(800);
     expect(simulation.getSnapshot().courseProgress.isFinished).toBe(true);

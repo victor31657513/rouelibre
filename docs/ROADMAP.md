@@ -12,14 +12,14 @@
 
 ## Prochaine tâche unique
 
-Ajouter un premier chronométrage intermédiaire pour un coureur isolé sur parcours fini, sans classement ni plusieurs coureurs.
+Définir un premier format interne précompilé de parcours capable de représenter une suite ordonnée d’échantillons longitudinaux avec distance et altitude, sans importer de fichier GPX ni ajouter les virages.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. longueur totale finie et état d’arrivée minimal ;
-2. GPX précompilé, altitude, pente variable et virages ;
+1. format interne précompilé de parcours avec distance et altitude, sans import GPX ni virages ;
+2. import GPX vers ce format, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;
 5. équipe de 9 coureurs ;

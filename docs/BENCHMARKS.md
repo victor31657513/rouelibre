@@ -99,4 +99,4 @@ Le scénario exécute le contrôleur du laboratoire avec une puissance demandée
 | Réserve W′ | 20 000 J |
 | État | Arrivé |
 
-La détection intervient après le tick qui atteint ou dépasse la ligne. La distance est bornée à 800 m sans interpolation sous-tick ; l’horodatage a donc une erreur maximale d’un tick. La résolution binaire de pente ne crée aucune allocation dans la boucle de ticks.
+La détection intervient après le tick qui atteint ou dépasse la ligne. La distance est bornée à 800 m sans interpolation sous-tick ; l’horodatage a donc une erreur maximale d’un tick. Après l’arrivée, les ticks, les commandes de puissance et de vent, l’énergie, les forces et les autres observables restent figés ; le passage vers le parcours à pente constante sans arrivée réactive les commandes. La résolution binaire de pente ne crée aucune allocation dans la boucle de ticks.
