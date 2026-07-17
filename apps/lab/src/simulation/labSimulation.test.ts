@@ -241,16 +241,43 @@ describe("lab simulation controller", () => {
     expect(first.getSnapshot()).toEqual(second.getSnapshot());
   });
 
-  it("matches the documented 120 second segmented benchmark", () => {
+  it("matches the documented finite-course arrival benchmark", () => {
     const simulation = createLabSimulation();
     simulation.setCourseMode("demonstration");
     simulation.stepTicks(7_200);
 
     const snapshot = simulation.getSnapshot();
-    expect(snapshot.physicalState.distanceMeters).toBeCloseTo(1060.5089829626077, 6);
-    expect(snapshot.physicalState.speedMetersPerSecond).toBeCloseTo(10.38827553709402, 6);
+    expect(snapshot.physicalState.distanceMeters).toBe(800);
+    expect(snapshot.physicalState.timeSeconds).toBeCloseTo(95.68333333332919, 10);
+    expect(snapshot.physicalState.speedMetersPerSecond).toBeCloseTo(11.292604288288551, 10);
     expect(snapshot.coursePosition.segmentIndex).toBe(3);
     expect(snapshot.environment.roadGrade).toBe(0);
     expect(snapshot.energyState.anaerobicReserveJoules).toBe(20_000);
+    expect(snapshot.courseProgress).toMatchObject({ totalLengthMeters: 800, remainingDistanceMeters: 0, progress: 1, isFinished: true });
+  });
+
+  it("freezes all observables after the first arrival tick and resets or changes mode deterministically", () => {
+    const simulation = createLabSimulation();
+    simulation.setCourseMode("demonstration");
+    simulation.stepTicks(10_000);
+    const arrived = simulation.getSnapshot();
+    simulation.setRequestedPowerWatts(1_200);
+    simulation.setWindSpeedMetersPerSecond(-10);
+    simulation.stepTicks(100);
+    expect(simulation.getSnapshot()).toEqual(arrived);
+    simulation.reset();
+    expect(simulation.getSnapshot().courseProgress).toMatchObject({ isFinished: false, remainingDistanceMeters: 800, progress: 0 });
+
+    simulation.setCourseMode("constant");
+    simulation.setRequestedPowerWatts(1_200);
+    simulation.setWindSpeedMetersPerSecond(-10);
+    simulation.stepTicks(10_000);
+    expect(simulation.getSnapshot().courseProgress.isFinished).toBeUndefined();
+    expect(simulation.getSnapshot().physicalState.distanceMeters).toBeGreaterThan(800);
+    expect(simulation.getSnapshot().physicalState.requestedPowerWatts).toBe(1_200);
+    expect(simulation.getSnapshot().environment.windSpeedMetersPerSecond).toBe(-10);
+    simulation.setCourseMode("demonstration");
+    expect(simulation.getSnapshot().physicalState.distanceMeters).toBe(800);
+    expect(simulation.getSnapshot().courseProgress.isFinished).toBe(true);
   });
 });
