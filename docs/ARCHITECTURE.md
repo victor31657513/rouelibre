@@ -15,7 +15,7 @@ Les décisions d'architecture sont consignées dans [`docs/decisions/`](decision
 Organisation interne :
 
 - `src/course.ts` contient le domaine de parcours longitudinal : validation, copie défensive, segments ordonnés immuables et résolution binaire de pente depuis une distance. Il ne dépend ni de la physique, ni de l’énergie, ni de React, du DOM ou du navigateur.
-- `src/longitudinal.ts` contient le profil physique, l'environnement longitudinal à pente constante, l'état physique, les forces longitudinales et le pas physique historique.
+- `src/longitudinal.ts` contient le profil physique, l'environnement longitudinal à pente instantanée, l'état physique, les forces longitudinales et le pas physique historique.
 - `src/energy.ts` contient le profil énergétique CP/W', l'état énergétique, la logique de consommation/récupération et l'orchestration énergie puis physique.
 - `src/index.ts` expose uniquement l'API publique nécessaire aux consommateurs du package.
 
@@ -23,6 +23,8 @@ API exposée :
 
 - `SingleRiderProfile` décrit le couple coureur-vélo avec masses, CdA, coefficient de roulement, rendement mécanique, puissance maximale et limite de force propulsive basse vitesse.
 - `LongitudinalEnvironment` décrit l'air, la densité de l'air, le vent longitudinal, la gravité et la pente longitudinale instantanée `roadGrade`. `roadGrade` est exprimée comme un ratio sans unité, positif en montée, négatif en descente et nul par défaut.
+- `LongitudinalCourseSegment` décrit le début en mètres et la pente d'un segment de parcours ; `LongitudinalCourse` contient ses segments ordonnés immuables ; `LongitudinalCoursePosition` expose le segment résolu et les distances utiles à l'observation.
+- `createLongitudinalCourse` valide et copie défensivement les segments. `getLongitudinalCourseSegmentIndexAtDistance` et `getLongitudinalCourseRoadGradeAtDistance` résolvent sans allocation l'index et la pente actifs. `getLongitudinalCoursePositionAtDistance` produit les informations détaillées réservées aux observateurs.
 - `SingleRiderState` contient l'état dynamique physique mutable.
 - `createSingleRiderState` crée un état physique initial typé.
 - `computeSingleRiderForces` calcule les forces longitudinales instantanées en utilisant la puissance demandée bornée, pour les usages historiques sans modèle énergétique.

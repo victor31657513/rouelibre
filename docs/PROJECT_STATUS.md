@@ -31,7 +31,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 
 ## Limites
 
-Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. La réinitialisation conserve la puissance demandée, le vent et la pente pour faciliter la répétition d'un scénario.
+Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. La réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
 
 ## Non existant
 
