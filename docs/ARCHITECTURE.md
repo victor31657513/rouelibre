@@ -4,6 +4,8 @@
 
 Le dépôt est organisé en workspace pnpm. Le socle contient les éléments nécessaires aux vérifications reproductibles, au noyau de simulation longitudinal minimal et au modèle énergétique minimal d'un coureur isolé.
 
+Les décisions d'architecture sont consignées dans [`docs/decisions/`](decisions/README.md).
+
 ## Packages
 
 ### `packages/sim-core`
