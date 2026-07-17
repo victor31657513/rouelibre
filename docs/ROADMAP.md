@@ -7,12 +7,12 @@
 - Puissance, vitesse, vent longitudinal et énergie CP/W'.
 - Laboratoire visuel minimal.
 - Pente longitudinale constante.
-- Parcours longitudinal segmenté à pente constante par segment.
+- Parcours longitudinal segmenté à pente constante par segment avec longueur totale optionnelle et arrivée minimale.
 - Publication GitHub Pages.
 
 ## Prochaine tâche unique
 
-Ajouter une longueur totale finie et un état d’arrivée minimal au parcours longitudinal segmenté, sans classement ni plusieurs coureurs.
+Ajouter un premier chronométrage intermédiaire pour un coureur isolé sur parcours fini, sans classement ni plusieurs coureurs.
 
 ## Étapes futures
 

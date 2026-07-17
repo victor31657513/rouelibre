@@ -6,10 +6,12 @@ import {
   defaultLongitudinalEnvironment,
   defaultSingleRiderProfile,
   getLongitudinalCoursePositionAtDistance,
+  getLongitudinalCourseProgressAtDistance,
   getLongitudinalCourseRoadGradeAtDistance,
   stepSingleRiderWithEnergy,
   type LongitudinalCourse,
   type LongitudinalCoursePosition,
+  type LongitudinalCourseProgress,
   type LongitudinalEnvironment,
   type SingleRiderEnergyProfile,
   type SingleRiderEnergyState,
@@ -30,7 +32,7 @@ export const LAB_DEMONSTRATION_COURSE = createLongitudinalCourse([
   { startDistanceMeters: 200, roadGrade: 0.05 },
   { startDistanceMeters: 400, roadGrade: -0.05 },
   { startDistanceMeters: 600, roadGrade: 0 },
-]);
+], { totalLengthMeters: 800 });
 
 export type LabCourseMode = "constant" | "demonstration";
 
@@ -43,6 +45,7 @@ export interface LabSimulationSnapshot {
   readonly courseMode: LabCourseMode;
   readonly course: LongitudinalCourse;
   readonly coursePosition: LongitudinalCoursePosition;
+  readonly courseProgress: LongitudinalCourseProgress;
   readonly tickSeconds: number;
 }
 
@@ -80,6 +83,7 @@ function snapshotFrom(
   const physicalStateCopy = { ...physicalState };
   const energyStateCopy = { ...energyState };
   const coursePosition = getLongitudinalCoursePositionAtDistance(course, physicalState.distanceMeters);
+  const courseProgress = getLongitudinalCourseProgressAtDistance(course, physicalState.distanceMeters);
   const environmentCopy = { ...environment, roadGrade: coursePosition.roadGrade };
   const forces = computeSingleRiderForcesAtPower(
     physicalStateCopy,
@@ -97,6 +101,7 @@ function snapshotFrom(
     courseMode,
     course,
     coursePosition,
+    courseProgress,
     tickSeconds: LAB_TICK_SECONDS,
   });
 }
@@ -107,6 +112,7 @@ export function createLabSimulation(): LabSimulation {
   const environment: LongitudinalEnvironment = { ...defaultLongitudinalEnvironment };
   let constantCourse = createConstantCourse(LAB_INITIAL_ROAD_GRADE_PERCENT);
   let courseMode: LabCourseMode = "constant";
+  let isFinished = false;
 
   const activeCourse = (): LongitudinalCourse => (
     courseMode === "constant" ? constantCourse : LAB_DEMONSTRATION_COURSE
@@ -116,6 +122,15 @@ export function createLabSimulation(): LabSimulation {
       activeCourse(),
       physicalState.distanceMeters,
     );
+  };
+  const synchronizeFinishState = (): void => {
+    const totalLengthMeters = activeCourse().totalLengthMeters;
+    if (totalLengthMeters !== undefined && physicalState.distanceMeters >= totalLengthMeters) {
+      physicalState.distanceMeters = totalLengthMeters;
+      isFinished = true;
+    } else {
+      isFinished = false;
+    }
   };
 
   synchronizeEnvironmentRoadGrade();
@@ -139,11 +154,13 @@ export function createLabSimulation(): LabSimulation {
         throw new RangeError("courseMode must be constant or demonstration");
       }
       courseMode = mode;
+      synchronizeFinishState();
       synchronizeEnvironmentRoadGrade();
     },
     stepTicks(count: number): void {
       assertTickCount(count);
       for (let index = 0; index < count; index += 1) {
+        if (isFinished) break;
         synchronizeEnvironmentRoadGrade();
         stepSingleRiderWithEnergy(
           physicalState,
@@ -153,12 +170,15 @@ export function createLabSimulation(): LabSimulation {
           environment,
           LAB_TICK_SECONDS,
         );
+        synchronizeFinishState();
+        if (isFinished) break;
       }
     },
     reset(): void {
       const requestedPowerWatts = physicalState.requestedPowerWatts;
       physicalState = createSingleRiderState(requestedPowerWatts);
       energyState = createSingleRiderEnergyState(LAB_ENERGY_PROFILE);
+      isFinished = false;
       synchronizeEnvironmentRoadGrade();
     },
     getSnapshot(): LabSimulationSnapshot {

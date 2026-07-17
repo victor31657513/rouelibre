@@ -5,9 +5,16 @@ export interface LongitudinalCourseSegment {
   readonly roadGrade: number;
 }
 
-/** Parcours ordonné immuable. Le dernier segment se prolonge indéfiniment. */
+/** Options explicites de création d'un parcours. */
+export interface LongitudinalCourseOptions {
+  /** Longueur totale finie en mètres. Absente pour un parcours sans arrivée. */
+  readonly totalLengthMeters?: number;
+}
+
+/** Parcours ordonné immuable. Le dernier segment se prolonge indéfiniment sans longueur totale. */
 export interface LongitudinalCourse {
   readonly segments: readonly Readonly<LongitudinalCourseSegment>[];
+  readonly totalLengthMeters: number | undefined;
 }
 
 /** Informations d'observation allouées à la demande, jamais nécessaires dans la boucle de ticks. */
@@ -20,6 +27,15 @@ export interface LongitudinalCoursePosition {
   readonly roadGrade: number;
 }
 
+/** Observation de progression. Les champs d'arrivée sont absents pour un parcours sans fin. */
+export interface LongitudinalCourseProgress {
+  readonly totalLengthMeters: number | undefined;
+  readonly distanceMeters: number;
+  readonly remainingDistanceMeters: number | undefined;
+  readonly progress: number | undefined;
+  readonly isFinished: boolean | undefined;
+}
+
 function assertFiniteDistance(distanceMeters: number): void {
   if (!Number.isFinite(distanceMeters) || distanceMeters < 0) {
     throw new RangeError("distanceMeters must be a non-negative finite number");
@@ -27,7 +43,10 @@ function assertFiniteDistance(distanceMeters: number): void {
 }
 
 /** Crée une copie défensive et gelée de segments validés. */
-export function createLongitudinalCourse(segments: readonly LongitudinalCourseSegment[]): LongitudinalCourse {
+export function createLongitudinalCourse(
+  segments: readonly LongitudinalCourseSegment[],
+  options: LongitudinalCourseOptions = {},
+): LongitudinalCourse {
   if (segments.length === 0) {
     throw new RangeError("course must contain at least one segment");
   }
@@ -55,7 +74,17 @@ export function createLongitudinalCourse(segments: readonly LongitudinalCourseSe
     previousStartDistanceMeters = segment.startDistanceMeters;
   }
 
-  return Object.freeze({ segments: Object.freeze(copiedSegments) });
+  const totalLengthMeters = options.totalLengthMeters;
+  if (totalLengthMeters !== undefined) {
+    if (!Number.isFinite(totalLengthMeters) || totalLengthMeters <= 0) {
+      throw new RangeError("totalLengthMeters must be a positive finite number");
+    }
+    if (totalLengthMeters <= previousStartDistanceMeters) {
+      throw new RangeError("totalLengthMeters must be greater than the final segment start distance");
+    }
+  }
+
+  return Object.freeze({ segments: Object.freeze(copiedSegments), totalLengthMeters });
 }
 
 /** Recherche binaire sans allocation du segment actif à une distance donnée. */
@@ -98,5 +127,31 @@ export function getLongitudinalCoursePositionAtDistance(course: LongitudinalCour
     distanceIntoSegmentMeters: distanceMeters - segment.startDistanceMeters,
     nextSegmentStartDistanceMeters: nextSegment?.startDistanceMeters,
     roadGrade: segment.roadGrade,
+  });
+}
+
+/** Produit les observables de progression et d'arrivée sans muter le parcours. */
+export function getLongitudinalCourseProgressAtDistance(
+  course: LongitudinalCourse,
+  distanceMeters: number,
+): LongitudinalCourseProgress {
+  assertFiniteDistance(distanceMeters);
+  const totalLengthMeters = course.totalLengthMeters;
+  if (totalLengthMeters === undefined) {
+    return Object.freeze({
+      totalLengthMeters,
+      distanceMeters,
+      remainingDistanceMeters: undefined,
+      progress: undefined,
+      isFinished: undefined,
+    });
+  }
+  const remainingDistanceMeters = Math.max(0, totalLengthMeters - distanceMeters);
+  return Object.freeze({
+    totalLengthMeters,
+    distanceMeters,
+    remainingDistanceMeters,
+    progress: Math.min(1, distanceMeters / totalLengthMeters),
+    isFinished: distanceMeters >= totalLengthMeters,
   });
 }

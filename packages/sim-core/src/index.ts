@@ -27,10 +27,13 @@ export {
 
 export {
   createLongitudinalCourse,
+  getLongitudinalCourseProgressAtDistance,
   getLongitudinalCoursePositionAtDistance,
   getLongitudinalCourseRoadGradeAtDistance,
   getLongitudinalCourseSegmentIndexAtDistance,
   type LongitudinalCourse,
   type LongitudinalCoursePosition,
+  type LongitudinalCourseProgress,
   type LongitudinalCourseSegment,
+  type LongitudinalCourseOptions,
 } from "./course.js";

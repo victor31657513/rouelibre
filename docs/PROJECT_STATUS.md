@@ -12,8 +12,8 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Package `packages/sim-core` sans dépendance graphique, navigateur, DOM, React ou Three.js.
 - Moteur longitudinal déterministe minimal pour un coureur isolé sur route à pente constante ou sur un parcours longitudinal déterministe composé de segments à pente constante.
 - Pente longitudinale instantanée signée dans l'environnement physique, exprimée comme ratio sans unité, nulle par défaut.
-- Domaine de parcours longitudinal distinct avec segments immuables, frontières semi-ouvertes et prolongation indéfinie du dernier segment.
-- Scénario segmenté de démonstration dans le laboratoire, en plus du scénario historique à pente constante.
+- Domaine de parcours longitudinal distinct avec segments immuables, frontières semi-ouvertes et longueur totale optionnelle.
+- Scénario segmenté de démonstration fini de 800 m avec arrivée, en plus du scénario historique à pente constante sans arrivée.
 - Distinction entre puissance demandée et puissance produite.
 - Environnement longitudinal avec vent de face ou vent arrière.
 - Modèle énergétique déterministe CP/W' pour un coureur isolé.
@@ -31,12 +31,12 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 
 ## Limites
 
-Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. La réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
+Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. Après une arrivée, le contrôleur borne la distance à la ligne et fige tous les observables ; la réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
 
 ## Non existant
 
-Le projet ne contient pas de GPX, altitude issue d'un parcours, virages, longueur totale finie, ligne d’arrivée, position latérale, aspiration, intelligence artificielle, tactique, psychologie, exécution Web Worker, moteur de corps rigides, collisions, adhérence, modèle physiologique complexe, courbes de puissance personnalisées, plusieurs réserves énergétiques, température, hydratation, nutrition, plusieurs coureurs, scène 3D, Three.js, Zustand, sons, sauvegarde, backend ou authentification.
+Le projet ne contient pas de GPX, altitude issue d'un parcours, virages, position latérale, aspiration, intelligence artificielle, tactique, psychologie, exécution Web Worker, moteur de corps rigides, collisions, adhérence, modèle physiologique complexe, courbes de puissance personnalisées, plusieurs réserves énergétiques, température, hydratation, nutrition, plusieurs coureurs, scène 3D, Three.js, Zustand, sons, sauvegarde, backend ou authentification.
 
 ## Prochaine tâche unique
 
-Ajouter une longueur totale finie et un état d’arrivée minimal au parcours longitudinal segmenté, sans classement ni plusieurs coureurs.
+Ajouter un premier chronométrage intermédiaire pour un coureur isolé sur parcours fini, sans classement ni plusieurs coureurs.

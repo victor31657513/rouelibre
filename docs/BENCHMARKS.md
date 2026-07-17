@@ -87,17 +87,16 @@ Scénario combiné avec un pas de 1 s :
 
 Dans ce scénario combiné, l'effort à 350 W consomme 100 J/s au-dessus de CP. La phase à 150 W récupère 50 J/s avec une efficacité de 0,5. Après 60 s de récupération, 3 000 J permettent 30 s supplémentaires à 350 W avant une nouvelle limitation à CP.
 
-## Scénario de référence : parcours segmenté
+## Scénario de référence : arrivée sur parcours segmenté
 
-Le scénario exécute le contrôleur du laboratoire pendant 120 s avec un pas fixe de `1 / 60 s`, une puissance demandée de 250 W, un vent nul, CP = 250 W et une réserve W' initiale de 20 000 J. Le parcours comporte les segments 0 m : 0 %, 200 m : +5 %, 400 m : -5 % et 600 m : 0 %. La pente est résolue au début de chaque tick ; les valeurs proviennent de l’exécution du code réel et sont couvertes par un test numérique.
+Le scénario exécute le contrôleur du laboratoire avec une puissance demandée de 250 W, un vent nul, CP = 250 W, W′ initiale = 20 000 J et un pas fixe de `1 / 60 s`. Le parcours fini comporte les segments 0 m : 0 %, 200 m : +5 %, 400 m : -5 % et 600 m : 0 %, avec une ligne d’arrivée à 800 m. Les résultats proviennent du code réel et sont couverts par un test numérique.
 
-| Observable final | Valeur |
+| Observable à l’arrivée | Valeur |
 | --- | ---: |
-| Distance | 1 060,509 m |
-| Vitesse | 10,388276 m/s |
-| Vitesse | 37,398 km/h |
-| Segment actif | 4 / 4 |
-| Pente active | 0,00 (0 %) |
-| Réserve W' | 20 000 J |
+| Distance finale | 800 m |
+| Temps simulé | 95,683333333329 s |
+| Vitesse au tick d’arrivée | 11,292604288289 m/s |
+| Réserve W′ | 20 000 J |
+| État | Arrivé |
 
-La résolution binaire est en `O(log n)` et ne crée ni parcours, ni tableau, ni position d’observation dans la boucle physique. Son impact est négligeable pour un coureur et quatre segments ; aucune optimisation supplémentaire n’est engagée sans mesure.
+La détection intervient après le tick qui atteint ou dépasse la ligne. La distance est bornée à 800 m sans interpolation sous-tick ; l’horodatage a donc une erreur maximale d’un tick. La résolution binaire de pente ne crée aucune allocation dans la boucle de ticks.
