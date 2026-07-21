@@ -191,6 +191,18 @@ distanceMeters = R × c
 
 La normalisation de `deltaLambda` sélectionne la traversée courte lors d’un passage de l’antiméridien. Le bornage de `a` protège les racines carrées près des cas limites numériques. Les segments sont additionnés dans l’ordre fixe, sans arrondi stocké ; les coordonnées identiques conservent deux points portant la même distance cumulée. Ce modèle ne représente pas un ellipsoïde terrestre, une projection cartographique ou une distance tridimensionnelle. Cette préparation est indépendante de `PrecompiledCourse` et s’exécute hors de la boucle physique.
 
+## Rapport de qualité géométrique GPX
+
+`analyzeGpxGeometryQuality` consomme une `DistanceAnnotatedGpxTrack` validée et parcourt une seule fois ses segments dans l’ordre documentaire. Le segment d’indice `i` relie les points `i - 1` et `i` ; sa distance horizontale est exclusivement `points[i].distanceMeters - points[i - 1].distanceMeters`. L’analyse ne recalcule donc pas Haversine, n’arrondit aucune distance et ne modifie ou ne copie aucun point.
+
+Trois catégories sont observées :
+
+- un doublon consécutif exact possède les mêmes `latitudeDegrees`, `longitudeDegrees` et `altitudeMeters` selon l’égalité numérique exacte, sans tolérance ;
+- un segment horizontal nul possède une différence de distance cumulée exactement égale à zéro ; les doublons exacts peuvent donc être un sous-ensemble de cette catégorie, qui contient aussi une même position horizontale avec des altitudes différentes ;
+- un saut possède une distance strictement supérieure à `jumpThresholdMeters`. Ce seuil fini et strictement positif est toujours fourni explicitement par l’appelant ; un segment égal au seuil n’est pas signalé.
+
+Le seuil de saut est diagnostique : une observation ne déclare pas le point invalide et n’entraîne ni rejet, ni suppression, ni correction. Le rapport conserve les indices source, les distances non arrondies, la longueur totale existante et le premier segment maximal en cas d’égalité exacte. Le rapport, ses tableaux et chaque observation sont gelés profondément.
+
 ## Parcours longitudinal segmenté
 
 Un `LongitudinalCourse` contient des segments immuables `{ startDistanceMeters, roadGrade }`. La distance de début est en mètres et la pente est un ratio sans unité. Le premier segment commence exactement à 0 m ; les débuts sont finis et strictement croissants. Le segment `i` couvre `[début_i, début_suivant[` : une frontière exacte sélectionne le nouveau segment. Le dernier segment se prolonge indéfiniment lorsqu’aucune longueur totale n’est définie. Une option explicite `totalLengthMeters`, finie, positive et strictement supérieure au début du dernier segment, définit une arrivée ; elle est immuable après création.

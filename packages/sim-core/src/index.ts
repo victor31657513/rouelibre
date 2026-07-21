@@ -64,3 +64,10 @@ export {
   type DistanceAnnotatedGpxPoint,
   type DistanceAnnotatedGpxTrack,
 } from "./gpxDistance.js";
+
+export {
+  analyzeGpxGeometryQuality,
+  type GpxGeometryQualityOptions,
+  type GpxGeometryQualityReport,
+  type GpxGeometrySegmentObservation,
+} from "./gpxQuality.js";
