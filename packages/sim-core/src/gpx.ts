@@ -138,7 +138,16 @@ export function parseGpxTrack(xml: string): ParsedGpxTrack {
     if (xml.startsWith("<!DOCTYPE", cursor) || xml.startsWith("<!doctype", cursor)) {
       syntax("DOCTYPE is not supported");
     }
-    if (xml.startsWith("<![CDATA[", cursor)) syntax("CDATA is not supported");
+    if (xml.startsWith("<![CDATA[", cursor)) {
+      const frame = stack[stack.length - 1];
+      if (frame === undefined) throw new SyntaxError("CDATA is not allowed outside the root element");
+      if (frame.kind === "ele") syntax("CDATA is not supported in trkpt elevation");
+      if (frame.kind !== "other") syntax("CDATA is only supported in ignored elements");
+      const end = xml.indexOf("]]>", cursor + 9);
+      if (end < 0) syntax("XML CDATA section is not closed");
+      cursor = end + 3;
+      continue;
+    }
     if (xml.startsWith("<?", cursor)) {
       const end = xml.indexOf("?>", cursor + 2);
       if (end < 0) syntax("XML processing instruction is malformed");

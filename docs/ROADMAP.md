@@ -13,11 +13,11 @@
 - Scénario déterministe de `sim-core` utilisant le parcours précompilé converti pour piloter la pente, la physique et l’énergie jusqu’à l’arrivée bornée.
 - Laboratoire utilisant les échantillons distance/altitude de référence via un `PrecompiledCourse` converti une fois, sans coût de conversion dans la boucle de ticks.
 - Publication GitHub Pages.
-- Type de point GPX brut et parseur déterministe du sous-ensemble GPX 1.1 à une trace et un segment, sans conversion de parcours.
+- Type de point GPX brut et parseur déterministe du sous-ensemble GPX 1.1 à une trace et un segment, validé contre les 21 exports VisuGPX bruts du Tour de France 2026, sans conversion de parcours.
 
 ## Prochaine tâche unique
 
-Calculer une distance horizontale cumulée déterministe depuis les points d’un segment GPX brut, sans encore créer de `PrecompiledCourse`, sans filtrage altimétrique et sans intégration physique.
+Calculer une distance horizontale cumulée déterministe depuis les points GPX bruts validés, sans créer de `PrecompiledCourse`, sans filtrage altimétrique et sans intégration physique.
 
 ## Étapes futures
 

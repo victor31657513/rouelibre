@@ -30,6 +30,37 @@ describe("parseGpxTrack", () => {
     ]);
   });
 
+  it("accepte un export VisuGPX et ignore ses points de passage et ses CDATA", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+      <gpx xmlns="http://www.topografix.com/GPX/1/1"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3"
+        xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"
+        version="1.1" creator="VisuGPX - https://www.visugpx.com">
+        <metadata><desc><![CDATA[Tour de France 2026]]></desc></metadata>
+        <wpt lat="1" lon="2"><ele>999</ele><name><![CDATA[Départ]]></name></wpt>
+        <trk>
+          <name><![CDATA[Etape 1]]></name>
+          <desc><![CDATA[Barcelone > Barcelone]]></desc>
+          <extensions><gpxx:TrackExtension><gpxx:DisplayColor>Red</gpxx:DisplayColor></gpxx:TrackExtension></extensions>
+          <trkseg>
+            <trkpt lat="41.3874" lon="2.1686"><ele>12.5</ele><time>2026-07-04T10:00:00Z</time></trkpt>
+            <trkpt lat="41.4036" lon="2.1744"><ele>18</ele><extensions><gpxx:RoutePointExtension /></extensions></trkpt>
+          </trkseg>
+        </trk>
+      </gpx>`;
+
+    const parsed = parseGpxTrack(xml);
+    expect(parsed.points).toEqual([
+      { latitudeDegrees: 41.3874, longitudeDegrees: 2.1686, altitudeMeters: 12.5 },
+      { latitudeDegrees: 41.4036, longitudeDegrees: 2.1744, altitudeMeters: 18 },
+    ]);
+    expect(parsed.points).toHaveLength(2);
+    expect(Object.isFrozen(parsed)).toBe(true);
+    expect(Object.isFrozen(parsed.points)).toBe(true);
+    expect(parsed.points.every(Object.isFrozen)).toBe(true);
+  });
+
   it("compare les noms locaux d'un namespace préfixé", () => {
     const xml = `<x:gpx x:version="1.1" xmlns:x="http://www.topografix.com/GPX/1/1">
       <x:trk><x:trkseg><x:trkpt x:lat="1" x:lon="2"><x:ele>3</x:ele></x:trkpt>
@@ -93,8 +124,12 @@ describe("parseGpxTrack", () => {
     ["balise mal fermée", wrap(`<trk><trkseg>${validPoints}</trk></trkseg>`) ],
     ["imbrication incorrecte", wrap(`<trkseg><trk>${validPoints}</trk></trkseg>`) ],
     ["DOCTYPE", `<!DOCTYPE gpx>${wrap(track(validPoints))}`],
-    ["CDATA numérique", wrap(track(`<trkpt lat="1" lon="2"><ele><![CDATA[3]]></ele></trkpt>${point("4", "5", "6")}`))],
   ])("rejette une structure non prise en charge : %s", (_label, xml) => {
+    expect(() => parseGpxTrack(xml)).toThrow(SyntaxError);
+  });
+
+  it("rejette séparément un CDATA dans ele", () => {
+    const xml = wrap(track(`<trkpt lat="1" lon="2"><ele><![CDATA[3]]></ele></trkpt>${point("4", "5", "6")}`));
     expect(() => parseGpxTrack(xml)).toThrow(SyntaxError);
   });
 });

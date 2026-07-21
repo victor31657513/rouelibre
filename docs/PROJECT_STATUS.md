@@ -14,7 +14,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Pente longitudinale instantanée signée dans l'environnement physique, exprimée comme ratio sans unité, nulle par défaut.
 - Domaine de parcours longitudinal distinct avec segments immuables, frontières semi-ouvertes et longueur totale optionnelle.
 - Format interne précompilé immuable et copié défensivement, composé d’échantillons ordonnés de distance et d’altitude en mètres, avec longueur totale dérivée, consultation d’altitude par interpolation linéaire et consultation déterministe de la pente entre deux échantillons successifs sous forme de ratio sans unité.
-- Type de point GPX brut immuable (latitude et longitude en degrés décimaux, altitude en mètres) et parseur GPX 1.1 déterministe, indépendant du DOM et du navigateur. Le sous-ensemble accepte exactement une trace, un segment et au moins deux points avec `lat`, `lon` et un unique `ele`, ainsi que les namespaces, commentaires et métadonnées supplémentaires.
+- Type de point GPX brut immuable (latitude et longitude en degrés décimaux, altitude en mètres) et parseur GPX 1.1 déterministe, indépendant du DOM et du navigateur. Le sous-ensemble accepte exactement une trace, un segment et au moins deux points avec `lat`, `lon` et un unique `ele`, ainsi que les namespaces, commentaires, métadonnées supplémentaires et CDATA dans les éléments ignorés. Les tests valident le parseur contre le corpus brut des 21 étapes du Tour de France 2026 exporté par VisuGPX.
 - Conversion explicite, pure et déterministe de `PrecompiledCourse` vers `LongitudinalCourse`, avec un segment par intervalle, conservation des frontières d’échantillons et transfert de la longueur totale, indépendante de la physique.
 - Scénario d’intégration déterministe de `sim-core` parcourant 800 m depuis des échantillons distance/altitude convertis : la pente est résolue depuis la distance au début de chaque tick, puis alimente la physique et l’énergie jusqu’à l’arrivée bornée. Ses résultats numériques sont couverts par le benchmark de référence.
 - Fabrique explicite du parcours minimal fini, plat et rectiligne depuis l’origine 0 m, avec bornage pur de la distance à la ligne.
@@ -46,4 +46,4 @@ Le projet ne contient pas de conversion GPX vers `PrecompiledCourse`, de calcul 
 
 ## Prochaine tâche unique
 
-Calculer une distance horizontale cumulée déterministe depuis les points d’un segment GPX brut, sans encore créer de `PrecompiledCourse`, sans filtrage altimétrique et sans intégration physique.
+Calculer une distance horizontale cumulée déterministe depuis les points GPX bruts validés, sans créer de `PrecompiledCourse`, sans filtrage altimétrique et sans intégration physique.
