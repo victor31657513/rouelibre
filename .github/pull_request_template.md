@@ -1,3 +1,5 @@
+<!-- Ce modèle aide à rédiger une Pull Request manuelle. Sa structure n'est pas un contrat vérifié automatiquement. -->
+
 ## Objectif
 
 <!-- Quel problème précis cette PR résout-elle ? -->

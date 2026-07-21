@@ -9,8 +9,7 @@
   "scripts": {
     "install:workspace": "pnpm install",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm run test:pr-description && pnpm -r test",
-    "test:pr-description": "vitest run scripts/check-pr-description.test.mjs",
+    "test": "pnpm -r test",
     "dev": "pnpm --filter @rouelibre/lab dev",
     "build": "pnpm -r build"
   },
