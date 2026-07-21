@@ -158,7 +158,16 @@ roadGrade = (altitude_fin - altitude_debut) / (distance_fin - distance_debut)
 
 Les altitudes et distances étant exprimées en mètres, `roadGrade` est un ratio sans unité : une valeur positive désigne une montée, zéro une portion plate et une valeur négative une descente. L’intervalle `i` couvre `[distance_i, distance_i+1[` ; une frontière intérieure exacte sélectionne donc le nouvel intervalle. À la distance du dernier échantillon et au-delà, la consultation conserve la pente du dernier intervalle valide.
 
-Une distance de consultation négative, infinie ou `NaN` est rejetée. La dérivation n’effectue ni lissage, ni estimation multi-échantillons, ni limitation artificielle. Le format ne décrit ni coordonnées GPS ni courbure ; sa pente n’est pas appliquée à la physique ou à la progression du coureur, et aucune conversion vers `LongitudinalCourse` n’existe.
+Une distance de consultation négative, infinie ou `NaN` est rejetée. La dérivation n’effectue ni lissage, ni estimation multi-échantillons, ni limitation artificielle. Le format ne décrit ni coordonnées GPS ni courbure ; sa pente n’est pas appliquée à la physique ou à la progression du coureur.
+
+La conversion explicite vers `LongitudinalCourse` produit `n - 1` segments pour `n` échantillons. Chaque paire successive produit exactement un segment selon la formule suivante :
+
+```text
+startDistanceMeters_i = distance_i
+roadGrade_i = (altitude_i+1 - altitude_i) / (distance_i+1 - distance_i)
+```
+
+Le dernier échantillon fournit uniquement la fin du dernier intervalle et `totalLengthMeters`, transféré à l’identique. Les frontières restent semi-ouvertes `[distance_i, distance_i+1[` et une frontière intérieure active le nouveau segment. Deux intervalles de même pente restent deux segments distincts : aucune fusion ou compression n’est effectuée. La conversion est pure et déterministe, puis `createLongitudinalCourse` assure la validation, la copie défensive et le gel de la sortie. Cette représentation convertie n’est intégrée à aucun scénario physique ou laboratoire à ce stade.
 
 ## Parcours longitudinal segmenté
 
