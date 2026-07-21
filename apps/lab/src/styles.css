@@ -15,7 +15,7 @@ dl { display: grid; grid-template-columns: 1fr auto; gap: .45rem .8rem; }
 dt { color: #46584d; }
 dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 700; }
 .road { position: relative; height: 92px; border-bottom: 12px solid #424942; background: linear-gradient(#dfead8, #eff5ec); overflow: hidden; border-radius: 10px; }
-.rider { position: absolute; bottom: 12px; width: 34px; height: 24px; border-radius: 5px 12px 5px 5px; background: #1e5bb8; transform: translateX(-50%); }
+.rider { position: absolute; bottom: 12px; width: 34px; height: 24px; border-radius: 5px 12px 5px 5px; background: #1e5bb8; }
 .rider::before, .rider::after { content: ""; position: absolute; bottom: -12px; width: 14px; height: 14px; border: 3px solid #111; border-radius: 50%; background: transparent; }
 .rider::before { left: -3px; } .rider::after { right: -3px; }
 .gauge { height: 24px; border: 1px solid #244b36; border-radius: 999px; overflow: hidden; background: #eef2ed; }

@@ -28,12 +28,14 @@ export function App({ simulation: providedSimulation }: AppProps): React.JSX.Ele
   const energy = snapshot.energyState;
   const forces = snapshot.forces;
   const reservePercent = (energy.anaerobicReserveJoules / snapshot.energyProfile.anaerobicCapacityJoules) * 100;
-  const riderPercent = ((physical.distanceMeters % 100) / 100) * 100;
+  const courseProgress = snapshot.courseProgress;
+  const riderProgressPercent = courseProgress.progress === undefined
+    ? ((physical.distanceMeters % 100) / 100) * 100
+    : Math.min(100, Math.max(0, courseProgress.progress * 100));
   const roadGradePercent = snapshot.environment.roadGrade * 100;
   const formattedRoadGradePercent = `${roadGradePercent > 0 ? "+" : ""}${fmt(roadGradePercent, 1)}`;
   const coursePosition = snapshot.coursePosition;
   const isConstantCourse = snapshot.courseMode === "constant";
-  const courseProgress = snapshot.courseProgress;
   const isFinished = courseProgress.isFinished === true;
 
   return <main className="app-shell">
@@ -49,7 +51,7 @@ export function App({ simulation: providedSimulation }: AppProps): React.JSX.Ele
       <label>Vitesse d'observation <select aria-label="Vitesse d'observation" value={speed} onChange={(event) => setRunnerSpeed(Number(event.currentTarget.value) as ObservationSpeed)}><option value={1}>×1</option><option value={5}>×5</option><option value={20}>×20</option></select></label><strong>Multiplicateur actif : ×{speed}</strong>
       <div className="buttons"><button type="button" onClick={start} disabled={running || isFinished}>Démarrer</button><button type="button" onClick={pause} disabled={!running}>Pause</button><button type="button" onClick={reset}>Réinitialiser</button><button type="button" onClick={manualStep} disabled={running || isFinished}>Avancer 1 s simulée</button></div>
     </section>
-    <section className="panel visual" aria-labelledby="visual-title"><h2 id="visual-title">Route longitudinale</h2><div className="road"><div className="rider" style={{ left: `${riderPercent}%` }} aria-label="Position visuelle du coureur" /></div><div className="gauge" aria-label="Jauge W prime"><span style={{ width: `${reservePercent}%` }} /></div><p>Réserve W′ : {fmt(energy.anaerobicReserveJoules, 0)} J ({fmt(reservePercent, 1)} %)</p></section>
+    <section className="panel visual" aria-labelledby="visual-title"><h2 id="visual-title">Route longitudinale</h2><div className="road"><div className="rider" style={{ left: `${riderProgressPercent}%`, transform: `translateX(-${riderProgressPercent}%)` }} aria-label="Position visuelle du coureur" {...(courseProgress.progress === undefined ? {} : { role: "progressbar", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": riderProgressPercent })} /></div><div className="gauge" aria-label="Jauge W prime"><span style={{ width: `${reservePercent}%` }} /></div><p>Réserve W′ : {fmt(energy.anaerobicReserveJoules, 0)} J ({fmt(reservePercent, 1)} %)</p></section>
     <section className="grid" aria-label="Observables">
       <article className="panel"><h2>État physique</h2><dl><dt>Temps simulé</dt><dd>{fmt(physical.timeSeconds)} s</dd><dt>Distance</dt><dd>{fmt(physical.distanceMeters)} m / {fmt(physical.distanceMeters / 1000, 3)} km</dd><dt>Vitesse</dt><dd>{fmt(physical.speedMetersPerSecond)} m/s / {fmt(physical.speedMetersPerSecond * 3.6)} km/h</dd><dt>Accélération</dt><dd>{fmt(physical.accelerationMetersPerSecondSquared)} m/s²</dd></dl></article>
       <article className="panel"><h2>Puissance et énergie</h2><dl><dt>Puissance demandée</dt><dd>{fmt(physical.requestedPowerWatts, 0)} W</dd><dt>Puissance produite</dt><dd>{fmt(physical.producedPowerWatts, 0)} W</dd><dt>Puissance critique</dt><dd>{fmt(snapshot.energyProfile.criticalPowerWatts, 0)} W</dd><dt>Puissance anaérobie dernier pas</dt><dd>{fmt(energy.lastAnaerobicPowerWatts)} W</dd><dt>Puissance de récupération dernier pas</dt><dd>{fmt(energy.lastRecoveryPowerWatts)} W</dd><dt>Limitation énergétique</dt><dd>{energy.isPowerLimitedByEnergy ? "Puissance limitée par l’énergie" : "Aucune limitation énergétique"}</dd></dl></article>
