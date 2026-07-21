@@ -66,6 +66,12 @@ export {
 } from "./gpxDistance.js";
 
 export {
+  removeConsecutiveExactGpxDuplicates,
+  type GpxExactDuplicateNormalizationReport,
+  type GpxExactDuplicateNormalizationResult,
+} from "./gpxNormalization.js";
+
+export {
   analyzeGpxGeometryQuality,
   type GpxGeometryQualityOptions,
   type GpxGeometryQualityReport,

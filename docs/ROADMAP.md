@@ -8,6 +8,7 @@
 - Laboratoire visuel minimal.
 - Pente longitudinale constante.
 - Parcours longitudinal segmenté à pente constante par segment avec longueur totale optionnelle et arrivée minimale.
+- Normalisation interne des GPX supprimant seulement les doublons consécutifs exactement identiques avant le calcul des distances.
 - Format interne précompilé immuable à échantillons de distance et d’altitude, avec interpolation linéaire de l’altitude et dérivation déterministe de la pente de chaque intervalle.
 - Conversion explicite du format précompilé vers un parcours longitudinal fini, avec conservation de chaque intervalle et de la longueur totale.
 - Scénario déterministe de `sim-core` utilisant le parcours précompilé converti pour piloter la pente, la physique et l’énergie jusqu’à l’arrivée bornée.
