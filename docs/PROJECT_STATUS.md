@@ -13,7 +13,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Moteur longitudinal déterministe minimal pour un coureur isolé sur route à pente constante ou sur un parcours longitudinal déterministe composé de segments à pente constante.
 - Pente longitudinale instantanée signée dans l'environnement physique, exprimée comme ratio sans unité, nulle par défaut.
 - Domaine de parcours longitudinal distinct avec segments immuables, frontières semi-ouvertes et longueur totale optionnelle.
-- Format interne précompilé immuable et copié défensivement, composé d’échantillons ordonnés de distance et d’altitude en mètres, avec longueur totale dérivée et consultation d’altitude par interpolation linéaire déterministe.
+- Format interne précompilé immuable et copié défensivement, composé d’échantillons ordonnés de distance et d’altitude en mètres, avec longueur totale dérivée, consultation d’altitude par interpolation linéaire et consultation déterministe de la pente entre deux échantillons successifs sous forme de ratio sans unité.
 - Fabrique explicite du parcours minimal fini, plat et rectiligne depuis l’origine 0 m, avec bornage pur de la distance à la ligne.
 - Scénario segmenté de démonstration fini de 800 m avec arrivée, en plus du scénario historique à pente constante sans arrivée.
 - Distinction entre puissance demandée et puissance produite.
@@ -42,4 +42,4 @@ Le projet ne contient pas d’import GPX, de coordonnées GPS, d’application �
 
 ## Prochaine tâche unique
 
-Dériver une pente longitudinale déterministe depuis les échantillons du format précompilé, sans l’appliquer à la physique du coureur.
+Convertir explicitement le format précompilé en une représentation consommable par le moteur, sans encore l’intégrer au laboratoire.

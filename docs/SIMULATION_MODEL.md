@@ -150,7 +150,15 @@ ratio = (distance - distance_debut) / (distance_fin - distance_debut)
 altitude = altitude_debut + (altitude_fin - altitude_debut) × ratio
 ```
 
-À partir de la longueur totale, la consultation retourne l’altitude du dernier échantillon. Une distance de consultation négative, infinie ou `NaN` est rejetée. Le format ne décrit ni coordonnées GPS, ni courbure, ni pente directement consommable par la physique ; il n’est pas utilisé par la progression du coureur et aucune conversion vers `LongitudinalCourse` n’existe.
+À partir de la longueur totale, la consultation retourne l’altitude du dernier échantillon. La pente d’un intervalle entre deux échantillons successifs est calculée directement, sans lissage ni filtrage :
+
+```text
+roadGrade = (altitude_fin - altitude_debut) / (distance_fin - distance_debut)
+```
+
+Les altitudes et distances étant exprimées en mètres, `roadGrade` est un ratio sans unité : une valeur positive désigne une montée, zéro une portion plate et une valeur négative une descente. L’intervalle `i` couvre `[distance_i, distance_i+1[` ; une frontière intérieure exacte sélectionne donc le nouvel intervalle. À la distance du dernier échantillon et au-delà, la consultation conserve la pente du dernier intervalle valide.
+
+Une distance de consultation négative, infinie ou `NaN` est rejetée. La dérivation n’effectue ni lissage, ni estimation multi-échantillons, ni limitation artificielle. Le format ne décrit ni coordonnées GPS ni courbure ; sa pente n’est pas appliquée à la physique ou à la progression du coureur, et aucune conversion vers `LongitudinalCourse` n’existe.
 
 ## Parcours longitudinal segmenté
 
@@ -258,4 +266,4 @@ Les tests vérifient :
 
 ## Simplifications et limites
 
-Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale instantanée, sans freinage. Le parcours segmenté ne consomme ni GPX, ni altitude, ni virages, ni chronométrage intermédiaire. Le format précompilé permet seulement de stocker et consulter une altitude échantillonnée : il ne couvre pas l’import GPX, les coordonnées GPS, le calcul ou l’application de pente, ni les virages. Le modèle ne couvre pas les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.
+Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale instantanée, sans freinage. Le parcours segmenté ne consomme ni GPX, ni altitude, ni virages, ni chronométrage intermédiaire. Le format précompilé permet de stocker et consulter une altitude échantillonnée et la pente directe de ses intervalles : il ne couvre pas l’import GPX, les coordonnées GPS, le lissage ou l’application de cette pente, ni les virages. Le modèle ne couvre pas les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.
