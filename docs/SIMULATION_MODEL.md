@@ -4,6 +4,10 @@
 
 Le modèle implémenté couvre la physique longitudinale minimale d'un coureur isolé sur route à pente longitudinale instantanée et un parcours segmenté minimal, ainsi qu’un modèle énergétique minimal CP/W'. La physique calcule l'évolution de la vitesse et de la distance à partir de la puissance produite, du profil coureur-vélo, de l'environnement et d'un pas de temps explicite. Le modèle énergétique limite la puissance produite à partir de la puissance demandée, de la puissance critique et de la réserve anaérobie.
 
+## Normalisation GPX exacte
+
+Entre le parsing et le calcul des distances, la normalisation conserve le premier point de chaque série puis supprime un point seulement si sa latitude, sa longitude et son altitude sont chacune égales avec l’opérateur `===` à celles du dernier point retenu. Les indices des points supprimés restent traçables dans l’ordre de la trace source. Cette règle n’emploie aucune tolérance et ne couvre donc ni les coordonnées proches, ni une position identique assortie d’une altitude différente.
+
 ## Unités
 
 Le moteur utilise les unités SI :
