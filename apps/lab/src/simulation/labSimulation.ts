@@ -1,7 +1,9 @@
 import {
   clampLongitudinalCourseDistance,
   computeSingleRiderForcesAtPower,
+  convertPrecompiledCourseToLongitudinalCourse,
   createLongitudinalCourse,
+  createPrecompiledCourse,
   createSingleRiderEnergyState,
   createSingleRiderState,
   defaultLongitudinalEnvironment,
@@ -28,12 +30,17 @@ export const LAB_ENERGY_PROFILE: Readonly<SingleRiderEnergyProfile> = Object.fre
   anaerobicCapacityJoules: 20_000,
   recoveryEfficiency: 0.5,
 });
-export const LAB_DEMONSTRATION_COURSE = createLongitudinalCourse([
-  { startDistanceMeters: 0, roadGrade: 0 },
-  { startDistanceMeters: 200, roadGrade: 0.05 },
-  { startDistanceMeters: 400, roadGrade: -0.05 },
-  { startDistanceMeters: 600, roadGrade: 0 },
-], { totalLengthMeters: 800 });
+const labDemonstrationPrecompiledCourse = createPrecompiledCourse([
+  { distanceMeters: 0, altitudeMeters: 0 },
+  { distanceMeters: 200, altitudeMeters: 0 },
+  { distanceMeters: 400, altitudeMeters: 10 },
+  { distanceMeters: 600, altitudeMeters: 0 },
+  { distanceMeters: 800, altitudeMeters: 0 },
+]);
+
+export const LAB_DEMONSTRATION_COURSE = convertPrecompiledCourseToLongitudinalCourse(
+  labDemonstrationPrecompiledCourse,
+);
 
 export type LabCourseMode = "constant" | "demonstration";
 

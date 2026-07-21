@@ -89,7 +89,7 @@ Dans ce scénario combiné, l'effort à 350 W consomme 100 J/s au-dessus de CP. 
 
 ## Scénario de référence : arrivée sur parcours précompilé converti
 
-Le scénario d’intégration de `sim-core` construit les échantillons distance/altitude `(0 m, 0 m)`, `(200 m, 0 m)`, `(400 m, 10 m)`, `(600 m, 0 m)` et `(800 m, 0 m)`, puis convertit une seule fois ce `PrecompiledCourse` en `LongitudinalCourse`. Il utilise le profil coureur-vélo de référence, une puissance demandée de 250 W, un vent nul, CP = 250 W, W′ initiale = 20 000 J, une efficacité de récupération de 0,5 et un pas fixe de `1 / 60 s`. Les quatre segments parcourus sont, dans l’ordre, 0 %, +5 %, -5 % et 0 %. Une limite explicite de 7 200 ticks empêche une boucle infinie. Les résultats proviennent du code réel et sont couverts par le test numérique de `sim-core` ; ils concordent avec le scénario segmenté du laboratoire.
+Le scénario d’intégration de `sim-core` et le laboratoire construisent les échantillons distance/altitude `(0 m, 0 m)`, `(200 m, 0 m)`, `(400 m, 10 m)`, `(600 m, 0 m)` et `(800 m, 0 m)`, puis convertissent une seule fois leur `PrecompiledCourse` en `LongitudinalCourse`. Ils utilisent le profil coureur-vélo de référence, une puissance demandée de 250 W, un vent nul, CP = 250 W, W′ initiale = 20 000 J, une efficacité de récupération de 0,5 et un pas fixe de `1 / 60 s`. Les quatre segments parcourus sont, dans l’ordre, 0 %, +5 %, -5 % et 0 %. Une limite explicite de 7 200 ticks empêche une boucle infinie. Les résultats proviennent du code réel et sont couverts par les tests numériques de `sim-core` et du laboratoire.
 
 | Observable à l’arrivée | Valeur |
 | --- | ---: |
