@@ -87,16 +87,19 @@ Scénario combiné avec un pas de 1 s :
 
 Dans ce scénario combiné, l'effort à 350 W consomme 100 J/s au-dessus de CP. La phase à 150 W récupère 50 J/s avec une efficacité de 0,5. Après 60 s de récupération, 3 000 J permettent 30 s supplémentaires à 350 W avant une nouvelle limitation à CP.
 
-## Scénario de référence : arrivée sur parcours segmenté
+## Scénario de référence : arrivée sur parcours précompilé converti
 
-Le scénario exécute le contrôleur du laboratoire avec une puissance demandée de 250 W, un vent nul, CP = 250 W, W′ initiale = 20 000 J et un pas fixe de `1 / 60 s`. Le parcours fini comporte les segments 0 m : 0 %, 200 m : +5 %, 400 m : -5 % et 600 m : 0 %, avec une ligne d’arrivée à 800 m. Les résultats proviennent du code réel et sont couverts par un test numérique.
+Le scénario d’intégration de `sim-core` construit les échantillons distance/altitude `(0 m, 0 m)`, `(200 m, 0 m)`, `(400 m, 10 m)`, `(600 m, 0 m)` et `(800 m, 0 m)`, puis convertit une seule fois ce `PrecompiledCourse` en `LongitudinalCourse`. Il utilise le profil coureur-vélo de référence, une puissance demandée de 250 W, un vent nul, CP = 250 W, W′ initiale = 20 000 J, une efficacité de récupération de 0,5 et un pas fixe de `1 / 60 s`. Les quatre segments parcourus sont, dans l’ordre, 0 %, +5 %, -5 % et 0 %. Une limite explicite de 7 200 ticks empêche une boucle infinie. Les résultats proviennent du code réel et sont couverts par le test numérique de `sim-core` ; ils concordent avec le scénario segmenté du laboratoire.
 
 | Observable à l’arrivée | Valeur |
 | --- | ---: |
 | Distance finale | 800 m |
+| Nombre de ticks | 5 741 |
 | Temps simulé | 95,683333333329 s |
 | Vitesse au tick d’arrivée | 11,292604288289 m/s |
+| Puissance produite | 250 W |
 | Réserve W′ | 20 000 J |
+| Segments traversés | 0, 1, 2, 3 |
 | État | Arrivé |
 
-La détection intervient après le tick qui atteint ou dépasse la ligne. La distance est bornée à 800 m sans interpolation sous-tick ; l’horodatage a donc une erreur maximale d’un tick. Après l’arrivée, les ticks, les commandes de puissance et de vent, l’énergie, les forces et les autres observables restent figés ; le passage vers le parcours à pente constante sans arrivée réactive les commandes. La résolution binaire de pente ne crée aucune allocation dans la boucle de ticks.
+La détection intervient après le tick qui atteint ou dépasse la ligne. La distance est bornée à 800 m sans interpolation sous-tick ; l’horodatage a donc une erreur maximale d’un tick. La boucle s’arrête dès que la progression signale l’arrivée et n’exécute aucun pas physique supplémentaire. La résolution de pente s’effectue au début du tick en `O(log n)` par la recherche binaire sans allocation de la couche parcours ; le parcours et sa conversion restent hors de la boucle.
