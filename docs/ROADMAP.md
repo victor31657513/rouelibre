@@ -10,17 +10,18 @@
 - Parcours longitudinal segmenté à pente constante par segment avec longueur totale optionnelle et arrivée minimale.
 - Format interne précompilé immuable à échantillons de distance et d’altitude, avec interpolation linéaire de l’altitude et dérivation déterministe de la pente de chaque intervalle.
 - Conversion explicite du format précompilé vers un parcours longitudinal fini, avec conservation de chaque intervalle et de la longueur totale.
+- Scénario déterministe de `sim-core` utilisant le parcours précompilé converti pour piloter la pente, la physique et l’énergie jusqu’à l’arrivée bornée.
 - Publication GitHub Pages.
 
 ## Prochaine tâche unique
 
-Utiliser le parcours converti dans un scénario déterministe de `sim-core`, sans modifier le laboratoire.
+Remplacer le parcours segmenté écrit manuellement du laboratoire par un `PrecompiledCourse` converti, sans changer les équations ni les résultats de référence.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. utilisation du parcours converti dans un scénario déterministe de `sim-core`, sans laboratoire ;
+1. remplacement du parcours segmenté écrit manuellement du laboratoire par un `PrecompiledCourse` converti, sans changer les équations ni les résultats de référence ;
 2. import GPX vers ce format, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;
