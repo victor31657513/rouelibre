@@ -18,6 +18,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Scénario d’intégration déterministe de `sim-core` parcourant 800 m depuis des échantillons distance/altitude convertis : la pente est résolue depuis la distance au début de chaque tick, puis alimente la physique et l’énergie jusqu’à l’arrivée bornée. Ses résultats numériques sont couverts par le benchmark de référence.
 - Fabrique explicite du parcours minimal fini, plat et rectiligne depuis l’origine 0 m, avec bornage pur de la distance à la ligne.
 - Scénario segmenté de démonstration fini de 800 m avec arrivée, en plus du scénario historique à pente constante sans arrivée.
+- Parcours de démonstration du laboratoire construit une fois au chargement du module depuis les échantillons distance/altitude de référence d’un `PrecompiledCourse`, puis converti une fois en `LongitudinalCourse` par l’API publique de `sim-core`.
 - Distinction entre puissance demandée et puissance produite.
 - Environnement longitudinal avec vent de face ou vent arrière.
 - Modèle énergétique déterministe CP/W' pour un coureur isolé.
@@ -40,8 +41,8 @@ Le laboratoire observe le moteur existant et ne contient pas de nouvelle équati
 
 ## Non existant
 
-Le projet ne contient pas d’import GPX, de coordonnées GPS, de filtrage altimétrique, d’utilisation du parcours converti par le laboratoire, de virages, de génération 3D, de position latérale, d’aspiration, d’intelligence artificielle, de tactique, de psychologie, d’exécution Web Worker, de moteur de corps rigides, de collisions, d’adhérence, de modèle physiologique complexe, de courbes de puissance personnalisées, de plusieurs réserves énergétiques, de température, d’hydratation, de nutrition, de plusieurs coureurs, de scène 3D, de Three.js, de Zustand, de sons, de sauvegarde, de backend ou d’authentification.
+Le projet ne contient pas d’import GPX, de coordonnées GPS, de filtrage altimétrique, de virages, de génération 3D, de position latérale, d’aspiration, d’intelligence artificielle, de tactique, de psychologie, d’exécution Web Worker, de moteur de corps rigides, de collisions, d’adhérence, de modèle physiologique complexe, de courbes de puissance personnalisées, de plusieurs réserves énergétiques, de température, d’hydratation, de nutrition, de plusieurs coureurs, de scène 3D, de Three.js, de Zustand, de sons, de sauvegarde, de backend ou d’authentification.
 
 ## Prochaine tâche unique
 
-Remplacer le parcours segmenté écrit manuellement du laboratoire par un `PrecompiledCourse` converti, sans changer les équations ni les résultats de référence.
+Introduire un type et un parseur GPX minimal déterministe produisant des points bruts latitude, longitude et altitude, sans conversion en `PrecompiledCourse` et sans intégration physique.

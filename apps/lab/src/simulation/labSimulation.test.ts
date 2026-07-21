@@ -1,6 +1,7 @@
 import {
   computeSingleRiderForcesAtPower,
   defaultSingleRiderProfile,
+  getLongitudinalCourseRoadGradeAtDistance,
 } from "@rouelibre/sim-core";
 import { describe, expect, it } from "vitest";
 import {
@@ -161,17 +162,30 @@ describe("lab simulation controller", () => {
     expect(observed.getSnapshot()).toEqual(reference.getSnapshot());
   });
 
-  it("exposes the fixed demonstration course and frozen observations", () => {
+  it("exposes the reference course derived from altitude samples", () => {
     const simulation = createLabSimulation();
     simulation.setCourseMode("demonstration");
     const snapshot = simulation.getSnapshot();
+    const expectedSegments = [[0, 0], [200, 0.05], [400, -0.05], [600, 0]];
 
     expect(snapshot.course).toBe(LAB_DEMONSTRATION_COURSE);
     expect(snapshot.course.segments.map((segment) => [segment.startDistanceMeters, segment.roadGrade]))
-      .toEqual([[0, 0], [200, 0.05], [400, -0.05], [600, 0]]);
+      .toEqual(expectedSegments);
+    expect(LAB_DEMONSTRATION_COURSE.segments.map((segment) => [
+      segment.startDistanceMeters,
+      segment.roadGrade,
+    ])).toEqual(expectedSegments);
+    expect(LAB_DEMONSTRATION_COURSE.totalLengthMeters).toBe(800);
     expect(snapshot.coursePosition.segmentIndex).toBe(0);
     expect(Object.isFrozen(snapshot.course)).toBe(true);
+    expect(Object.isFrozen(snapshot.course.segments)).toBe(true);
+    expect(snapshot.course.segments.every(Object.isFrozen)).toBe(true);
     expect(Object.isFrozen(snapshot.coursePosition)).toBe(true);
+
+    expect(getLongitudinalCourseRoadGradeAtDistance(snapshot.course, 199.999)).toBe(0);
+    expect(getLongitudinalCourseRoadGradeAtDistance(snapshot.course, 200)).toBe(0.05);
+    expect(getLongitudinalCourseRoadGradeAtDistance(snapshot.course, 400)).toBe(-0.05);
+    expect(getLongitudinalCourseRoadGradeAtDistance(snapshot.course, 600)).toBe(0);
   });
 
   it("uses the grade resolved at the start of a tick that crosses a boundary", () => {

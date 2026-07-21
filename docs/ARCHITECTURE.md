@@ -71,17 +71,19 @@ Le développement local conserve une base Vite `/`. Le workflow GitHub Pages dé
 Direction des dépendances :
 
 ```text
-apps/lab → course + energy + longitudinal
+apps/lab → precompiled course conversion + course + energy + longitudinal
 ```
 
 `sim-core` ne dépend pas du laboratoire, de React, de Vite, du DOM, du navigateur, de Three.js ni d'une bibliothèque graphique.
 
 Organisation :
 
-- `src/simulation/labSimulation.ts` contient le contrôleur indépendant de React et du DOM. Il possède les états physique et énergétique, un état d’arrivée, le mode de parcours, la pente constante sélectionnée et le parcours segmenté de démonstration. Au début de chaque tick, il résout la pente depuis la distance et la copie dans `environment.roadGrade`, puis applique CP = 250 W, W' = 20 000 J, une efficacité de récupération de 0,5, un pas fixe `1 / 60 s` et calcule les forces avec la puissance réellement produite.
+- `src/simulation/labSimulation.ts` contient le contrôleur indépendant de React et du DOM. Il possède les états physique et énergétique, un état d’arrivée, le mode de parcours et la pente constante sélectionnée. Le parcours de démonstration est construit au chargement du module depuis un `PrecompiledCourse` et converti une fois par l’API publique de `sim-core`. Le laboratoire ne calcule pas les pentes : la conversion de parcours les dérive, puis le contrôleur résout au début de chaque tick la pente du `LongitudinalCourse` depuis la distance et la copie dans `environment.roadGrade`. Il applique ensuite CP = 250 W, W' = 20 000 J, une efficacité de récupération de 0,5, un pas fixe `1 / 60 s` et calcule les forces avec la puissance réellement produite.
 - `src/simulation/fixedStepRunner.ts` contient l'adaptateur temporel. Il transforme le temps réel issu de `requestAnimationFrame` en ticks entiers, conserve un reliquat, plafonne le temps réel rattrapable après une frame longue avant application du multiplicateur, puis réinitialise sa référence temporelle lors d'une reprise. Le multiplicateur ×20 produit vingt secondes simulées par seconde réelle en fonctionnement normal sans modifier le pas fixe `1 / 60 s`.
 - `src/App.tsx` contient les composants React d'affichage et de commande. Les composants ne portent pas la logique de simulation et ne reçoivent que des instantanés copiés et gelés.
 - `src/styles.css` fournit une présentation CSS simple, responsive et lisible.
+
+Le parcours source, sa conversion, la physique et l’interface restent des responsabilités séparées. La conversion ne s’exécute ni pendant un tick, ni lors d’une réinitialisation ou d’un changement de mode. React observe le contrôleur sans construire le parcours et le rendu reste dérivé de la simulation, jamais source de vérité.
 
 Choix temporaires et réversibles :
 
