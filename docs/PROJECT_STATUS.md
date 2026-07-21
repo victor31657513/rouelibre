@@ -14,6 +14,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Pente longitudinale instantanée signée dans l'environnement physique, exprimée comme ratio sans unité, nulle par défaut.
 - Domaine de parcours longitudinal distinct avec segments immuables, frontières semi-ouvertes et longueur totale optionnelle.
 - Format interne précompilé immuable et copié défensivement, composé d’échantillons ordonnés de distance et d’altitude en mètres, avec longueur totale dérivée, consultation d’altitude par interpolation linéaire et consultation déterministe de la pente entre deux échantillons successifs sous forme de ratio sans unité.
+- Conversion explicite, pure et déterministe de `PrecompiledCourse` vers `LongitudinalCourse`, avec un segment par intervalle, conservation des frontières d’échantillons et transfert de la longueur totale, indépendante de la physique.
 - Fabrique explicite du parcours minimal fini, plat et rectiligne depuis l’origine 0 m, avec bornage pur de la distance à la ligne.
 - Scénario segmenté de démonstration fini de 800 m avec arrivée, en plus du scénario historique à pente constante sans arrivée.
 - Distinction entre puissance demandée et puissance produite.
@@ -38,8 +39,8 @@ Le laboratoire observe le moteur existant et ne contient pas de nouvelle équati
 
 ## Non existant
 
-Le projet ne contient pas d’import GPX, de coordonnées GPS, d’application à la physique d’une pente issue des échantillons d’altitude, de conversion du format précompilé vers `LongitudinalCourse`, de virages, de génération 3D, de position latérale, d’aspiration, d’intelligence artificielle, de tactique, de psychologie, d’exécution Web Worker, de moteur de corps rigides, de collisions, d’adhérence, de modèle physiologique complexe, de courbes de puissance personnalisées, de plusieurs réserves énergétiques, de température, d’hydratation, de nutrition, de plusieurs coureurs, de scène 3D, de Three.js, de Zustand, de sons, de sauvegarde, de backend ou d’authentification.
+Le projet ne contient pas d’import GPX, de coordonnées GPS, de filtrage altimétrique, d’utilisation du parcours converti par la simulation ou le laboratoire, de virages, de génération 3D, de position latérale, d’aspiration, d’intelligence artificielle, de tactique, de psychologie, d’exécution Web Worker, de moteur de corps rigides, de collisions, d’adhérence, de modèle physiologique complexe, de courbes de puissance personnalisées, de plusieurs réserves énergétiques, de température, d’hydratation, de nutrition, de plusieurs coureurs, de scène 3D, de Three.js, de Zustand, de sons, de sauvegarde, de backend ou d’authentification.
 
 ## Prochaine tâche unique
 
-Convertir explicitement le format précompilé en une représentation consommable par le moteur, sans encore l’intégrer au laboratoire.
+Utiliser le parcours converti dans un scénario déterministe de `sim-core`, sans modifier le laboratoire.

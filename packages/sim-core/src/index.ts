@@ -47,3 +47,7 @@ export {
   type PrecompiledCourse,
   type PrecompiledCourseSample,
 } from "./precompiledCourse.js";
+
+export {
+  convertPrecompiledCourseToLongitudinalCourse,
+} from "./courseConversion.js";
