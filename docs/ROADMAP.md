@@ -13,16 +13,17 @@
 - Scénario déterministe de `sim-core` utilisant le parcours précompilé converti pour piloter la pente, la physique et l’énergie jusqu’à l’arrivée bornée.
 - Laboratoire utilisant les échantillons distance/altitude de référence via un `PrecompiledCourse` converti une fois, sans coût de conversion dans la boucle de ticks.
 - Publication GitHub Pages.
+- Type de point GPX brut et parseur déterministe du sous-ensemble GPX 1.1 à une trace et un segment, sans conversion de parcours.
 
 ## Prochaine tâche unique
 
-Introduire un type et un parseur GPX minimal déterministe produisant des points bruts latitude, longitude et altitude, sans conversion en `PrecompiledCourse` et sans intégration physique.
+Calculer une distance horizontale cumulée déterministe depuis les points d’un segment GPX brut, sans encore créer de `PrecompiledCourse`, sans filtrage altimétrique et sans intégration physique.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. type et parseur GPX minimal déterministe produisant des points bruts latitude, longitude et altitude, sans conversion en `PrecompiledCourse` et sans intégration physique ;
+1. calcul d’une distance horizontale cumulée déterministe depuis les points GPX bruts, sans création de `PrecompiledCourse`, filtrage altimétrique ou intégration physique ;
 2. conversion ultérieure des points GPX vers le format précompilé, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;
