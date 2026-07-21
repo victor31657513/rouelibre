@@ -14,16 +14,17 @@
 - Laboratoire utilisant les échantillons distance/altitude de référence via un `PrecompiledCourse` converti une fois, sans coût de conversion dans la boucle de ticks.
 - Publication GitHub Pages.
 - Type de point GPX brut et parseur déterministe du sous-ensemble GPX 1.1 à une trace et un segment, validé contre les 21 exports VisuGPX bruts du Tour de France 2026, sans conversion de parcours.
+- Distance horizontale cumulée déterministe des points GPX par Haversine sur une Terre sphérique, sans nettoyage, filtrage altimétrique, conversion de parcours ou intégration physique.
 
 ## Prochaine tâche unique
 
-Calculer une distance horizontale cumulée déterministe depuis les points GPX bruts validés, sans créer de `PrecompiledCourse`, sans filtrage altimétrique et sans intégration physique.
+Produire un rapport déterministe de qualité géométrique des tracés GPX distancés — doublons consécutifs exacts, segments horizontaux nuls et sauts de distance — sans supprimer ni modifier aucun point.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. calcul d’une distance horizontale cumulée déterministe depuis les points GPX bruts, sans création de `PrecompiledCourse`, filtrage altimétrique ou intégration physique ;
+1. rapport déterministe de qualité géométrique des tracés GPX distancés, sans suppression ni modification de point ;
 2. conversion ultérieure des points GPX vers le format précompilé, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;

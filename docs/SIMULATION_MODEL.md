@@ -173,7 +173,23 @@ Le dernier échantillon fournit uniquement la fin du dernier intervalle et `tota
 
 Le parseur GPX accepte le sous-ensemble GPX 1.1 suivant : une racine `gpx` de version 1.1, exactement un `trk`, exactement un `trkseg`, au moins deux `trkpt`, les attributs uniques `lat` et `lon` et exactement un `ele` par point. Les noms locaux avec namespace optionnel, la déclaration XML, les commentaires, les éléments supplémentaires et leurs sections CDATA opaques sont acceptés. Seuls les `trkpt` de l'unique `trkseg` alimentent le résultat ; les `wpt` et `rtept` sont ignorés. Les structures ambiguës ou mal formées, DOCTYPE, CDATA dans `ele` et entités dans les nombres obligatoires sont rejetés par `SyntaxError`. Le corpus de test couvre les 21 exports VisuGPX du Tour de France 2026.
 
-`latitudeDegrees` et `longitudeDegrees` restent en degrés décimaux, respectivement dans `[-90, 90]` et `[-180, 180]`. Une coordonnée finie hors limites produit une `RangeError`. `altitudeMeters` est exprimée en mètres et doit être finie, sans borne artificielle. Ces points source profondément immuables ne subissent ni conversion en radians, ni projection, ni normalisation, filtrage ou correction. Aucune distance, pente ou représentation `PrecompiledCourse` n’est calculée par le parseur.
+`latitudeDegrees` et `longitudeDegrees` restent en degrés décimaux, respectivement dans `[-90, 90]` et `[-180, 180]`. Une coordonnée finie hors limites produit une `RangeError`. `altitudeMeters` est exprimée en mètres et doit être finie, sans borne artificielle. Ces points source profondément immuables ne subissent ni projection, ni normalisation, filtrage ou correction. Aucune distance, pente ou représentation `PrecompiledCourse` n’est calculée par le parseur.
+
+## Distance horizontale cumulée des points GPX
+
+`computeGpxCumulativeDistances` copie les points dans leur ordre documentaire et annote le premier avec `distanceMeters = 0`. Chaque point suivant reçoit la somme, en mètres, des distances horizontales des segments précédents. `totalLengthMeters` reprend exactement la distance du dernier point. Le résultat, son tableau et chaque point sont gelés ; aucun point source n’est supprimé, fusionné, déplacé ou muté. L’altitude en mètres est copiée sans modification mais ne participe pas au calcul : une différence d’altitude seule produit donc une distance horizontale nulle.
+
+Chaque segment utilise une distance de grand cercle par la formule de Haversine sur une Terre sphérique simplifiée. Le rayon terrestre moyen unique vaut `R = 6 371 008,8 m`. Pour les latitudes `phi1`, `phi2` en radians, `deltaPhi = phi2 - phi1` et la différence de longitude `deltaLambda` normalisée dans `[-pi, pi]` :
+
+```text
+a = sin²(deltaPhi / 2)
+  + cos(phi1) × cos(phi2) × sin²(deltaLambda / 2)
+a_borne = min(1, max(0, a))
+c = 2 × atan2(sqrt(a_borne), sqrt(1 - a_borne))
+distanceMeters = R × c
+```
+
+La normalisation de `deltaLambda` sélectionne la traversée courte lors d’un passage de l’antiméridien. Le bornage de `a` protège les racines carrées près des cas limites numériques. Les segments sont additionnés dans l’ordre fixe, sans arrondi stocké ; les coordonnées identiques conservent deux points portant la même distance cumulée. Ce modèle ne représente pas un ellipsoïde terrestre, une projection cartographique ou une distance tridimensionnelle. Cette préparation est indépendante de `PrecompiledCourse` et s’exécute hors de la boucle physique.
 
 ## Parcours longitudinal segmenté
 
