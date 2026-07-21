@@ -3,7 +3,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { computeGpxCumulativeDistances, parseGpxTrack } from "../src/index.js";
+import {
+  analyzeGpxGeometryQuality,
+  computeGpxCumulativeDistances,
+  parseGpxTrack,
+} from "../src/index.js";
+
+const CORPUS_JUMP_THRESHOLD_METERS = 250;
 
 const corpusDirectory = fileURLToPath(
   new URL("../../../data/courses/tour-de-france/2026/raw/", import.meta.url),
@@ -59,5 +65,47 @@ describe("corpus GPX du Tour de France 2026", () => {
         expect(point?.distanceMeters).toBeGreaterThanOrEqual(first.points[index - 1]?.distanceMeters ?? 0);
       }
     }
+  });
+
+  it.each(corpusFiles)("observe la qualité géométrique de %s sans modifier les données", (fileName) => {
+    const xml = readFileSync(new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8");
+    const distanceAnnotated = computeGpxCumulativeDistances(parseGpxTrack(xml));
+    const snapshot = structuredClone(distanceAnnotated);
+    const first = analyzeGpxGeometryQuality(distanceAnnotated, {
+      jumpThresholdMeters: CORPUS_JUMP_THRESHOLD_METERS,
+    });
+    const second = analyzeGpxGeometryQuality(distanceAnnotated, {
+      jumpThresholdMeters: CORPUS_JUMP_THRESHOLD_METERS,
+    });
+
+    expect(first).toEqual(second);
+    expect(first.pointCount).toBe(distanceAnnotated.points.length);
+    expect(first.segmentCount).toBe(first.pointCount - 1);
+    expect(first.totalLengthMeters).toBe(distanceAnnotated.totalLengthMeters);
+    expect(Number.isFinite(first.longestSegment.segmentDistanceMeters)).toBe(true);
+    expect(first.longestSegment.segmentDistanceMeters).toBeGreaterThanOrEqual(0);
+
+    const observations = [
+      ...first.exactDuplicateSegments,
+      ...first.zeroHorizontalSegments,
+      ...first.jumpSegments,
+      first.longestSegment,
+    ];
+    for (const observation of observations) {
+      expect(observation.startPointIndex).toBeGreaterThanOrEqual(0);
+      expect(observation.endPointIndex).toBe(observation.startPointIndex + 1);
+      expect(observation.endPointIndex).toBeLessThan(first.pointCount);
+    }
+    for (const observation of first.zeroHorizontalSegments) {
+      const start = distanceAnnotated.points[observation.startPointIndex];
+      const end = distanceAnnotated.points[observation.endPointIndex];
+      expect((end?.distanceMeters ?? Number.NaN) - (start?.distanceMeters ?? Number.NaN)).toBe(0);
+    }
+    for (const observation of first.jumpSegments) {
+      expect(observation.segmentDistanceMeters).toBeGreaterThan(CORPUS_JUMP_THRESHOLD_METERS);
+    }
+    expect(distanceAnnotated).toEqual(snapshot);
+    expect(readFileSync(new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8"))
+      .toBe(xml);
   });
 });

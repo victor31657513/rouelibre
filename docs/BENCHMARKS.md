@@ -12,6 +12,43 @@ Le même code appliqué au corpus fournit la référence suivante :
 
 Cette valeur est la longueur du tracé GPX dans le modèle sphérique choisi, et non la distance officielle de l’étape. Le test de corpus exige une égalité exacte entre deux exécutions déterministes ; il vérifie aussi les valeurs finies, non négatives et monotones, sans comparer la longueur à une référence officielle ni appliquer de tolérance à cette longueur réelle.
 
+## Qualité géométrique du corpus GPX 2026
+
+L’analyse déterministe utilise le seuil diagnostique explicite de `250 m`. Ce seuil sert uniquement à observer les segments strictement plus longs ; il ne prescrit aucune suppression ou correction. Les résultats produits par `analyzeGpxGeometryQuality` sur les 21 fichiers sont :
+
+- points : `160 626` ;
+- segments : `160 605` ;
+- doublons consécutifs exacts : `770` ;
+- segments horizontaux nuls : `771` ;
+- sauts strictement supérieurs à 250 m : `82` ;
+- segment le plus long : `747,3787552887879 m`, dans `tour-de-france-2026-etape-03-granollers-les-angles.gpx`, des indices `1265` à `1266`.
+
+Toutes les étapes présentent au moins une des trois observations. Le segment maximal de chaque ligne est conservé sans arrondi dans le rapport ; son affichage ci-dessous reprend la valeur numérique complète produite par le code.
+
+| Source GPX | Points | Doublons exacts | Segments nuls | Sauts > 250 m | Segment maximal (m) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `tour-de-france-2026-etape-01-barcelone-barcelone.gpx` | 917 | 2 | 2 | 0 | 141,5448893888647 |
+| `tour-de-france-2026-etape-02-tarragone-barcelone.gpx` | 7 297 | 7 | 7 | 11 | 591,6775588564633 |
+| `tour-de-france-2026-etape-03-granollers-les-angles.gpx` | 6 748 | 5 | 6 | 31 | 747,3787552887879 |
+| `tour-de-france-2026-etape-04-carcassonne-foix.gpx` | 10 501 | 28 | 28 | 1 | 267,6079793203098 |
+| `tour-de-france-2026-etape-05-lannemezan-pau.gpx` | 5 689 | 34 | 34 | 12 | 437,68961918927016 |
+| `tour-de-france-2026-etape-06-pau-gavarnie-gedre.gpx` | 9 803 | 39 | 39 | 1 | 283,70567224366096 |
+| `tour-de-france-2026-etape-07-hagetmau-bordeaux.gpx` | 6 428 | 44 | 44 | 5 | 348,5585477855275 |
+| `tour-de-france-2026-etape-08-perigueux-bergerac.gpx` | 7 816 | 113 | 113 | 1 | 291,07448426957126 |
+| `tour-de-france-2026-etape-09-malemort-ussel.gpx` | 8 680 | 25 | 25 | 1 | 275,7804127262498 |
+| `tour-de-france-2026-etape-10-aurillac-le-lioran.gpx` | 9 847 | 27 | 27 | 0 | 174,28894863668575 |
+| `tour-de-france-2026-etape-11-vichy-nevers.gpx` | 6 750 | 38 | 38 | 0 | 204,43309093090647 |
+| `tour-de-france-2026-etape-12-circuit-nevers-magny-cours-chalon-sur-saone.gpx` | 7 198 | 53 | 53 | 3 | 384,7252989420231 |
+| `tour-de-france-2026-etape-13-dole-belfort.gpx` | 9 970 | 25 | 25 | 7 | 349,9333615231735 |
+| `tour-de-france-2026-etape-14-mulhouse-le-markstein.gpx` | 9 253 | 48 | 48 | 0 | 239,82976896986656 |
+| `tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx` | 10 515 | 42 | 42 | 1 | 258,4050682822126 |
+| `tour-de-france-2026-etape-16-evian-les-bains-thonon-les-bains.gpx` | 1 613 | 16 | 16 | 0 | 111,50645011413326 |
+| `tour-de-france-2026-etape-17-chambery-voiron.gpx` | 8 980 | 30 | 30 | 1 | 265,182548366065 |
+| `tour-de-france-2026-etape-18-voiron-orcieres-merlette.gpx` | 10 023 | 41 | 41 | 1 | 285,37188916121704 |
+| `tour-de-france-2026-etape-19-gap-alpe-d-huez.gpx` | 7 474 | 26 | 26 | 0 | 223,26317889431084 |
+| `tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx` | 9 968 | 41 | 41 | 3 | 463,8151410822975 |
+| `tour-de-france-2026-etape-21-thoiry-paris-champs-elysees.gpx` | 5 156 | 86 | 86 | 3 | 436,6878872924499 |
+
 ## Scénario de référence : coureur isolé sur route à pente constante
 
 Le scénario de référence exécute le moteur longitudinal minimal pendant 7 200 s avec un pas de 0,5 s. Les vitesses reportées correspondent à l'état final, utilisé comme approximation de vitesse stabilisée pour ces paramètres.
