@@ -9,17 +9,18 @@
 - Pente longitudinale constante.
 - Parcours longitudinal segmenté à pente constante par segment avec longueur totale optionnelle et arrivée minimale.
 - Format interne précompilé immuable à échantillons de distance et d’altitude, avec interpolation linéaire de l’altitude et dérivation déterministe de la pente de chaque intervalle.
+- Conversion explicite du format précompilé vers un parcours longitudinal fini, avec conservation de chaque intervalle et de la longueur totale.
 - Publication GitHub Pages.
 
 ## Prochaine tâche unique
 
-Convertir explicitement le format précompilé en une représentation consommable par le moteur, sans encore l’intégrer au laboratoire.
+Utiliser le parcours converti dans un scénario déterministe de `sim-core`, sans modifier le laboratoire.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. conversion explicite vers une représentation consommable par le moteur ;
+1. utilisation du parcours converti dans un scénario déterministe de `sim-core`, sans laboratoire ;
 2. import GPX vers ce format, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;
