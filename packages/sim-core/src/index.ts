@@ -51,3 +51,9 @@ export {
 export {
   convertPrecompiledCourseToLongitudinalCourse,
 } from "./courseConversion.js";
+
+export {
+  parseGpxTrack,
+  type ParsedGpxTrack,
+  type RawGpxTrackPoint,
+} from "./gpx.js";
