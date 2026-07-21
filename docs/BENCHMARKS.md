@@ -1,5 +1,17 @@
 # Benchmarks
 
+## Référence numérique : distance horizontale GPX
+
+Le calcul GPX emploie la formule de Haversine sur une Terre sphérique de rayon moyen `6 371 008,8 m`. Un degré de longitude à l’équateur produit `111 195,080233526 m` avec le code réel ; le test synthétique compare ce résultat à `R × pi / 180` avec une tolérance absolue de `10⁻⁸ m`.
+
+Le même code appliqué au corpus fournit la référence suivante :
+
+| Source GPX | Points | Longueur horizontale calculée |
+| --- | ---: | ---: |
+| `tour-de-france-2026-etape-01-barcelone-barcelone.gpx` | 917 | 19 418,59596934856 m |
+
+Cette valeur est la longueur du tracé GPX dans le modèle sphérique choisi, et non la distance officielle de l’étape. Le test de corpus exige une égalité exacte entre deux exécutions déterministes ; il vérifie aussi les valeurs finies, non négatives et monotones, sans comparer la longueur à une référence officielle ni appliquer de tolérance à cette longueur réelle.
+
 ## Scénario de référence : coureur isolé sur route à pente constante
 
 Le scénario de référence exécute le moteur longitudinal minimal pendant 7 200 s avec un pas de 0,5 s. Les vitesses reportées correspondent à l'état final, utilisé comme approximation de vitesse stabilisée pour ces paramètres.

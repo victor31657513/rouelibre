@@ -57,3 +57,10 @@ export {
   type ParsedGpxTrack,
   type RawGpxTrackPoint,
 } from "./gpx.js";
+
+export {
+  computeGpxCumulativeDistances,
+  EARTH_MEAN_RADIUS_METERS,
+  type DistanceAnnotatedGpxPoint,
+  type DistanceAnnotatedGpxTrack,
+} from "./gpxDistance.js";

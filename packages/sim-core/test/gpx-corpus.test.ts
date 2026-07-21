@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { parseGpxTrack } from "../src/index.js";
+import { computeGpxCumulativeDistances, parseGpxTrack } from "../src/index.js";
 
 const corpusDirectory = fileURLToPath(
   new URL("../../../data/courses/tour-de-france/2026/raw/", import.meta.url),
@@ -32,6 +32,32 @@ describe("corpus GPX du Tour de France 2026", () => {
       expect(point.latitudeDegrees).toBeLessThanOrEqual(90);
       expect(point.longitudeDegrees).toBeGreaterThanOrEqual(-180);
       expect(point.longitudeDegrees).toBeLessThanOrEqual(180);
+    }
+  });
+
+  it.each(corpusFiles)("calcule les distances horizontales de %s sans modifier les points", (fileName) => {
+    const xml = readFileSync(new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8");
+    const parsed = parseGpxTrack(xml);
+    const first = computeGpxCumulativeDistances(parsed);
+    const second = computeGpxCumulativeDistances(parsed);
+
+    expect(first.points).toHaveLength(parsed.points.length);
+    expect(first.points[0]?.distanceMeters).toBe(0);
+    expect(first).toEqual(second);
+    expect(Number.isFinite(first.totalLengthMeters)).toBe(true);
+    expect(first.totalLengthMeters).toBeGreaterThan(0);
+    expect(first.points.at(-1)?.distanceMeters).toBe(first.totalLengthMeters);
+    for (let index = 0; index < first.points.length; index += 1) {
+      const point = first.points[index];
+      const source = parsed.points[index];
+      expect(point?.latitudeDegrees).toBe(source?.latitudeDegrees);
+      expect(point?.longitudeDegrees).toBe(source?.longitudeDegrees);
+      expect(point?.altitudeMeters).toBe(source?.altitudeMeters);
+      expect(Number.isFinite(point?.distanceMeters)).toBe(true);
+      expect(point?.distanceMeters).toBeGreaterThanOrEqual(0);
+      if (index > 0) {
+        expect(point?.distanceMeters).toBeGreaterThanOrEqual(first.points[index - 1]?.distanceMeters ?? 0);
+      }
     }
   });
 });
