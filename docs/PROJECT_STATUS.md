@@ -13,6 +13,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Moteur longitudinal déterministe minimal pour un coureur isolé sur route à pente constante ou sur un parcours longitudinal déterministe composé de segments à pente constante.
 - Pente longitudinale instantanée signée dans l'environnement physique, exprimée comme ratio sans unité, nulle par défaut.
 - Domaine de parcours longitudinal distinct avec segments immuables, frontières semi-ouvertes et longueur totale optionnelle.
+- Format interne précompilé immuable et copié défensivement, composé d’échantillons ordonnés de distance et d’altitude en mètres, avec longueur totale dérivée et consultation d’altitude par interpolation linéaire déterministe.
 - Fabrique explicite du parcours minimal fini, plat et rectiligne depuis l’origine 0 m, avec bornage pur de la distance à la ligne.
 - Scénario segmenté de démonstration fini de 800 m avec arrivée, en plus du scénario historique à pente constante sans arrivée.
 - Distinction entre puissance demandée et puissance produite.
@@ -36,8 +37,8 @@ Le laboratoire observe le moteur existant et ne contient pas de nouvelle équati
 
 ## Non existant
 
-Le projet ne contient pas de GPX, altitude issue d'un parcours, virages, position latérale, aspiration, intelligence artificielle, tactique, psychologie, exécution Web Worker, moteur de corps rigides, collisions, adhérence, modèle physiologique complexe, courbes de puissance personnalisées, plusieurs réserves énergétiques, température, hydratation, nutrition, plusieurs coureurs, scène 3D, Three.js, Zustand, sons, sauvegarde, backend ou authentification.
+Le projet ne contient pas d’import GPX, de coordonnées GPS, d’application à la physique d’une pente issue des échantillons d’altitude, de conversion du format précompilé vers `LongitudinalCourse`, de virages, de génération 3D, de position latérale, d’aspiration, d’intelligence artificielle, de tactique, de psychologie, d’exécution Web Worker, de moteur de corps rigides, de collisions, d’adhérence, de modèle physiologique complexe, de courbes de puissance personnalisées, de plusieurs réserves énergétiques, de température, d’hydratation, de nutrition, de plusieurs coureurs, de scène 3D, de Three.js, de Zustand, de sons, de sauvegarde, de backend ou d’authentification.
 
 ## Prochaine tâche unique
 
-Définir un premier format interne précompilé de parcours capable de représenter une suite ordonnée d’échantillons longitudinaux avec distance et altitude, sans importer de fichier GPX ni ajouter les virages.
+Dériver une pente longitudinale déterministe depuis les échantillons du format précompilé, sans l’appliquer à la physique du coureur.
