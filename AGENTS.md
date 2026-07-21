@@ -88,7 +88,7 @@ La documentation ne présente jamais comme existante une fonctionnalité seuleme
 
 ## Contenu obligatoire d'une Pull Request
 
-Une PR présente :
+La description d'une PR fait partie du livrable et n'est pas une formalité secondaire. Toute PR utilise exactement la structure et l'ordre de `.github/pull_request_template.md`. Toutes les sections sont présentes et apportent une réponse concrète ; leur contenu couvre les éléments obligatoires suivants :
 
 - l'objectif ;
 - l'état initial vérifié ;
@@ -101,3 +101,7 @@ Une PR présente :
 - la documentation mise à jour ;
 - les risques et limites ;
 - l'impact sur les performances.
+
+La description est construite à partir de l'état initial vérifié et du diff réel. Les tests annoncés ont réellement été exécutés, les résultats observables sont précis et vérifiables, et le périmètre reste distinct du hors périmètre. Les risques, les limites et l'impact sur les performances sont explicités même lorsqu'ils sont négligeables ou sans objet.
+
+Après la création de la PR, Codex relit sa description puis la compare une dernière fois aux fichiers réellement modifiés avant de déclarer la tâche terminée. Codex ne fusionne pas une PR avant la validation explicite de ChatGPT. Les règles détaillées et la configuration du check requis sont documentées dans `docs/PULL_REQUESTS.md`.

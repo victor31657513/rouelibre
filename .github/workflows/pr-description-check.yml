@@ -1,0 +1,25 @@
+name: PR Description Check
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-description:
+    name: Validate PR description
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate description
+        run: node scripts/check-pr-description.mjs --event-file "$GITHUB_EVENT_PATH"
