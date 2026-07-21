@@ -39,3 +39,10 @@ export {
   type LongitudinalCourseSegment,
   type LongitudinalCourseOptions,
 } from "./course.js";
+
+export {
+  createPrecompiledCourse,
+  getPrecompiledCourseAltitudeAtDistance,
+  type PrecompiledCourse,
+  type PrecompiledCourseSample,
+} from "./precompiledCourse.js";

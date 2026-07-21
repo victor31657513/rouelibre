@@ -139,6 +139,19 @@ theta = atan(grade)
 
 Une pente de 5 % correspond donc à `grade = 0,05` et non à un angle de 5 degrés.
 
+## Parcours précompilé à altitude échantillonnée
+
+Un `PrecompiledCourse` est une configuration statique distincte de la simulation. Chaque `PrecompiledCourseSample` contient une `distanceMeters` depuis l’origine et une `altitudeMeters`, toutes deux en mètres. Il contient au moins deux échantillons ; la première distance vaut exactement 0, toutes les distances sont finies, positives ou nulles et strictement croissantes, et toutes les altitudes sont finies. Une altitude négative est valide pour représenter une zone sous le niveau de la mer. `totalLengthMeters` est la distance finie et strictement positive du dernier échantillon. La création valide l’entrée entière, la copie défensivement, puis gèle chaque échantillon, le tableau et le parcours.
+
+La consultation à la distance exacte d’un échantillon retourne son altitude exacte. Entre deux échantillons, une recherche binaire détermine l’intervalle puis applique l’interpolation linéaire suivante :
+
+```text
+ratio = (distance - distance_debut) / (distance_fin - distance_debut)
+altitude = altitude_debut + (altitude_fin - altitude_debut) × ratio
+```
+
+À partir de la longueur totale, la consultation retourne l’altitude du dernier échantillon. Une distance de consultation négative, infinie ou `NaN` est rejetée. Le format ne décrit ni coordonnées GPS, ni courbure, ni pente directement consommable par la physique ; il n’est pas utilisé par la progression du coureur et aucune conversion vers `LongitudinalCourse` n’existe.
+
 ## Parcours longitudinal segmenté
 
 Un `LongitudinalCourse` contient des segments immuables `{ startDistanceMeters, roadGrade }`. La distance de début est en mètres et la pente est un ratio sans unité. Le premier segment commence exactement à 0 m ; les débuts sont finis et strictement croissants. Le segment `i` couvre `[début_i, début_suivant[` : une frontière exacte sélectionne le nouveau segment. Le dernier segment se prolonge indéfiniment lorsqu’aucune longueur totale n’est définie. Une option explicite `totalLengthMeters`, finie, positive et strictement supérieure au début du dernier segment, définit une arrivée ; elle est immuable après création.
@@ -245,4 +258,4 @@ Les tests vérifient :
 
 ## Simplifications et limites
 
-Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale instantanée, sans freinage. Le parcours segmenté ne couvre ni GPX, ni altitude, ni virages, ni chronométrage intermédiaire. Il ne couvre pas l'altitude issue d'un parcours, les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.
+Le modèle énergétique CP/W' est minimal et déterministe. Il ne prétend pas valider une physiologie universelle. Il ne couvre pas plusieurs réserves énergétiques, les cinétiques physiologiques complexes, les courbes de puissance personnalisées, la température, l'hydratation, la nutrition, la fatigue neuromusculaire, la psychologie ou la tactique. Le modèle physique couvre une pente longitudinale instantanée, sans freinage. Le parcours segmenté ne consomme ni GPX, ni altitude, ni virages, ni chronométrage intermédiaire. Le format précompilé permet seulement de stocker et consulter une altitude échantillonnée : il ne couvre pas l’import GPX, les coordonnées GPS, le calcul ou l’application de pente, ni les virages. Le modèle ne couvre pas les virages, la position latérale, l'aspiration, les changements de posture, les pertes dépendantes de la transmission, l'adhérence, les collisions, le GPX, l'intelligence artificielle, le rendu graphique ou l'exécution Web Worker.
