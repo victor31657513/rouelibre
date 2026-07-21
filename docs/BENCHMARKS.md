@@ -1,10 +1,10 @@
 # Benchmarks
 
-## Normalisation exacte du corpus GPX Tour de France 2026
+## Normalisation des positions horizontales du corpus GPX Tour de France 2026
 
-La chaîne `parseGpxTrack` → normalisation exacte → distances → rapport de qualité traite 160 626 points source. Elle supprime 770 doublons consécutifs exacts et conserve 159 856 points. La longueur horizontale de chacune des 21 étapes reste exactement égale à celle calculée sur la trace source ; le segment maximal du corpus reste également identique.
+La chaîne canonique `parseGpxTrack` → `removeConsecutiveSameHorizontalGpxPoints` → distances → rapport de qualité traite 160 626 points source. Elle supprime 771 points : 770 doublons exacts et 1 point à altitude différente. Elle conserve 159 855 points. La longueur horizontale de chacune des 21 étapes reste exactement inchangée, comme le segment maximal du corpus.
 
-Le corpus normalisé contient 1 segment horizontal nul, contre 771 avant normalisation, et conserve les 82 sauts strictement supérieurs à 250 m avec leurs distances inchangées. Le segment nul restant se trouve dans `tour-de-france-2026-etape-03-granollers-les-angles.gpx`, entre les indices normalisés 1861 et 1862 : latitude 41.87328°, longitude 2.28579°, altitudes respectives 621,5 m et 619 m, distance horizontale 0 m. Cette observation n’entraîne aucune correction.
+Le corpus normalisé ne contient aucun segment horizontal nul et conserve les 82 sauts strictement supérieurs à 250 m avec leurs distances inchangées. Dans `tour-de-france-2026-etape-03-granollers-les-angles.gpx`, la règle conserve le premier point à latitude 41,87328°, longitude 2,28579° et altitude 621,5 m, et supprime le point source suivant à la même position et à 619 m. Elle ne crée ni coordonnée ni altitude.
 
 ## Référence numérique : distance horizontale GPX
 

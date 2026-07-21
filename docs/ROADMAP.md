@@ -8,7 +8,7 @@
 - Laboratoire visuel minimal.
 - Pente longitudinale constante.
 - Parcours longitudinal segmenté à pente constante par segment avec longueur totale optionnelle et arrivée minimale.
-- Normalisation interne des GPX supprimant seulement les doublons consécutifs exactement identiques avant le calcul des distances.
+- Normalisations internes des GPX : suppression exacte sur latitude, longitude et altitude toujours disponible, et passe canonique supprimant les positions horizontales consécutives exactement identiques en conservant le premier point et son altitude avant le calcul des distances.
 - Format interne précompilé immuable à échantillons de distance et d’altitude, avec interpolation linéaire de l’altitude et dérivation déterministe de la pente de chaque intervalle.
 - Conversion explicite du format précompilé vers un parcours longitudinal fini, avec conservation de chaque intervalle et de la longueur totale.
 - Scénario déterministe de `sim-core` utilisant le parcours précompilé converti pour piloter la pente, la physique et l’énergie jusqu’à l’arrivée bornée.
@@ -20,13 +20,13 @@
 
 ## Prochaine tâche unique
 
-Arbitrer, à partir du rapport de qualité géométrique validé, la première règle minimale de normalisation GPX. Aucun nettoyage ne doit être implémenté avant cet arbitrage.
+Produire un rapport déterministe sur l’espacement horizontal des points et les pentes brutes du corpus GPX normalisé, sans filtrer, rééchantillonner ni convertir en `PrecompiledCourse`.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. arbitrage de la première règle minimale de normalisation GPX à partir du rapport validé, sans nettoyage avant décision ;
+1. rapport déterministe sur l’espacement horizontal et les pentes brutes du corpus normalisé, sans filtrage ni conversion ;
 2. conversion ultérieure des points GPX vers le format précompilé, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;

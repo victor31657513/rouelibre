@@ -67,8 +67,11 @@ export {
 
 export {
   removeConsecutiveExactGpxDuplicates,
+  removeConsecutiveSameHorizontalGpxPoints,
   type GpxExactDuplicateNormalizationReport,
   type GpxExactDuplicateNormalizationResult,
+  type GpxHorizontalPositionNormalizationReport,
+  type GpxHorizontalPositionNormalizationResult,
 } from "./gpxNormalization.js";
 
 export {
