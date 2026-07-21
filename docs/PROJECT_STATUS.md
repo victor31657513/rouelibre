@@ -30,7 +30,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Contrôleur de laboratoire indépendant de React et du DOM, utilisant uniquement l'API publique de `@rouelibre/sim-core`.
 - Adaptateur temporel navigateur à pas fixe `1 / 60 s` avec accumulateur, multiplicateurs ×1, ×5 et ×20, et plafonnement du temps réel rattrapable après une frame longue avant application du multiplicateur.
 - Affichage des observables physiques, énergétiques, environnementales et des forces du coureur isolé, dont la force gravitationnelle longitudinale.
-- Représentation visuelle minimale dérivée de la distance simulée et jauge W'.
+- Représentation visuelle minimale dont la position sur un parcours fini est dérivée de `LongitudinalCourseProgress.progress`, bornée visuellement entre 0 % et 100 %. Le parcours constant sans arrivée conserve une animation cyclique fondée sur la distance modulo 100 m.
 - Vérification CI pour l'installation, le typecheck, les tests et le build sur Pull Request.
 - Modèle de description proposé pour aider à rédiger manuellement les Pull Requests, avec audit humain de la description et du diff.
 - Workflow GitHub Actions pouvant publier le build Vite du laboratoire sur GitHub Pages depuis `main`, après installation, typecheck, tests et build de production.
@@ -39,7 +39,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 
 ## Limites
 
-Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité. Après une arrivée, le contrôleur borne la distance à la ligne et fige tous les observables, y compris les commandes de puissance et de vent ; le passage vers le parcours à pente constante sans arrivée les réactive. La réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
+Le laboratoire observe le moteur existant et ne contient pas de nouvelle équation physique ou énergétique. La représentation visuelle est une aide d'observation dérivée de l'état simulé ; elle n'est pas une source de vérité et ne modifie jamais la simulation. Après une arrivée, le contrôleur borne la distance à la ligne et fige tous les observables, y compris les commandes de puissance et de vent ; le passage vers le parcours à pente constante sans arrivée les réactive. La réinitialisation conserve la puissance demandée, le vent, le mode de parcours et la pente constante sélectionnée pour faciliter la répétition d'un scénario.
 
 ## Non existant
 
