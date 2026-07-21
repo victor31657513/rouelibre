@@ -27,6 +27,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Affichage des observables physiques, énergétiques, environnementales et des forces du coureur isolé, dont la force gravitationnelle longitudinale.
 - Représentation visuelle minimale dérivée de la distance simulée et jauge W'.
 - Vérification CI pour l'installation, le typecheck, les tests et le build sur Pull Request.
+- Modèle officiel de Pull Request et validation CI dédiée de la structure et du contenu utile de sa description.
 - Workflow GitHub Actions pouvant publier le build Vite du laboratoire sur GitHub Pages depuis `main`, après installation, typecheck, tests et build de production.
 - Documentation du projet, de l'architecture, du modèle physique longitudinal, du modèle énergétique minimal, du laboratoire visuel et de la publication GitHub Pages.
 - Répertoire `docs/decisions/` pour les décisions d'architecture structurées.
