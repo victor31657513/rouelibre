@@ -8,6 +8,10 @@ Le modèle implémenté couvre la physique longitudinale minimale d'un coureur i
 
 Entre le parsing et le calcul des distances, la normalisation conserve le premier point de chaque série puis supprime un point seulement si sa latitude, sa longitude et son altitude sont chacune égales avec l’opérateur `===` à celles du dernier point retenu. Les indices des points supprimés restent traçables dans l’ordre de la trace source. Cette règle n’emploie aucune tolérance et ne couvre donc ni les coordonnées proches, ni une position identique assortie d’une altitude différente.
 
+## Normalisation GPX des positions horizontales
+
+La passe canonique du corpus compare chaque point au dernier point retenu avec `===` sur `latitudeDegrees` et `longitudeDegrees`. Elle conserve le premier point de chaque série consécutive, avec son altitude source, et supprime les suivants même si leur altitude diffère. Cette convention déterministe ne détermine pas l’altitude réelle, ne calcule ni ne remplace une altitude et n’emploie aucune tolérance. Des positions identiques non consécutives restent distinctes. La normalisation exacte sur les trois valeurs reste disponible séparément.
+
 ## Unités
 
 Le moteur utilise les unités SI :

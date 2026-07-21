@@ -29,4 +29,4 @@ Le segment horizontal nul dont les altitudes diffèrent et les 82 sauts supérie
 
 ## Date ou référence de PR
 
-Pull Request dédiée à la suppression des doublons GPX consécutifs exacts.
+Pull Request #260 dédiée à la suppression des doublons GPX consécutifs exacts.

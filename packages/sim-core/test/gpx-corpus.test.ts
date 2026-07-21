@@ -7,7 +7,7 @@ import {
   analyzeGpxGeometryQuality,
   computeGpxCumulativeDistances,
   parseGpxTrack,
-  removeConsecutiveExactGpxDuplicates,
+  removeConsecutiveSameHorizontalGpxPoints,
 } from "../src/index.js";
 
 const CORPUS_JUMP_THRESHOLD_METERS = 250;
@@ -110,11 +110,12 @@ describe("corpus GPX du Tour de France 2026", () => {
       .toBe(xml);
   });
 
-  it("normalise uniquement les 770 doublons exacts du corpus", () => {
+  it("supprime les 771 positions horizontales consécutives identiques du corpus", () => {
     let sourcePointCount = 0;
     let retainedPointCount = 0;
     let removedPointCount = 0;
-    let exactDuplicateCount = 0;
+    let removedExactDuplicateCount = 0;
+    let removedDifferentAltitudeCount = 0;
     let zeroHorizontalCount = 0;
     let jumpCount = 0;
     let sourceLongest = { fileName: "", distance: -1 };
@@ -127,8 +128,8 @@ describe("corpus GPX du Tour de France 2026", () => {
       const parsed = parseGpxTrack(xml);
       const sourceDistances = computeGpxCumulativeDistances(parsed);
       const sourceQuality = analyzeGpxGeometryQuality(sourceDistances, { jumpThresholdMeters: CORPUS_JUMP_THRESHOLD_METERS });
-      const first = removeConsecutiveExactGpxDuplicates(parsed);
-      const second = removeConsecutiveExactGpxDuplicates(parsed);
+      const first = removeConsecutiveSameHorizontalGpxPoints(parsed);
+      const second = removeConsecutiveSameHorizontalGpxPoints(parsed);
       const normalizedDistances = computeGpxCumulativeDistances(first.track);
       const normalizedQuality = analyzeGpxGeometryQuality(normalizedDistances, { jumpThresholdMeters: CORPUS_JUMP_THRESHOLD_METERS });
 
@@ -144,7 +145,14 @@ describe("corpus GPX du Tour de France 2026", () => {
         const sourcePoint = parsed.points[sourceIndex];
         if (removed.has(sourceIndex)) {
           const previous = parsed.points[previousRetainedSourceIndex];
-          expect(sourcePoint).toEqual(previous);
+          expect(sourcePoint?.latitudeDegrees).toBe(previous?.latitudeDegrees);
+          expect(sourcePoint?.longitudeDegrees).toBe(previous?.longitudeDegrees);
+          if (first.report.removedExactDuplicateSourcePointIndices.includes(sourceIndex)) {
+            expect(sourcePoint?.altitudeMeters).toBe(previous?.altitudeMeters);
+          } else {
+            expect(first.report.removedDifferentAltitudeSourcePointIndices).toContain(sourceIndex);
+            expect(sourcePoint?.altitudeMeters).not.toBe(previous?.altitudeMeters);
+          }
         } else {
           expect(first.track.points[normalizedIndex]).toEqual(sourcePoint);
           previousRetainedSourceIndex = sourceIndex;
@@ -152,12 +160,24 @@ describe("corpus GPX du Tour de France 2026", () => {
         }
       }
       expect(normalizedIndex).toBe(first.track.points.length);
+      if (fileName === "tour-de-france-2026-etape-03-granollers-les-angles.gpx") {
+        expect(first.report.removedDifferentAltitudeSourcePointIndices).toEqual([1864]);
+        expect(parsed.points[1863]).toEqual({
+          latitudeDegrees: 41.87328, longitudeDegrees: 2.28579, altitudeMeters: 621.5,
+        });
+        expect(parsed.points[1864]).toEqual({
+          latitudeDegrees: 41.87328, longitudeDegrees: 2.28579, altitudeMeters: 619,
+        });
+        expect(first.track.points[1861]).toEqual(parsed.points[1863]);
+        expect(first.track.points[1862]).toEqual(parsed.points[1865]);
+      }
       expect(readFileSync(url, "utf8")).toBe(xml);
 
       sourcePointCount += parsed.points.length;
       retainedPointCount += first.track.points.length;
       removedPointCount += first.report.removedPointCount;
-      exactDuplicateCount += normalizedQuality.exactDuplicateSegments.length;
+      removedExactDuplicateCount += first.report.removedExactDuplicatePointCount;
+      removedDifferentAltitudeCount += first.report.removedDifferentAltitudePointCount;
       zeroHorizontalCount += normalizedQuality.zeroHorizontalSegments.length;
       jumpCount += normalizedQuality.jumpSegments.length;
       if (sourceQuality.longestSegment.segmentDistanceMeters > sourceLongest.distance) {
@@ -179,16 +199,13 @@ describe("corpus GPX du Tour de France 2026", () => {
     }
 
     expect({ sourcePointCount, removedPointCount, retainedPointCount }).toEqual({
-      sourcePointCount: 160_626, removedPointCount: 770, retainedPointCount: 159_856,
+      sourcePointCount: 160_626, removedPointCount: 771, retainedPointCount: 159_855,
     });
-    expect(exactDuplicateCount).toBe(0);
-    expect(zeroHorizontalCount).toBe(1);
+    expect(removedExactDuplicateCount).toBe(770);
+    expect(removedDifferentAltitudeCount).toBe(1);
+    expect(zeroHorizontalCount).toBe(0);
     expect(jumpCount).toBe(82);
     expect(normalizedLongest).toEqual(sourceLongest);
-    expect(remainingZeroSegments).toEqual([{
-      fileName: "tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      start: 1861, end: 1862, latitude: 41.87328, longitude: 2.28579,
-      startAltitude: 621.5, endAltitude: 619, distance: 0,
-    }]);
+    expect(remainingZeroSegments).toEqual([]);
   }, 15_000);
 });
