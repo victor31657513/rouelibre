@@ -86,22 +86,8 @@ Documents de référence :
 
 La documentation ne présente jamais comme existante une fonctionnalité seulement prévue.
 
-## Contenu obligatoire d'une Pull Request
+## Contenu d'une Pull Request
 
-La description d'une PR fait partie du livrable et n'est pas une formalité secondaire. Toute PR utilise exactement la structure et l'ordre de `.github/pull_request_template.md`. Toutes les sections sont présentes et apportent une réponse concrète ; leur contenu couvre les éléments obligatoires suivants :
+La description d'une PR explique son objectif et son périmètre, présente les tests réellement exécutés et signale les limites importantes. Sa structure exacte n'est pas bloquante. Le modèle `.github/pull_request_template.md` reste une aide pour les descriptions rédigées manuellement, et les descriptions automatiques structurées en `Motivation` / `Description` / `Testing` sont acceptées.
 
-- l'objectif ;
-- l'état initial vérifié ;
-- le périmètre ;
-- les éléments hors périmètre ;
-- les fichiers modifiés ;
-- les choix et hypothèses ;
-- les tests exécutés ;
-- les résultats observables ;
-- la documentation mise à jour ;
-- les risques et limites ;
-- l'impact sur les performances.
-
-La description est construite à partir de l'état initial vérifié et du diff réel. Les tests annoncés ont réellement été exécutés, les résultats observables sont précis et vérifiables, et le périmètre reste distinct du hors périmètre. Les risques, les limites et l'impact sur les performances sont explicités même lorsqu'ils sont négligeables ou sans objet.
-
-Après la création de la PR, Codex relit sa description puis la compare une dernière fois aux fichiers réellement modifiés avant de déclarer la tâche terminée. Codex ne fusionne pas une PR avant la validation explicite de ChatGPT. Les règles détaillées et la configuration du check requis sont documentées dans `docs/PULL_REQUESTS.md`.
+ChatGPT compare la description au diff réel lors de l'audit. Codex ne fusionne pas une PR avant la validation explicite de ChatGPT. Les recommandations détaillées sont documentées dans `docs/PULL_REQUESTS.md`.
