@@ -18,6 +18,23 @@ function assertReadableDistance(distanceMeters: number): void {
   }
 }
 
+/** Résout l'intervalle semi-ouvert actif, en prolongeant le dernier intervalle. */
+function getIntervalStartIndexAtDistance(
+  samples: readonly Readonly<PrecompiledCourseSample>[],
+  distanceMeters: number,
+): number {
+  let low = 0;
+  let high = samples.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const sample = samples[middle];
+    if (sample === undefined) throw new RangeError("precompiled course sample is missing");
+    if (sample.distanceMeters <= distanceMeters) low = middle + 1;
+    else high = middle - 1;
+  }
+  return Math.min(high, samples.length - 2);
+}
+
 /** Valide puis copie et gèle une suite d'échantillons longitudinaux. */
 export function createPrecompiledCourse(
   samples: readonly PrecompiledCourseSample[],
@@ -71,23 +88,30 @@ export function getPrecompiledCourseAltitudeAtDistance(
   if (finalSample === undefined) throw new RangeError("precompiled course sample is missing");
   if (distanceMeters >= course.totalLengthMeters) return finalSample.altitudeMeters;
 
-  let low = 0;
-  let high = samples.length - 1;
-  while (low <= high) {
-    const middle = Math.floor((low + high) / 2);
-    const sample = samples[middle];
-    if (sample === undefined) throw new RangeError("precompiled course sample is missing");
-    if (sample.distanceMeters === distanceMeters) return sample.altitudeMeters;
-    if (sample.distanceMeters < distanceMeters) low = middle + 1;
-    else high = middle - 1;
-  }
-
-  const start = samples[high];
-  const end = samples[low];
+  const startIndex = getIntervalStartIndexAtDistance(samples, distanceMeters);
+  const start = samples[startIndex];
+  const end = samples[startIndex + 1];
   if (start === undefined || end === undefined) {
     throw new RangeError("precompiled course interpolation interval is missing");
   }
   const ratio = (distanceMeters - start.distanceMeters)
     / (end.distanceMeters - start.distanceMeters);
   return start.altitudeMeters + (end.altitudeMeters - start.altitudeMeters) * ratio;
+}
+
+/** Lit la pente de l'intervalle actif comme ratio sans unité, sans modifier ni allouer. */
+export function getPrecompiledCourseRoadGradeAtDistance(
+  course: PrecompiledCourse,
+  distanceMeters: number,
+): number {
+  assertReadableDistance(distanceMeters);
+  const samples = course.samples;
+  const startIndex = getIntervalStartIndexAtDistance(samples, distanceMeters);
+  const start = samples[startIndex];
+  const end = samples[startIndex + 1];
+  if (start === undefined || end === undefined) {
+    throw new RangeError("precompiled course grade interval is missing");
+  }
+  return (end.altitudeMeters - start.altitudeMeters)
+    / (end.distanceMeters - start.distanceMeters);
 }

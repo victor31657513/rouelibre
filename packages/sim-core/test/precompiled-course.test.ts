@@ -1,6 +1,7 @@
 import {
   createPrecompiledCourse,
   getPrecompiledCourseAltitudeAtDistance,
+  getPrecompiledCourseRoadGradeAtDistance,
 } from "@rouelibre/sim-core";
 import { describe, expect, it } from "vitest";
 
@@ -81,5 +82,45 @@ describe("precompiled course", () => {
     for (const distance of [0, 12.5, 25, 37.5, 50, 100]) {
       expect(getPrecompiledCourseAltitudeAtDistance(first, distance)).toBe(getPrecompiledCourseAltitudeAtDistance(second, distance));
     }
+  });
+
+  it("derives ascending, descending, and flat grades as unitless ratios", () => {
+    const ascending = createPrecompiledCourse([{ distanceMeters: 0, altitudeMeters: 100 }, { distanceMeters: 100, altitudeMeters: 105 }]);
+    const descending = createPrecompiledCourse([{ distanceMeters: 0, altitudeMeters: 110 }, { distanceMeters: 100, altitudeMeters: 90 }]);
+    const flat = createPrecompiledCourse([{ distanceMeters: 0, altitudeMeters: 100 }, { distanceMeters: 100, altitudeMeters: 100 }]);
+    expect(getPrecompiledCourseRoadGradeAtDistance(ascending, 50)).toBe(0.05);
+    expect(getPrecompiledCourseRoadGradeAtDistance(descending, 25)).toBe(-0.2);
+    expect(getPrecompiledCourseRoadGradeAtDistance(flat, 75)).toBe(0);
+  });
+
+  it("uses actual irregular sample spacing", () => {
+    const course = createPrecompiledCourse([{ distanceMeters: 0, altitudeMeters: 100 }, { distanceMeters: 30, altitudeMeters: 101 }, { distanceMeters: 50, altitudeMeters: 103 }]);
+    expect(getPrecompiledCourseRoadGradeAtDistance(course, 40)).toBe(0.1);
+  });
+
+  it("selects semi-open intervals and extends the final valid grade", () => {
+    const course = createPrecompiledCourse([{ distanceMeters: 0, altitudeMeters: 100 }, { distanceMeters: 100, altitudeMeters: 105 }, { distanceMeters: 200, altitudeMeters: 95 }]);
+    expect(getPrecompiledCourseRoadGradeAtDistance(course, 99.999)).toBe(0.05);
+    expect(getPrecompiledCourseRoadGradeAtDistance(course, 100)).toBe(-0.1);
+    expect(getPrecompiledCourseRoadGradeAtDistance(course, 200)).toBe(-0.1);
+    expect(getPrecompiledCourseRoadGradeAtDistance(course, 500)).toBe(-0.1);
+  });
+
+  it("rejects invalid grade read distances", () => {
+    const course = createPrecompiledCourse(samples);
+    for (const distance of [-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => getPrecompiledCourseRoadGradeAtDistance(course, distance)).toThrow(RangeError);
+    }
+  });
+
+  it("reads grades deterministically without mutating the course", () => {
+    const first = createPrecompiledCourse(samples);
+    const second = createPrecompiledCourse(samples.map((sample) => ({ ...sample })));
+    const snapshot = JSON.stringify(first);
+    for (const distance of [0, 12.5, 25, 37.5, 50, 100]) {
+      expect(getPrecompiledCourseRoadGradeAtDistance(first, distance)).toBe(getPrecompiledCourseRoadGradeAtDistance(second, distance));
+    }
+    expect(JSON.stringify(first)).toBe(snapshot);
+    expect(first.samples).toEqual(samples);
   });
 });

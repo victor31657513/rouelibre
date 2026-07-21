@@ -43,6 +43,7 @@ export {
 export {
   createPrecompiledCourse,
   getPrecompiledCourseAltitudeAtDistance,
+  getPrecompiledCourseRoadGradeAtDistance,
   type PrecompiledCourse,
   type PrecompiledCourseSample,
 } from "./precompiledCourse.js";
