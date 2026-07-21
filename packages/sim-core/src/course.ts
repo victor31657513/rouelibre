@@ -36,6 +36,8 @@ export interface LongitudinalCourseProgress {
   readonly isFinished: boolean | undefined;
 }
 
+const FLAT_ROAD_GRADE = 0;
+
 function assertFiniteDistance(distanceMeters: number): void {
   if (!Number.isFinite(distanceMeters) || distanceMeters < 0) {
     throw new RangeError("distanceMeters must be a non-negative finite number");
@@ -85,6 +87,22 @@ export function createLongitudinalCourse(
   }
 
   return Object.freeze({ segments: Object.freeze(copiedSegments), totalLengthMeters });
+}
+
+/** Crée le parcours fini minimal, rectiligne et plat, depuis l'origine 0 m. */
+export function createFlatLongitudinalCourse(totalLengthMeters: number): LongitudinalCourse {
+  return createLongitudinalCourse(
+    [{ startDistanceMeters: 0, roadGrade: FLAT_ROAD_GRADE }],
+    { totalLengthMeters },
+  );
+}
+
+/** Borne une distance validée à l'arrivée d'un parcours fini. */
+export function clampLongitudinalCourseDistance(course: LongitudinalCourse, distanceMeters: number): number {
+  assertFiniteDistance(distanceMeters);
+  return course.totalLengthMeters === undefined
+    ? distanceMeters
+    : Math.min(distanceMeters, course.totalLengthMeters);
 }
 
 /** Recherche binaire sans allocation du segment actif à une distance donnée. */
