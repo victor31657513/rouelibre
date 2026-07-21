@@ -26,6 +26,8 @@ export {
 } from "./energy.js";
 
 export {
+  clampLongitudinalCourseDistance,
+  createFlatLongitudinalCourse,
   createLongitudinalCourse,
   getLongitudinalCourseProgressAtDistance,
   getLongitudinalCoursePositionAtDistance,

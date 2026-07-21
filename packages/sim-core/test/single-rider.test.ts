@@ -131,6 +131,25 @@ describe("single rider longitudinal physics", () => {
     expect(state.distanceMeters).toBeGreaterThan(0);
   });
 
+  it("integrates 100 m over ten fixed 1 s steps at a constant 10 m/s", () => {
+    const state = createSingleRiderState(0);
+    state.speedMetersPerSecond = 10;
+    const forceFreeProfile: SingleRiderProfile = {
+      ...referenceProfile,
+      cdaSquareMeters: 0,
+      rollingResistanceCoefficient: 0,
+      maxPowerWatts: 0,
+    };
+
+    for (let index = 0; index < 10; index += 1) {
+      stepSingleRider(state, forceFreeProfile, referenceEnvironment, 1);
+    }
+
+    expect(state.timeSeconds).toBe(10);
+    expect(state.speedMetersPerSecond).toBe(10);
+    expect(state.distanceMeters).toBe(100);
+  });
+
   it("caps produced power at the rider maximum", () => {
     const state = createSingleRiderState(2_000);
 

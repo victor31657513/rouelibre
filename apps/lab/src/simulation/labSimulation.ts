@@ -1,4 +1,5 @@
 import {
+  clampLongitudinalCourseDistance,
   computeSingleRiderForcesAtPower,
   createLongitudinalCourse,
   createSingleRiderEnergyState,
@@ -124,13 +125,10 @@ export function createLabSimulation(): LabSimulation {
     );
   };
   const synchronizeFinishState = (): void => {
-    const totalLengthMeters = activeCourse().totalLengthMeters;
-    if (totalLengthMeters !== undefined && physicalState.distanceMeters >= totalLengthMeters) {
-      physicalState.distanceMeters = totalLengthMeters;
-      isFinished = true;
-    } else {
-      isFinished = false;
-    }
+    const course = activeCourse();
+    const totalLengthMeters = course.totalLengthMeters;
+    physicalState.distanceMeters = clampLongitudinalCourseDistance(course, physicalState.distanceMeters);
+    isFinished = totalLengthMeters !== undefined && physicalState.distanceMeters >= totalLengthMeters;
   };
 
   synchronizeEnvironmentRoadGrade();
