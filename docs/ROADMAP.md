@@ -17,16 +17,17 @@
 - Type de point GPX brut et parseur déterministe du sous-ensemble GPX 1.1 à une trace et un segment, validé contre les 21 exports VisuGPX bruts du Tour de France 2026, sans conversion de parcours.
 - Distance horizontale cumulée déterministe des points GPX par Haversine sur une Terre sphérique, sans nettoyage, filtrage altimétrique, conversion de parcours ou intégration physique.
 - Rapport déterministe et immuable de qualité géométrique des tracés GPX distancés : doublons consécutifs exacts, segments horizontaux nuls, sauts selon un seuil diagnostique explicite et premier segment maximal, sans nettoyage ni modification de point.
+- Rapport déterministe et profondément immuable des espacements, variations d'altitude et pentes brutes du corpus GPX normalisé, avec extrema traçables et compteurs directionnels.
 
 ## Prochaine tâche unique
 
-Produire un rapport déterministe sur l’espacement horizontal des points et les pentes brutes du corpus GPX normalisé, sans filtrer, rééchantillonner ni convertir en `PrecompiledCourse`.
+Définir, à partir des extrema observés, les exigences minimales d'une future préparation altimétrique déterministe, sans encore filtrer, rééchantillonner ou convertir le corpus.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. rapport déterministe sur l’espacement horizontal et les pentes brutes du corpus normalisé, sans filtrage ni conversion ;
+1. définition des exigences minimales de préparation altimétrique à partir du diagnostic brut ;
 2. conversion ultérieure des points GPX vers le format précompilé, altitude, pente variable et virages ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;
