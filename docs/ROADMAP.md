@@ -18,17 +18,18 @@
 - Distance horizontale cumulée déterministe des points GPX par Haversine sur une Terre sphérique, sans nettoyage, filtrage altimétrique, conversion de parcours ou intégration physique.
 - Rapport déterministe et immuable de qualité géométrique des tracés GPX distancés : doublons consécutifs exacts, segments horizontaux nuls, sauts selon un seuil diagnostique explicite et premier segment maximal, sans nettoyage ni modification de point.
 - Rapport déterministe et profondément immuable des espacements, variations d'altitude et pentes brutes du corpus GPX normalisé, avec extrema traçables et compteurs directionnels.
+- Exigences de préparation altimétrique déterministe : géométrie horizontale conservée, voisinages exprimés en mètres, configuration explicite, sortie atomique et finie, traçabilité, rapport avant/après et comportement déclaré sur les intervalles longs, sans choix prématuré d'algorithme ou de seuil.
 
 ## Prochaine tâche unique
 
-Définir, à partir des extrema observés, les exigences minimales d'une future préparation altimétrique déterministe, sans encore filtrer, rééchantillonner ou convertir le corpus.
+Diagnostiquer de façon déterministe les distributions des espacements, variations d'altitude et valeurs absolues de pente brute, par étape et sur le corpus agrégé, avec percentiles et effectifs fondés sur des seuils diagnostiques explicites, sans transformer les données.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. définition des exigences minimales de préparation altimétrique à partir du diagnostic brut ;
-2. conversion ultérieure des points GPX vers le format précompilé, altitude, pente variable et virages ;
+1. diagnostic des distributions nécessaire au choix ultérieur d'une préparation altimétrique conforme à la décision 0007 ;
+2. choix puis implémentation, dans des tâches séparées, de la préparation altimétrique et de la conversion vers le format précompilé ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;
 5. équipe de 9 coureurs ;
