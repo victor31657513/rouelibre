@@ -1,0 +1,855 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Contrat de comparaison hors production; il ne sélectionne, ne recommande et n'implémente aucune stratégie de préparation.",
+  "units": {
+    "distance": "meters",
+    "altitude": "meters",
+    "altitudeCorrection": "meters",
+    "horizontalSpacing": "meters",
+    "grade": "unitless-ratio",
+    "counts": "unitless-integers"
+  },
+  "canonicalInputPipeline": [
+    "parseGpxTrack",
+    "removeConsecutiveSameHorizontalGpxPoints",
+    "computeGpxCumulativeDistances"
+  ],
+  "comparisonUnit": {
+    "fields": [
+      "candidateId",
+      "configurationId",
+      "configuration"
+    ],
+    "configurationRules": [
+      "fully-declared-before-execution",
+      "si-units",
+      "identical-for-all-inputs",
+      "no-manual-per-track-or-per-case-adjustment",
+      "no-hidden-thresholds",
+      "defensively-copied-and-deeply-immutable"
+    ],
+    "adaptiveRule": "Une adaptation intrinsèque est admise seulement si sa règle explicite et déterministe appartient à l'algorithme et ne lit aucun nom de fichier, identifiant d'étape ou cas du manifeste."
+  },
+  "neutralReference": {
+    "id": "identity",
+    "role": "measurement-harness-validation-only",
+    "candidate": false,
+    "implementationRequiredInThisArtifact": false,
+    "requirements": [
+      "exact-source-profile",
+      "zero-altitude-correction",
+      "same-distances",
+      "same-altitudes",
+      "same-point-count",
+      "same-elevation-gains-and-losses",
+      "same-grades"
+    ]
+  },
+  "corpusSelection": {
+    "canonicalTrackDirectory": "data/courses/tour-de-france/2026/raw",
+    "expectedTrackCount": 21,
+    "inputFileOrder": "lexicographic",
+    "manifestPath": "data/courses/tour-de-france/2026/altimetric-extremes.json",
+    "manifestSchemaVersion": 2,
+    "expectedCaseCount": 43,
+    "selectionMode": "all-cases",
+    "caseOrder": "manifest-order",
+    "processingRule": "Chaque trace complète est préparée avant extraction des cas; aucun cas n'est préparé comme fragment isolé."
+  },
+  "syntheticProfiles": [
+    {
+      "id": "flat",
+      "tags": [
+        "flat",
+        "ordinary",
+        "preservation"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "regular-ascent",
+      "tags": [
+        "ascending",
+        "ordinary",
+        "monotonic",
+        "preservation"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 105
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 110
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 115
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 120
+        }
+      ]
+    },
+    {
+      "id": "regular-descent",
+      "tags": [
+        "descending",
+        "ordinary",
+        "monotonic",
+        "preservation"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 120
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 115
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 110
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 105
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "summit",
+      "tags": [
+        "summit",
+        "ordinary",
+        "shape"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 105
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 110
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 105
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "valley",
+      "tags": [
+        "valley",
+        "ordinary",
+        "shape"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 110
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 105
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 105
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 110
+        }
+      ]
+    },
+    {
+      "id": "isolated-peak",
+      "tags": [
+        "isolated-peak",
+        "extreme"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 130
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "isolated-trough",
+      "tags": [
+        "isolated-trough",
+        "extreme"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 70
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "irregular-spacing-constant-grade",
+      "tags": [
+        "irregular-spacing",
+        "monotonic",
+        "preservation"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 5,
+          "altitudeMeters": 100.25
+        },
+        {
+          "distanceMeters": 20,
+          "altitudeMeters": 101
+        },
+        {
+          "distanceMeters": 80,
+          "altitudeMeters": 104
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 110
+        },
+        {
+          "distanceMeters": 500,
+          "altitudeMeters": 125
+        }
+      ]
+    },
+    {
+      "id": "long-horizontal-interval",
+      "tags": [
+        "long-interval",
+        "monotonic",
+        "policy-required"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 20,
+          "altitudeMeters": 101
+        },
+        {
+          "distanceMeters": 40,
+          "altitudeMeters": 102
+        },
+        {
+          "distanceMeters": 540,
+          "altitudeMeters": 127
+        },
+        {
+          "distanceMeters": 560,
+          "altitudeMeters": 128
+        }
+      ]
+    },
+    {
+      "id": "negative-altitude",
+      "tags": [
+        "negative-altitude",
+        "monotonic",
+        "numeric"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": -20
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": -15
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": -10
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": -5
+        }
+      ]
+    },
+    {
+      "id": "tiny-spacing-spike",
+      "tags": [
+        "tiny-spacing",
+        "isolated-peak",
+        "extreme",
+        "numeric"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 0.5,
+          "altitudeMeters": 101
+        },
+        {
+          "distanceMeters": 1,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "start-outlier",
+      "tags": [
+        "start-endpoint",
+        "isolated-peak",
+        "policy-required"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 130
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 100
+        }
+      ]
+    },
+    {
+      "id": "end-outlier",
+      "tags": [
+        "end-endpoint",
+        "isolated-peak",
+        "policy-required"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 100,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 200,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 300,
+          "altitudeMeters": 130
+        }
+      ]
+    },
+    {
+      "id": "mixed-density-summit",
+      "tags": [
+        "irregular-spacing",
+        "summit",
+        "shape"
+      ],
+      "points": [
+        {
+          "distanceMeters": 0,
+          "altitudeMeters": 100
+        },
+        {
+          "distanceMeters": 10,
+          "altitudeMeters": 101
+        },
+        {
+          "distanceMeters": 50,
+          "altitudeMeters": 106
+        },
+        {
+          "distanceMeters": 150,
+          "altitudeMeters": 111
+        },
+        {
+          "distanceMeters": 400,
+          "altitudeMeters": 100
+        }
+      ]
+    }
+  ],
+  "hardGates": [
+    {
+      "id": "input-unchanged",
+      "description": "L'entrée source reste inchangée.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "configuration-unchanged",
+      "description": "La configuration reste inchangée.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "repeatable-result",
+      "description": "Deux exécutions indépendantes produisent exactement le même résultat et le même rapport fonctionnel.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "finite-output-values",
+      "description": "Toutes les distances et altitudes produites sont finies.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "no-nan-or-infinity",
+      "description": "Aucune valeur produite ou rapportée n'est NaN ou Infinity.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "zero-first-distance",
+      "description": "La première distance produite est exactement zéro.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "strictly-increasing-distances",
+      "description": "Les distances produites sont strictement croissantes.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "exact-source-final-distance",
+      "description": "La dernière distance produite égale exactement la longueur horizontale source.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "exact-horizontal-length-preservation",
+      "description": "La longueur horizontale totale est exactement conservée.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "source-coordinates-unchanged",
+      "description": "Les latitudes et longitudes sources ne sont pas modifiées.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "complete-output-traceability",
+      "description": "Chaque point ou intervalle produit est entièrement relié aux points ou intervalles sources qui y contribuent.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "explicit-altitude-change-list",
+      "description": "Le rapport liste explicitement les points ou intervalles dont l'altitude a changé.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "declared-endpoint-policy",
+      "description": "La politique des deux extrémités figure dans la configuration et le rapport.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "declared-long-interval-policy",
+      "description": "La politique des intervalles longs figure dans la configuration et le rapport.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "complete-configuration-reported",
+      "description": "La configuration complète figure dans le rapport.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "atomic-failure",
+      "description": "Une erreur ne produit ni résultat ni rapport partiel.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "deeply-immutable-result-and-report",
+      "description": "Le résultat et le rapport sont profondément immuables et issus de copies défensives.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "no-random-clock-or-mutable-global-state",
+      "description": "Le calcul fonctionnel n'utilise ni Math.random(), ni horloge, ni état global mutable.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "no-file-or-case-specific-adaptation",
+      "description": "L'algorithme ne lit ni nom de fichier, ni identifiant d'étape, ni identifiant ou présence d'un cas du manifeste.",
+      "failureEffect": "candidate-run-invalid"
+    },
+    {
+      "id": "coherent-altitude-profile",
+      "description": "Aucune limitation directe de rawGrade n'est admise sans construction d'un profil d'altitude cohérent.",
+      "failureEffect": "candidate-run-invalid"
+    }
+  ],
+  "measurementConventions": {
+    "preparedAltitudeAtSourceDistance": {
+      "profileModel": "piecewise-linear-between-successive-prepared-points",
+      "exactDistanceRule": "Si la distance source correspond exactement à une distance préparée, utiliser son altitude.",
+      "interpolationFormula": "t = (d - d0) / (d1 - d0); preparedAltitudeAtSourceDistance = altitude0 + t * (altitude1 - altitude0)",
+      "extrapolationAllowed": false,
+      "role": "measurement-only-not-preparation"
+    },
+    "intervals": {
+      "deltaAltitudeFormula": "endAltitude - startAltitude",
+      "gradeFormula": "deltaAltitudeMeters / horizontalSpacingMeters"
+    },
+    "percentiles": {
+      "method": "empirical-nearest-rank",
+      "formula": "p = 0 selects index 0; otherwise index = ceil((p / 100) * N) - 1 after ascending sort",
+      "interpolation": false,
+      "tieBreak": "first-observation-in-document-order"
+    },
+    "corrections": {
+      "formula": "preparedAltitudeAtSourceDistance - sourceAltitudeMeters",
+      "changedComparison": "exactly-not-equal-to-zero",
+      "meanAbsoluteFormula": "sum(abs(correctionMeters)) / sourcePointCount",
+      "rootMeanSquareFormula": "sqrt(sum(correctionMeters * correctionMeters) / sourcePointCount)",
+      "maximumTieBreak": "first-source-point-index",
+      "validationThreshold": false
+    }
+  },
+  "metrics": [
+    {
+      "id": "sourcePointCount",
+      "definition": "Nombre de points du profil source."
+    },
+    {
+      "id": "preparedPointCount",
+      "definition": "Nombre de points du profil préparé."
+    },
+    {
+      "id": "sourceMinimumAltitudeMeters",
+      "definition": "Altitude source minimale."
+    },
+    {
+      "id": "preparedMinimumAltitudeMeters",
+      "definition": "Altitude préparée minimale."
+    },
+    {
+      "id": "sourceMaximumAltitudeMeters",
+      "definition": "Altitude source maximale."
+    },
+    {
+      "id": "preparedMaximumAltitudeMeters",
+      "definition": "Altitude préparée maximale."
+    },
+    {
+      "id": "sourcePositiveElevationGainMeters",
+      "definition": "Somme source des max(deltaAltitude, 0)."
+    },
+    {
+      "id": "preparedPositiveElevationGainMeters",
+      "definition": "Somme préparée des max(deltaAltitude, 0)."
+    },
+    {
+      "id": "positiveElevationGainDifferenceMeters",
+      "definition": "Valeur préparée moins valeur source."
+    },
+    {
+      "id": "sourceNegativeElevationLossMeters",
+      "definition": "Somme source des max(-deltaAltitude, 0)."
+    },
+    {
+      "id": "preparedNegativeElevationLossMeters",
+      "definition": "Somme préparée des max(-deltaAltitude, 0)."
+    },
+    {
+      "id": "negativeElevationLossDifferenceMeters",
+      "definition": "Valeur préparée moins valeur source."
+    },
+    {
+      "id": "sourceMinimumGrade",
+      "definition": "Pente source minimale."
+    },
+    {
+      "id": "preparedMinimumGrade",
+      "definition": "Pente préparée minimale."
+    },
+    {
+      "id": "sourceMaximumGrade",
+      "definition": "Pente source maximale."
+    },
+    {
+      "id": "preparedMaximumGrade",
+      "definition": "Pente préparée maximale."
+    },
+    {
+      "id": "sourceMaximumAbsoluteGrade",
+      "definition": "Valeur absolue maximale des pentes sources."
+    },
+    {
+      "id": "preparedMaximumAbsoluteGrade",
+      "definition": "Valeur absolue maximale des pentes préparées."
+    },
+    {
+      "id": "sourceP95AbsoluteGrade",
+      "definition": "Percentile 95 des valeurs absolues de pente source."
+    },
+    {
+      "id": "preparedP95AbsoluteGrade",
+      "definition": "Percentile 95 des valeurs absolues de pente préparée."
+    },
+    {
+      "id": "sourceP99AbsoluteGrade",
+      "definition": "Percentile 99 des valeurs absolues de pente source."
+    },
+    {
+      "id": "preparedP99AbsoluteGrade",
+      "definition": "Percentile 99 des valeurs absolues de pente préparée."
+    },
+    {
+      "id": "sourcePointChangedCountExact",
+      "definition": "Nombre de corrections aux points sources exactement différentes de zéro."
+    },
+    {
+      "id": "meanAbsoluteCorrectionMeters",
+      "definition": "Moyenne des valeurs absolues des corrections aux points sources."
+    },
+    {
+      "id": "rootMeanSquareCorrectionMeters",
+      "definition": "Racine de la moyenne des carrés des corrections aux points sources."
+    },
+    {
+      "id": "maximumAbsoluteCorrectionMeters",
+      "definition": "Valeur absolue maximale des corrections aux points sources."
+    },
+    {
+      "id": "maximumAbsoluteCorrectionSourcePointIndex",
+      "definition": "Premier indice source portant la correction absolue maximale."
+    },
+    {
+      "id": "startAltitudeCorrectionMeters",
+      "definition": "Correction au premier point source."
+    },
+    {
+      "id": "endAltitudeCorrectionMeters",
+      "definition": "Correction au dernier point source."
+    },
+    {
+      "id": "changedSourcePointIndices",
+      "definition": "Indices sources, dans l'ordre croissant, dont la correction est exactement différente de zéro."
+    },
+    {
+      "id": "sourceIntervalsContributingToPreparedPoints",
+      "definition": "Pour chaque point préparé, liste ordonnée des intervalles sources qui contribuent à sa valeur."
+    },
+    {
+      "id": "endpointPolicy",
+      "definition": "Politique déclarée et effectivement appliquée aux deux extrémités."
+    },
+    {
+      "id": "longIntervalPolicy",
+      "definition": "Politique déclarée et effectivement appliquée aux intervalles longs."
+    },
+    {
+      "id": "maximumSourceContributionCount",
+      "definition": "Nombre maximal de points ou intervalles sources contribuant à un point préparé."
+    }
+  ],
+  "manifestCaseFields": [
+    "caseId",
+    "sourceFile",
+    "selectionReasons",
+    "direction",
+    "horizontalSpacingAbove250Meters",
+    "sourceStartAltitudeMeters",
+    "sourceEndAltitudeMeters",
+    "preparedStartAltitudeMeters",
+    "preparedEndAltitudeMeters",
+    "sourceGrade",
+    "preparedGrade",
+    "startCorrectionMeters",
+    "endCorrectionMeters"
+  ],
+  "interpretationPolicy": {
+    "globalScoreAllowed": false,
+    "winnerSelectedByProtocol": false,
+    "acceptanceThresholdsDefined": false,
+    "requiredPresentationOrder": [
+      "hard-gate-failures",
+      "metrics-by-synthetic-profile",
+      "global-metrics-by-track",
+      "manifest-case-results",
+      "observed-tradeoffs",
+      "separate-performance-results"
+    ],
+    "finalChoiceRequiresDedicatedDecision": true
+  },
+  "executionPolicy": {
+    "nodeMajorVersion": 24,
+    "sortedInputFiles": true,
+    "repeatabilityRuns": 2,
+    "configurationFrozen": true,
+    "fullTracksBeforeCaseExtraction": true,
+    "randomnessAllowed": false,
+    "clockAllowedInFunctionalResults": false,
+    "functionalResultForbiddenFields": [
+      "date",
+      "duration",
+      "absolute-path",
+      "machine-identifier",
+      "environment-dependent-data"
+    ]
+  },
+  "performance": {
+    "informativeOnly": true,
+    "implementedByThisArtifact": false,
+    "afterFunctionalValidation": true,
+    "input": "21-full-tracks",
+    "separateProcessAndResults": true,
+    "warmupRuns": 5,
+    "measuredRuns": 20,
+    "reportedStatistics": [
+      "medianMilliseconds",
+      "p95Milliseconds"
+    ],
+    "environmentFields": [
+      "nodeVersion",
+      "pnpmVersion",
+      "operatingSystem",
+      "processor"
+    ],
+    "contributesToGlobalScore": false,
+    "acceptanceThreshold": false
+  },
+  "resultOrdering": [
+    "candidateId",
+    "configurationId",
+    "syntheticProfileProtocolOrder",
+    "gpxFileLexicographicOrder",
+    "manifestCaseOrder",
+    "metricProtocolOrder"
+  ],
+  "reportContract": {
+    "fieldOrder": [
+      "protocolSchemaVersion",
+      "candidateId",
+      "candidateVersion",
+      "configurationId",
+      "configuration",
+      "inputSet",
+      "hardGateResults",
+      "syntheticProfileResults",
+      "corpusTrackResults",
+      "corpusCaseResults",
+      "performance",
+      "environment"
+    ],
+    "functionalSectionFields": [
+      "protocolSchemaVersion",
+      "candidateId",
+      "candidateVersion",
+      "configurationId",
+      "configuration",
+      "inputSet",
+      "hardGateResults",
+      "syntheticProfileResults",
+      "corpusTrackResults",
+      "corpusCaseResults"
+    ],
+    "performanceSection": "performance",
+    "environmentSection": "environment",
+    "functionalAndPerformanceSeparated": true,
+    "completeConfigurationRequired": true,
+    "caseFields": "manifestCaseFields",
+    "metricOrder": "metrics"
+  },
+  "environment": {
+    "separateFromFunctionalResults": true,
+    "requiredFields": [
+      "nodeVersion",
+      "pnpmVersion",
+      "operatingSystem",
+      "processor"
+    ],
+    "informationalOnly": true
+  }
+}

@@ -21,23 +21,26 @@
 - Diagnostic déterministe et profondément immuable des distributions brutes, sur une étape ou plusieurs traces ordonnées : percentiles au rang supérieur, seuils diagnostiques explicites et observations source traçables, sans transformation des données.
 - Corpus dérivé, reproductible et documenté de 43 segments uniques couvrant les seuils diagnostiques de variation absolue et de pente brute ainsi que leurs observations aux percentiles 99, 99,9 et 100, avec correspondance entre indices normalisés et bruts et voisinages source.
 - Exigences de préparation altimétrique déterministe : géométrie horizontale conservée, voisinages exprimés en mètres, configuration explicite, sortie atomique et finie, traçabilité, rapport avant/après et comportement déclaré sur les intervalles longs, sans choix prématuré d'algorithme ou de seuil.
+- Protocole reproductible de comparaison altimétrique : 14 profils synthétiques, 21 traces complètes, 43 cas extraits après traitement complet, invariants éliminatoires, métriques et rapport ordonnés, sans score global ni candidat.
 
 ## Prochaine tâche unique
 
-Définir un protocole reproductible de comparaison de stratégies candidates de préparation altimétrique sur les profils synthétiques prévus par la décision 0007 et sur le manifeste des cas corpus, sans sélectionner ni intégrer encore de stratégie à l’API publique ou à la simulation.
+Implémenter un banc d’essai neutre et déterministe appliquant le protocole de comparaison, avec uniquement la référence identité, sans implémenter encore de stratégie candidate de préparation altimétrique.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. définition d’un protocole reproductible de comparaison des stratégies candidates de préparation altimétrique ;
-2. comparaison des stratégies candidates selon ce protocole ;
-3. choix documenté d’une stratégie ;
-4. implémentation de cette stratégie ;
-5. conversion GPX vers le format précompilé ;
-6. pilotage autonome individuel ;
-7. petit groupe et aspiration ;
-8. équipe de 9 coureurs ;
-9. plusieurs équipes ;
-10. peloton complet d'environ 184 coureurs ;
-11. psychologie, tactique et classements.
+1. définition du protocole reproductible de comparaison des préparations altimétriques — réalisée ;
+2. banc d'essai neutre et déterministe avec la seule référence identité ;
+3. ajout de stratégies candidates dans des tâches dédiées ;
+4. exécution et documentation de la comparaison ;
+5. choix documenté d'une stratégie et de ses paramètres ;
+6. implémentation de production de la préparation retenue ;
+7. conversion explicite du résultat vers `PrecompiledCourse` ;
+8. pilotage autonome individuel ;
+9. petit groupe et aspiration ;
+10. équipe de 9 coureurs ;
+11. plusieurs équipes ;
+12. peloton complet d'environ 184 coureurs ;
+13. psychologie, tactique et classements.
