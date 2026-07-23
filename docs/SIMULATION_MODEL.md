@@ -241,6 +241,17 @@ pente. En cas d'égalité exacte d'un extremum, la première occurrence document
 est conservée. Ces pentes entre deux points source servent au diagnostic du corpus ;
 elles ne constituent pas un profil directement adapté au moteur longitudinal.
 
+`analyzeGpxRawDistributions` applique ces mêmes équations à une liste ordonnée
+non vide de traces. Il diagnostique aussi `abs(variation_altitude)` et
+`abs(pente_brute)`. Pour `N` observations triées, le percentile `0` sélectionne
+l'indice `0` ; tout autre percentile `p` sélectionne l'indice
+`ceil((p / 100) × N) - 1`. Il n'existe aucune interpolation. Les égalités sont
+départagées explicitement par index de trace puis index du point de départ.
+Chaque seuil compte exclusivement les valeurs strictement supérieures et
+localise la première dans l'ordre documentaire. Les percentiles, seuils et
+traces sont entièrement validés avant publication du rapport ; les options sont
+copiées et la sortie est profondément immuable.
+
 ## Contrat de préparation altimétrique future
 
 La [décision 0007](decisions/0007-exigences-preparation-altimetrique.md) impose à
@@ -259,10 +270,10 @@ intervalles source et accompagnée d'un rapport avant/après. Une éventuelle li
 de pente devra reconstruire un profil d'altitude cohérent avant d'en dériver les
 pentes ; un clamp direct de `rawGrade` ne satisfait pas ce contrat.
 
-Les extrema et la moyenne actuels ne suffisent pas à fixer résolution, fenêtre,
-méthode ou seuil. Le diagnostic suivant porte donc sur les distributions par
-étape et agrégées, sans transformation de données. Aucun algorithme de préparation
-ou de conversion vers `PrecompiledCourse` n'est implémenté à ce stade.
+Les distributions par étape et agrégées décrivent le corpus sans fixer une
+résolution, une fenêtre, une méthode ou un seuil de préparation. Leurs repères
+restent diagnostiques. Aucun algorithme de préparation ou de conversion vers
+`PrecompiledCourse` n'est implémenté à ce stade.
 
 ## Équations physiques longitudinales
 

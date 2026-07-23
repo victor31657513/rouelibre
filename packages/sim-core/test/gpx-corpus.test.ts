@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  analyzeGpxRawDistributions,
   analyzeGpxGeometryQuality,
   analyzeGpxRawProfile,
   computeGpxCumulativeDistances,
@@ -12,6 +13,12 @@ import {
 } from "../src/index.js";
 
 const CORPUS_JUMP_THRESHOLD_METERS = 250;
+const DISTRIBUTION_OPTIONS = Object.freeze({
+  percentiles: Object.freeze([0, 0.1, 1, 5, 25, 50, 75, 95, 99, 99.9, 100]),
+  horizontalSpacingThresholdsMeters: Object.freeze([25, 50, 100, 250, 500]),
+  absoluteAltitudeDeltaThresholdsMeters: Object.freeze([1, 2, 5, 10, 20, 50]),
+  absoluteRawGradeThresholds: Object.freeze([0.05, 0.10, 0.20, 0.50, 1.00]),
+});
 
 const corpusDirectory = fileURLToPath(
   new URL("../../../data/courses/tour-de-france/2026/raw/", import.meta.url),
@@ -311,4 +318,63 @@ describe("corpus GPX du Tour de France 2026", () => {
         .toBe(xml);
     }
   }, 20_000);
+
+  it("diagnostique les distributions par étape et sur le corpus agrégé", () => {
+    const rawSources = corpusFiles.map((fileName) => readFileSync(
+      new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8",
+    ));
+    const tracks = rawSources.map((xml) => computeGpxCumulativeDistances(
+      removeConsecutiveSameHorizontalGpxPoints(parseGpxTrack(xml)).track,
+    ));
+    const stageReports = tracks.map((track) => analyzeGpxRawDistributions([track], DISTRIBUTION_OPTIONS));
+    const aggregate = analyzeGpxRawDistributions(tracks, DISTRIBUTION_OPTIONS);
+
+    expect(stageReports).toEqual(tracks.map((track) => analyzeGpxRawDistributions([track], DISTRIBUTION_OPTIONS)));
+    expect(aggregate).toEqual(analyzeGpxRawDistributions(tracks, DISTRIBUTION_OPTIONS));
+    expect(aggregate).toMatchObject({ trackCount: 21, pointCount: 159_855, segmentCount: 159_834 });
+    const distributions = [aggregate.horizontalSpacingMeters, aggregate.altitudeDeltaMeters,
+      aggregate.absoluteAltitudeDeltaMeters, aggregate.absoluteRawGrade];
+    for (const distribution of distributions) {
+      expect(distribution.percentiles.map(({ percentile }) => percentile)).toEqual(DISTRIBUTION_OPTIONS.percentiles);
+      for (const observation of distribution.percentiles) {
+        for (const value of [observation.percentile, observation.value, observation.horizontalSpacingMeters,
+          observation.altitudeDeltaMeters, observation.rawGrade]) expect(Number.isFinite(value)).toBe(true);
+      }
+      for (const threshold of distribution.thresholds) {
+        expect(Number.isFinite(threshold.threshold)).toBe(true);
+        expect(Number.isFinite(threshold.proportion)).toBe(true);
+        expect(threshold.segmentCountAbove).toBeGreaterThanOrEqual(0);
+      }
+    }
+    for (const key of ["horizontalSpacingMeters", "absoluteAltitudeDeltaMeters", "absoluteRawGrade"] as const) {
+      expect(aggregate[key].thresholds.map(({ segmentCountAbove }) => segmentCountAbove)).toEqual(
+        aggregate[key].thresholds.map((_, thresholdIndex) => stageReports.reduce(
+          (sum, report) => sum + (report[key].thresholds[thresholdIndex]?.segmentCountAbove ?? 0), 0,
+        )),
+      );
+    }
+    expect(aggregate.horizontalSpacingMeters.percentiles.map(({ value }) => value)).toEqual([
+      0.7313561113696778, 0.7839677878000657, 1.8607079709836398, 3.701651918483549,
+      8.949478733782598, 15.138322053371667, 25.957515128786326, 59.430400331664714,
+      108.52812897859258, 216.09650285716634, 747.3787552887879,
+    ]);
+    expect(aggregate.altitudeDeltaMeters.percentiles.map(({ value }) => value)).toEqual([
+      -93.40000000000009, -7.2999999999999545, -3.599999999999966, -1.7999999999999545,
+      -0.40000000000009095, 0, 0.5, 2, 3.8999999999999773, 7.5, 107.10000000000002,
+    ]);
+    expect(aggregate.absoluteAltitudeDeltaMeters.thresholds.map(({ segmentCountAbove }) => segmentCountAbove))
+      .toEqual([39_602, 13_617, 1_268, 132, 29, 9]);
+    expect(aggregate.absoluteRawGrade.thresholds.map(({ segmentCountAbove }) => segmentCountAbove))
+      .toEqual([55_112, 18_181, 3_170, 219, 12]);
+
+    const directionCounts = tracks.map(analyzeGpxRawProfile).reduce((counts, report) => ({
+      ascending: counts.ascending + report.ascendingSegmentCount,
+      descending: counts.descending + report.descendingSegmentCount,
+      constant: counts.constant + report.constantAltitudeSegmentCount,
+    }), { ascending: 0, descending: 0, constant: 0 });
+    expect(directionCounts).toEqual({ ascending: 73_625, descending: 66_626, constant: 19_583 });
+    corpusFiles.forEach((fileName, index) => expect(readFileSync(
+      new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8",
+    )).toBe(rawSources[index]));
+  }, 30_000);
 });
