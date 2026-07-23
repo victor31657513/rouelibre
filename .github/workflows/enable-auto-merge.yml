@@ -1,0 +1,66 @@
+name: Enable Pull Request Auto-Merge
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+      - synchronize
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-auto-merge:
+    if: >
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+
+    steps:
+      - name: Enable auto-merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          read -r state auto_merge_enabled < <(
+            gh pr view "$PR_URL" \
+              --json state,autoMergeRequest \
+              --jq '[.state, (.autoMergeRequest != null)] | @tsv'
+          )
+
+          if [[ "$state" == "MERGED" ]]; then
+            echo "Pull Request is already merged."
+            exit 0
+          fi
+
+          if [[ "$auto_merge_enabled" == "true" ]]; then
+            echo "Auto-merge is already enabled."
+            exit 0
+          fi
+
+          gh pr merge "$PR_URL" --auto --merge
+
+          read -r state auto_merge_enabled < <(
+            gh pr view "$PR_URL" \
+              --json state,autoMergeRequest \
+              --jq '[.state, (.autoMergeRequest != null)] | @tsv'
+          )
+
+          if [[ "$state" == "MERGED" || "$auto_merge_enabled" == "true" ]]; then
+            echo "Auto-merge is enabled or the Pull Request is merged."
+            exit 0
+          fi
+
+          echo "Error: Pull Request remains open without auto-merge enabled." >&2
+          exit 1
