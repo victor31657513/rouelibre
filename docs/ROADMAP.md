@@ -19,21 +19,25 @@
 - Rapport déterministe et immuable de qualité géométrique des tracés GPX distancés : doublons consécutifs exacts, segments horizontaux nuls, sauts selon un seuil diagnostique explicite et premier segment maximal, sans nettoyage ni modification de point.
 - Rapport déterministe et profondément immuable des espacements, variations d'altitude et pentes brutes du corpus GPX normalisé, avec extrema traçables et compteurs directionnels.
 - Diagnostic déterministe et profondément immuable des distributions brutes, sur une étape ou plusieurs traces ordonnées : percentiles au rang supérieur, seuils diagnostiques explicites et observations source traçables, sans transformation des données.
-- Corpus dérivé, reproductible et documenté des 20 segments dépassant les derniers seuils diagnostiques de variation absolue ou de pente brute, avec correspondance entre indices normalisés et bruts et voisinages source.
+- Corpus dérivé, reproductible et documenté de 43 segments uniques couvrant les seuils diagnostiques de variation absolue et de pente brute ainsi que leurs observations aux percentiles 99, 99,9 et 100, avec correspondance entre indices normalisés et bruts et voisinages source.
 - Exigences de préparation altimétrique déterministe : géométrie horizontale conservée, voisinages exprimés en mètres, configuration explicite, sortie atomique et finie, traçabilité, rapport avant/après et comportement déclaré sur les intervalles longs, sans choix prématuré d'algorithme ou de seuil.
 
 ## Prochaine tâche unique
 
-Choisir une stratégie minimale de préparation altimétrique à comparer sur le corpus traçable et les profils synthétiques, sans implémenter dans la même tâche la conversion vers le format précompilé.
+Définir un protocole reproductible de comparaison de stratégies candidates de préparation altimétrique sur les profils synthétiques prévus par la décision 0007 et sur le manifeste des cas corpus, sans sélectionner ni intégrer encore de stratégie à l’API publique ou à la simulation.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. choix puis implémentation, dans des tâches séparées, de la préparation altimétrique et de la conversion vers le format précompilé ;
-2. pilotage autonome individuel ;
-3. petit groupe et aspiration ;
-4. équipe de 9 coureurs ;
-5. plusieurs équipes ;
-6. peloton complet d'environ 184 coureurs ;
-7. psychologie, tactique et classements.
+1. définition d’un protocole reproductible de comparaison des stratégies candidates de préparation altimétrique ;
+2. comparaison des stratégies candidates selon ce protocole ;
+3. choix documenté d’une stratégie ;
+4. implémentation de cette stratégie ;
+5. conversion GPX vers le format précompilé ;
+6. pilotage autonome individuel ;
+7. petit groupe et aspiration ;
+8. équipe de 9 coureurs ;
+9. plusieurs équipes ;
+10. peloton complet d'environ 184 coureurs ;
+11. psychologie, tactique et classements.
