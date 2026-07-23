@@ -94,9 +94,9 @@ ChatGPT compare la description au diff réel lors de l'audit post-fusion. Les re
 
 ## Fusion et examen des Pull Requests
 
-Les Pull Requests préparées par Codex sont fusionnées automatiquement lorsque toutes les vérifications obligatoires de la CI ont réussi.
+Le workflow `Enable Pull Request Auto-Merge` active automatiquement l'auto-merge avec la méthode `merge commit` pour les Pull Requests éligibles ciblant `main`. Les protections de branche restent responsables de la fusion effective après la réussite de toutes les vérifications obligatoires de la CI.
 
-Codex active l'auto-merge après avoir terminé l'implémentation, exécuté les tests prévus, mis à jour la documentation concernée, vérifié le périmètre de la tâche et renseigné la description de la Pull Request.
+Après avoir terminé l'implémentation, exécuté les tests prévus, mis à jour la documentation concernée, vérifié le périmètre de la tâche et renseigné la description de la Pull Request, Codex vérifie que ce workflow a réussi. Si le workflow échoue, Codex signale explicitement l'échec et ne fusionne jamais manuellement la Pull Request.
 
 Une Pull Request ne doit pas être fusionnée automatiquement dans les cas suivants :
 
@@ -113,6 +113,6 @@ ChatGPT effectue un audit post-fusion de chaque Pull Request. Le verdict prend l
 - **NOUVELLE PR** : le besoin identifié relève d'un autre périmètre ;
 - **BLOQUÉE** : un problème empêche de poursuivre le développement.
 
-La fusion automatique n'autorise pas Codex à commencer spontanément la tâche suivante. La phase ou la tâche suivante ne commence qu'après le verdict **VALIDÉE** de ChatGPT.
+La fusion automatique n'autorise pas Codex à commencer spontanément la tâche suivante. Après la fusion, Codex attend l'audit post-fusion et le verdict **VALIDÉE** de ChatGPT avant de commencer la phase ou la tâche suivante.
 
 Lorsqu'une Pull Request fusionnée nécessite une correction, la branche `main` n'est pas réécrite et la Pull Request initiale n'est pas rouverte. Codex prépare une nouvelle Pull Request corrective minimale, testable et documentée.
