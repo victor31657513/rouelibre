@@ -55,6 +55,33 @@ Toutes les étapes présentent au moins une des trois observations. Le segment m
 | `tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx` | 9 968 | 41 | 41 | 3 | 463,8151410822975 |
 | `tour-de-france-2026-etape-21-thoiry-paris-champs-elysees.gpx` | 5 156 | 86 | 86 | 3 | 436,6878872924499 |
 
+## Espacements et pentes brutes du corpus normalisé
+
+La chaîne `parseGpxTrack` → `removeConsecutiveSameHorizontalGpxPoints` →
+`computeGpxCumulativeDistances` → `analyzeGpxRawProfile` produit, sans arrondi
+interne, les résultats agrégés suivants sur les 21 étapes :
+
+- points : `159 855` ;
+- segments : `159 834` ;
+- longueur horizontale cumulée des étapes : `3 425 268,0713700126 m` ;
+- segments montants : `73 625` ;
+- segments descendants : `66 626` ;
+- segments à altitude constante : `19 583` ;
+- espacement horizontal moyen agrégé : `21,43015923627021 m`.
+
+| Extremum | Fichier et indices normalisés | Espacement horizontal | Variation d'altitude | Pente brute |
+| --- | --- | ---: | ---: | ---: |
+| Espacement minimal | `tour-de-france-2026-etape-21-thoiry-paris-champs-elysees.gpx`, `4285` → `4286` | `0,7313561113696778 m` | `0 m` | `0` |
+| Espacement maximal | `tour-de-france-2026-etape-03-granollers-les-angles.gpx`, `1263` → `1264` | `747,3787552887879 m` | `7,25 m` | `0,009700570090728083` |
+| Pente brute minimale | `tour-de-france-2026-etape-17-chambery-voiron.gpx`, `5134` → `5135` | `20,99645791387593 m` | `-73,5 m` | `-3,500590447278541` |
+| Pente brute maximale | `tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx`, `3993` → `3994` | `11,225355917282286 m` | `13 m` | `1,1580924556686452` |
+
+L'espacement moyen agrégé est la longueur agrégée divisée par le nombre agrégé de
+segments. La pente brute est le ratio exact de la variation d'altitude sur
+l'espacement horizontal entre deux points GPX successifs. Les valeurs extrêmes
+montrent qu'elle n'est pas directement adaptée à la simulation : ce rapport ne
+corrige, ne filtre, ne lisse, ne rééchantillonne et ne limite aucune donnée.
+
 ## Scénario de référence : coureur isolé sur route à pente constante
 
 Le scénario de référence exécute le moteur longitudinal minimal pendant 7 200 s avec un pas de 0,5 s. Les vitesses reportées correspondent à l'état final, utilisé comme approximation de vitesse stabilisée pour ces paramètres.

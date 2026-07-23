@@ -80,3 +80,9 @@ export {
   type GpxGeometryQualityReport,
   type GpxGeometrySegmentObservation,
 } from "./gpxQuality.js";
+
+export {
+  analyzeGpxRawProfile,
+  type GpxRawProfileReport,
+  type GpxRawSegmentObservation,
+} from "./gpxRawProfile.js";

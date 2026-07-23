@@ -223,6 +223,24 @@ Le scénario d’intégration précompilé utilise les échantillons `(distance 
 
 Le parcours de démonstration du laboratoire utilise ces mêmes cinq échantillons distance/altitude de référence. Le `PrecompiledCourse` et sa conversion en `LongitudinalCourse` sont créés une fois à l’initialisation du module, jamais dans la boucle de ticks, lors d’un reset ou d’un changement de mode. Cette source de parcours ne modifie ni les équations physiques et énergétiques, ni la résolution de pente au début du tick, ni le retard maximal d’un tick aux frontières et à l’arrivée.
 
+## Diagnostic brut du profil GPX
+
+Après `parseGpxTrack`, `removeConsecutiveSameHorizontalGpxPoints` et
+`computeGpxCumulativeDistances`, `analyzeGpxRawProfile` observe chaque intervalle :
+
+```text
+espacement_horizontal = distance_fin - distance_début        (m)
+variation_altitude = altitude_fin - altitude_début            (m)
+pente_brute = variation_altitude / espacement_horizontal      (ratio sans unité)
+```
+
+Les distances doivent commencer à zéro, être strictement croissantes et finir à la
+longueur déclarée. Une distance nulle ou décroissante est rejetée. Le calcul
+n'applique aucun arrondi, seuil, lissage, interpolation, filtrage ou limitation de
+pente. En cas d'égalité exacte d'un extremum, la première occurrence documentaire
+est conservée. Ces pentes entre deux points source servent au diagnostic du corpus ;
+elles ne constituent pas un profil directement adapté au moteur longitudinal.
+
 ## Équations physiques longitudinales
 
 La masse totale est :

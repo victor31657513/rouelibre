@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   analyzeGpxGeometryQuality,
+  analyzeGpxRawProfile,
   computeGpxCumulativeDistances,
   parseGpxTrack,
   removeConsecutiveSameHorizontalGpxPoints,
@@ -208,4 +209,106 @@ describe("corpus GPX du Tour de France 2026", () => {
     expect(normalizedLongest).toEqual(sourceLongest);
     expect(remainingZeroSegments).toEqual([]);
   }, 15_000);
+
+  it("agrège les espacements et pentes brutes des 21 traces normalisées", () => {
+    const rawSources = new Map(corpusFiles.map((fileName) => [
+      fileName,
+      readFileSync(new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8"),
+    ]));
+    let pointCount = 0;
+    let segmentCount = 0;
+    let totalHorizontalLengthMeters = 0;
+    let ascendingSegmentCount = 0;
+    let descendingSegmentCount = 0;
+    let constantAltitudeSegmentCount = 0;
+    let minimumSpacing: { fileName: string; startPointIndex: number; endPointIndex: number;
+      horizontalSpacingMeters: number; altitudeDeltaMeters: number; rawGrade: number; value: number } | undefined;
+    let maximumSpacing: typeof minimumSpacing;
+    let minimumGrade: typeof minimumSpacing;
+    let maximumGrade: typeof minimumSpacing;
+
+    for (const fileName of corpusFiles) {
+      const parsed = parseGpxTrack(rawSources.get(fileName) ?? "");
+      const normalized = removeConsecutiveSameHorizontalGpxPoints(parsed).track;
+      const distances = computeGpxCumulativeDistances(normalized);
+      const first = analyzeGpxRawProfile(distances);
+      const second = analyzeGpxRawProfile(distances);
+      expect(first).toEqual(second);
+      expect(first.pointCount).toBe(normalized.points.length);
+      expect(first.segmentCount).toBe(first.pointCount - 1);
+      for (const observation of [
+        first.minimumHorizontalSpacing, first.maximumHorizontalSpacing,
+        first.minimumRawGrade, first.maximumRawGrade,
+      ]) {
+        expect(Number.isFinite(observation.horizontalSpacingMeters)).toBe(true);
+        expect(Number.isFinite(observation.altitudeDeltaMeters)).toBe(true);
+        expect(Number.isFinite(observation.rawGrade)).toBe(true);
+        expect(observation.horizontalSpacingMeters).toBeGreaterThan(0);
+      }
+
+      pointCount += first.pointCount;
+      segmentCount += first.segmentCount;
+      totalHorizontalLengthMeters += first.totalHorizontalLengthMeters;
+      ascendingSegmentCount += first.ascendingSegmentCount;
+      descendingSegmentCount += first.descendingSegmentCount;
+      constantAltitudeSegmentCount += first.constantAltitudeSegmentCount;
+      const candidates = [
+        ["minimumSpacing", first.minimumHorizontalSpacing.horizontalSpacingMeters, first.minimumHorizontalSpacing],
+        ["maximumSpacing", first.maximumHorizontalSpacing.horizontalSpacingMeters, first.maximumHorizontalSpacing],
+        ["minimumGrade", first.minimumRawGrade.rawGrade, first.minimumRawGrade],
+        ["maximumGrade", first.maximumRawGrade.rawGrade, first.maximumRawGrade],
+      ] as const;
+      for (const [kind, value, observation] of candidates) {
+        const current = kind === "minimumSpacing" ? minimumSpacing : kind === "maximumSpacing" ? maximumSpacing
+          : kind === "minimumGrade" ? minimumGrade : maximumGrade;
+        const shouldReplace = current === undefined
+          || (kind.startsWith("minimum") ? value < current.value : value > current.value);
+        if (shouldReplace) {
+          const candidate = { fileName, startPointIndex: observation.startPointIndex,
+            endPointIndex: observation.endPointIndex,
+            horizontalSpacingMeters: observation.horizontalSpacingMeters,
+            altitudeDeltaMeters: observation.altitudeDeltaMeters,
+            rawGrade: observation.rawGrade, value };
+          if (kind === "minimumSpacing") minimumSpacing = candidate;
+          else if (kind === "maximumSpacing") maximumSpacing = candidate;
+          else if (kind === "minimumGrade") minimumGrade = candidate;
+          else maximumGrade = candidate;
+        }
+      }
+    }
+
+    expect({ pointCount, segmentCount, totalHorizontalLengthMeters,
+      ascendingSegmentCount, descendingSegmentCount, constantAltitudeSegmentCount })
+      .toEqual({ pointCount: 159_855, segmentCount: 159_834,
+        totalHorizontalLengthMeters: 3_425_268.0713700126,
+        ascendingSegmentCount: 73_625, descendingSegmentCount: 66_626,
+        constantAltitudeSegmentCount: 19_583 });
+    expect(minimumSpacing).toEqual({
+      fileName: "tour-de-france-2026-etape-21-thoiry-paris-champs-elysees.gpx",
+      startPointIndex: 4285, endPointIndex: 4286, value: 0.7313561113696778,
+      horizontalSpacingMeters: 0.7313561113696778, altitudeDeltaMeters: 0, rawGrade: 0,
+    });
+    expect(maximumSpacing).toEqual({
+      fileName: "tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      startPointIndex: 1263, endPointIndex: 1264, value: 747.3787552887879,
+      horizontalSpacingMeters: 747.3787552887879, altitudeDeltaMeters: 7.25,
+      rawGrade: 0.009700570090728083,
+    });
+    expect(minimumGrade).toEqual({
+      fileName: "tour-de-france-2026-etape-17-chambery-voiron.gpx",
+      startPointIndex: 5134, endPointIndex: 5135, value: -3.500590447278541,
+      horizontalSpacingMeters: 20.99645791387593, altitudeDeltaMeters: -73.5,
+      rawGrade: -3.500590447278541,
+    });
+    expect(maximumGrade).toEqual({
+      fileName: "tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx",
+      startPointIndex: 3993, endPointIndex: 3994, value: 1.1580924556686452,
+      horizontalSpacingMeters: 11.225355917282286, altitudeDeltaMeters: 13,
+      rawGrade: 1.1580924556686452,
+    });
+    for (const [fileName, xml] of rawSources) {
+      expect(readFileSync(new URL(`../../../data/courses/tour-de-france/2026/raw/${fileName}`, import.meta.url), "utf8"))
+        .toBe(xml);
+    }
+  }, 20_000);
 });
