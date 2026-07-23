@@ -18,17 +18,18 @@
 - Distance horizontale cumulée déterministe des points GPX par Haversine sur une Terre sphérique, sans nettoyage, filtrage altimétrique, conversion de parcours ou intégration physique.
 - Rapport déterministe et immuable de qualité géométrique des tracés GPX distancés : doublons consécutifs exacts, segments horizontaux nuls, sauts selon un seuil diagnostique explicite et premier segment maximal, sans nettoyage ni modification de point.
 - Rapport déterministe et profondément immuable des espacements, variations d'altitude et pentes brutes du corpus GPX normalisé, avec extrema traçables et compteurs directionnels.
+- Diagnostic déterministe et profondément immuable des distributions brutes, sur une étape ou plusieurs traces ordonnées : percentiles au rang supérieur, seuils diagnostiques explicites et observations source traçables, sans transformation des données.
 - Exigences de préparation altimétrique déterministe : géométrie horizontale conservée, voisinages exprimés en mètres, configuration explicite, sortie atomique et finie, traçabilité, rapport avant/après et comportement déclaré sur les intervalles longs, sans choix prématuré d'algorithme ou de seuil.
 
 ## Prochaine tâche unique
 
-Diagnostiquer de façon déterministe les distributions des espacements, variations d'altitude et valeurs absolues de pente brute, par étape et sur le corpus agrégé, avec percentiles et effectifs fondés sur des seuils diagnostiques explicites, sans transformer les données.
+Examiner et documenter les observations source des principales queues de variation absolue d'altitude et de pente brute afin de constituer des cas corpus traçables pour une comparaison ultérieure, sans choisir ni implémenter la préparation altimétrique.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
-1. diagnostic des distributions nécessaire au choix ultérieur d'une préparation altimétrique conforme à la décision 0007 ;
+1. examen traçable des observations source dans les queues diagnostiquées ;
 2. choix puis implémentation, dans des tâches séparées, de la préparation altimétrique et de la conversion vers le format précompilé ;
 3. pilotage autonome individuel ;
 4. petit groupe et aspiration ;

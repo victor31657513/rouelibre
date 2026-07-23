@@ -86,3 +86,14 @@ export {
   type GpxRawProfileReport,
   type GpxRawSegmentObservation,
 } from "./gpxRawProfile.js";
+
+export {
+  analyzeGpxRawDistributions,
+  type GpxRawDistribution,
+  type GpxRawDistributionOptions,
+  type GpxRawDistributionReport,
+  type GpxRawDistributionSegmentObservation,
+  type GpxRawPercentileObservation,
+  type GpxRawThresholdObservation,
+  type GpxRawThresholdResult,
+} from "./gpxRawDistribution.js";
