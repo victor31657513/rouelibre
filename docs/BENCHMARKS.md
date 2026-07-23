@@ -264,6 +264,10 @@ La configuration explicite utilise les percentiles `0`, `0,1`, `1`, `5`, `25`, `
 
 Les queues principales sont localisées dans les tableaux agrégés : le maximum de variation absolue (`107,1 m`) appartient à l’étape 3, segment `2917` → `2918`, tandis que le maximum de pente absolue (`3,50059044727854`) appartient à l’étape 17, segment `5134` → `5135`. Les percentiles décrivent uniquement le corpus fourni et les seuils sont des repères diagnostiques. Aucune valeur ne constitue un paramètre de préparation altimétrique ; aucune donnée n’est filtrée, lissée, rééchantillonnée, corrigée, convertie ou autrement transformée.
 
+## Corpus traçable des extrêmes altimétriques
+
+Le [corpus des extrêmes altimétriques](ALTIMETRIC_EXTREMES_CORPUS.md) matérialise l’union des derniers dépassements diagnostiques : variation absolue strictement supérieure à `50 m` ou pente brute absolue strictement supérieure à `1`. Il contient `20` segments (`9` dans la première queue, `12` dans la seconde et `1` commun aux deux), leurs indices bruts et normalisés, leurs valeurs non arrondies et jusqu’à deux points de contexte de chaque côté. Le test dédié reconstruit exactement le fichier JSON depuis les 21 GPX bruts sans les modifier.
+
 Le traitement s’exécute hors de la boucle de simulation. Pour `n` segments et `p` percentiles, il coûte `O(n log n + tn + p)` en temps pour `t` seuils et `p` percentiles (quatre tris et parcours ordonnés des seuils) et `O(n + p)` en mémoire. Les allocations principales sont le tableau d’observations de segments, quatre copies triées, puis les tableaux immuables de percentiles et de seuils ; aucune dépendance ni optimisation prématurée n’est introduite.
 
 ## Scénario de référence : coureur isolé sur route à pente constante
