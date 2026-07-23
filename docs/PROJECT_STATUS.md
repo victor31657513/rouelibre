@@ -37,8 +37,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Adaptateur temporel navigateur à pas fixe `1 / 60 s` avec accumulateur, multiplicateurs ×1, ×5 et ×20, et plafonnement du temps réel rattrapable après une frame longue avant application du multiplicateur.
 - Affichage des observables physiques, énergétiques, environnementales et des forces du coureur isolé, dont la force gravitationnelle longitudinale.
 - Représentation visuelle minimale dont la position sur un parcours fini est dérivée de `LongitudinalCourseProgress.progress`, bornée visuellement entre 0 % et 100 %. Le parcours constant sans arrivée conserve une animation cyclique fondée sur la distance modulo 100 m.
-- Vérification CI pour l'installation, le typecheck, les tests et le build sur Pull Request.
-- Modèle de description proposé pour aider à rédiger manuellement les Pull Requests, workflow de programmation idempotente de l'auto-merge des Pull Requests éligibles vers `main` avec la méthode `merge commit`, fusion conditionnée par `Pull Request Checks / verify` et les protections GitHub, et audit post-fusion de la description et du diff.
+- Modèle de description proposé pour aider à rédiger manuellement les Pull Requests, auto-merge conditionné par les vérifications obligatoires de la CI et audit post-fusion de la description et du diff.
 - Workflow GitHub Actions pouvant publier le build Vite du laboratoire sur GitHub Pages depuis `main`, après installation, typecheck, tests et build de production.
 - Documentation du projet, de l'architecture, du modèle physique longitudinal, du modèle énergétique minimal, du laboratoire visuel et de la publication GitHub Pages.
 - Répertoire `docs/decisions/` pour les décisions d'architecture structurées.

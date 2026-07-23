@@ -4,7 +4,7 @@ Le laboratoire web dispose d'un workflow GitHub Actions dédié au build et à l
 
 ## Branche `main`
 
-Chaque push sur `main` déclenche le workflow `Deploy Lab to GitHub Pages`. Les Pull Requests ne publient pas de site GitHub Pages ; elles restent couvertes par le workflow CI dédié.
+Chaque push sur `main` déclenche le workflow `Deploy Lab to GitHub Pages`. Les Pull Requests ne déclenchent pas de workflow GitHub Actions et ne publient pas de site GitHub Pages.
 
 ## Déclenchement manuel
 
