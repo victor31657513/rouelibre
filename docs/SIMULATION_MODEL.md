@@ -241,6 +241,29 @@ pente. En cas d'égalité exacte d'un extremum, la première occurrence document
 est conservée. Ces pentes entre deux points source servent au diagnostic du corpus ;
 elles ne constituent pas un profil directement adapté au moteur longitudinal.
 
+## Contrat de préparation altimétrique future
+
+La [décision 0007](decisions/0007-exigences-preparation-altimetrique.md) impose à
+la future préparation de consommer la trace normalisée et distancée, sans jamais
+réécrire les GPX `raw`. Latitude, longitude, distances cumulées, longueur totale
+et emplacements horizontaux extrêmes restent inchangés ; les anomalies
+géométriques, notamment les 82 intervalles strictement supérieurs à 250 m,
+restent observables séparément et reçoivent un comportement explicite plutôt
+qu'une correction implicite.
+
+Les voisinages et résolutions seront exprimés en mètres dans une configuration
+validée et immuable. Une sortie valide contiendra uniquement des distances et
+altitudes finies, des distances strictement croissantes et des pentes dérivées
+finies. La préparation sera déterministe, atomique, traçable jusqu'aux indices ou
+intervalles source et accompagnée d'un rapport avant/après. Une éventuelle limite
+de pente devra reconstruire un profil d'altitude cohérent avant d'en dériver les
+pentes ; un clamp direct de `rawGrade` ne satisfait pas ce contrat.
+
+Les extrema et la moyenne actuels ne suffisent pas à fixer résolution, fenêtre,
+méthode ou seuil. Le diagnostic suivant porte donc sur les distributions par
+étape et agrégées, sans transformation de données. Aucun algorithme de préparation
+ou de conversion vers `PrecompiledCourse` n'est implémenté à ce stade.
+
 ## Équations physiques longitudinales
 
 La masse totale est :
