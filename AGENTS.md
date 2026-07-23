@@ -94,13 +94,15 @@ ChatGPT compare la description au diff réel lors de l'audit post-fusion. Les re
 
 ## Fusion et examen des Pull Requests
 
-Le workflow `Enable Pull Request Auto-Merge` active automatiquement l'auto-merge avec la méthode `merge commit` pour les Pull Requests éligibles ciblant `main`. Les protections de branche restent responsables de la fusion effective après la réussite de toutes les vérifications obligatoires de la CI.
+Avant d'ouvrir une Pull Request non brouillon, Codex exécute systématiquement `pnpm typecheck`, `pnpm test`, `pnpm build` et `git diff --check`, ainsi que les tests ciblés nécessaires au périmètre modifié. La description de la Pull Request rapporte uniquement les commandes réellement exécutées et leurs résultats. Si une vérification échoue, Codex corrige l'échec ou arrête la tâche en signalant précisément le problème ; il ne rend pas la Pull Request prête à être fusionnée automatiquement. L'absence de CI sur les Pull Requests ne réduit pas les exigences de tests, de documentation, de déterminisme ou de stabilité numérique.
+
+Le workflow `Enable Pull Request Auto-Merge` vérifie uniquement les critères d'éligibilité de la Pull Request et demande l'auto-merge avec la méthode `merge commit` pour les Pull Requests éligibles ciblant `main`. Il ne récupère ni n'exécute le code de la branche source et ne réalise aucun typecheck, test ou build. Aucun contrôle obligatoire de code ou protection équivalente n'est configuré : une Pull Request éligible peut donc être fusionnée dès que GitHub accepte la demande d'auto-merge. Ce comportement ne contourne pas une protection inexistante.
 
 Après avoir terminé l'implémentation, exécuté les tests prévus, mis à jour la documentation concernée, vérifié le périmètre de la tâche et renseigné la description de la Pull Request, Codex vérifie que ce workflow a réussi. Si le workflow échoue, Codex signale explicitement l'échec et ne fusionne jamais manuellement la Pull Request.
 
 Une Pull Request ne doit pas être fusionnée automatiquement dans les cas suivants :
 
-- la CI échoue ;
+- une vérification locale échoue ;
 - les tests requis n'ont pas été exécutés ;
 - la documentation nécessaire est absente ;
 - un problème connu compromet la cohérence de la simulation, la stabilité numérique ou le déterminisme ;
