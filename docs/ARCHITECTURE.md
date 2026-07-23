@@ -65,7 +65,7 @@ Contraintes :
 
 La publication statique du laboratoire est assurée par le workflow GitHub Actions `.github/workflows/deploy-pages.yml`. Il construit le workspace avec Node.js 24 et pnpm 10.28.1, exécute le typecheck, les tests et le build, vérifie `apps/lab/dist/index.html`, configure GitHub Pages, téléverse `apps/lab/dist` avec `actions/upload-pages-artifact` et déploie l’artefact dans l’environnement `github-pages`.
 
-Le workflow se déclenche manuellement ou lors d’un push sur `main`. Les Pull Requests utilisent le workflow CI dédié et ne publient pas de déploiement GitHub Pages.
+Le workflow se déclenche manuellement ou lors d’un push sur `main`. Les Pull Requests ne déclenchent pas de workflow GitHub Actions et ne publient pas de déploiement GitHub Pages.
 
 Le développement local conserve une base Vite `/`. Le workflow GitHub Pages définit `VITE_BASE_PATH` à partir de `GITHUB_REPOSITORY` : `/` pour un dépôt de type `<propriétaire>.github.io`, ou `/<nom-du-dépôt>/` pour un dépôt projet GitHub Pages.
 
