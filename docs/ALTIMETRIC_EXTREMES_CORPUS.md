@@ -2,43 +2,34 @@
 
 ## Objet et frontière
 
-Le fichier versionné [`data/courses/tour-de-france/2026/altimetric-extremes.json`](../data/courses/tour-de-france/2026/altimetric-extremes.json) constitue un corpus de comparaison traçable. Il recense l’union des segments du diagnostic agrégé dont la variation absolue d’altitude est strictement supérieure à `50 m` ou dont la valeur absolue de pente brute est strictement supérieure à `1`. Ces deux bornes reprennent les derniers seuils diagnostiques de chaque distribution ; elles sélectionnent des cas à examiner et ne sont ni des seuils de correction ni des paramètres de préparation.
+Le fichier versionné [`data/courses/tour-de-france/2026/altimetric-extremes.json`](../data/courses/tour-de-france/2026/altimetric-extremes.json) constitue un corpus diagnostique traçable. Il contient l’union dédupliquée :
 
-La chaîne source est exactement `parseGpxTrack` → `removeConsecutiveSameHorizontalGpxPoints` → `computeGpxCumulativeDistances`. Le corpus contient les valeurs numériques non arrondies produites par cette chaîne. Pour chaque cas, il conserve le fichier GPX relatif, les indices du segment dans la trace normalisée, les indices correspondants dans le fichier brut, les métriques du segment, ses deux extrémités et jusqu’à deux points normalisés de contexte de chaque côté. Les indices sont nuls et l’ordre des cas suit celui des fichiers puis des points source.
+- des segments dont la variation absolue d’altitude dépasse strictement `20 m` ;
+- des segments dont la pente brute absolue dépasse strictement `1` ;
+- des observations source aux percentiles `99`, `99,9` et `100` de chacune de ces deux distributions.
 
-Le test de corpus reconstruit intégralement ce document depuis les 21 fichiers bruts et exige une égalité profonde. Les fichiers `raw/*.gpx` restent immuables. Le JSON ne prétend pas établir l’altitude réelle, qualifier automatiquement une observation d’erreur, ni prescrire un lissage, une correction, un rejet ou un rééchantillonnage.
+Les six observations de percentile constituent six motifs avant déduplication. Chaque segment ne figure qu’une fois et expose tous ses `selectionReasons` dans l’ordre canonique documenté par le manifeste.
+
+La chaîne source est exactement `parseGpxTrack` → `removeConsecutiveSameHorizontalGpxPoints` → `computeGpxCumulativeDistances`. Le corpus conserve les valeurs non arrondies, les indices normalisés et bruts des extrémités, la direction, l’indicateur d’espacement strictement supérieur à `250 m` et jusqu’à deux points normalisés de contexte de chaque côté. Les indices sont indexés à partir de zéro. L’ordre des cas suit le fichier source, l’indice normalisé de départ puis celui d’arrivée.
+
+Le test reconstruit intégralement le document depuis les 21 GPX, deux fois indépendamment, et exige une égalité profonde. Il vérifie aussi que les sources `raw/*.gpx` restent inchangées.
 
 ## Couverture
 
-L’union contient `20` segments répartis sur les étapes 3, 6, 15, 17 et 20 :
+Les deux ensembles exhaustifs contiennent respectivement `29` et `12` segments. Leur intersection contient `2` segments et leur union `39`. Parmi les six observations de percentile, `4` segments ne figurent dans aucun ensemble de seuil ; le corpus fusionné contient donc `43` cas uniques.
 
-- `9` segments dépassent strictement `50 m` de variation absolue ;
-- `12` segments dépassent strictement `1` en valeur absolue de pente brute ;
-- le segment `5134` → `5135` de l’étape 17 appartient aux deux ensembles ;
-- `11` cas ont une variation absolue inférieure ou égale à `50 m` mais une pente absolue supérieure à `1`, ce qui conserve des intervalles courts que la seule variation d’altitude ne révélerait pas ;
-- `8` cas ont une pente absolue inférieure ou égale à `1` mais une variation absolue supérieure à `50 m`, ce qui conserve des intervalles plus longs que la seule pente ne révélerait pas.
+La répartition est la suivante :
+
+- direction : `20` montées et `23` descentes ;
+- espacement horizontal strictement supérieur à `250 m` : `2` cas ;
+- étapes : étape 2 (`1`), étape 3 (`12`), étape 6 (`5`), étape 15 (`5`), étape 17 (`4`), étape 18 (`1`), étape 19 (`2`) et étape 20 (`13`).
 
 ## Examen documentaire des voisinages
 
-Les voisinages montrent plusieurs formes distinctes qui devront rester représentées lors d’une comparaison ultérieure :
-
-| Groupe source | Cas | Observation factuelle du contexte conservé |
-| --- | --- | --- |
-| Étape 3 | `1890` → `1891`, `6523` → `6524` | Deux intervalles très courts portent respectivement `-1 m` sur `0,8279 m` et `+2,25 m` sur `1,9793 m`; les altitudes voisines continuent dans le même sens ou restent stables. |
-| Étape 3 | `2811` → `2812` | La hausse de `59,2 m` sur `199,12 m` est suivie d’une baisse de `46 m` sur le segment suivant. |
-| Étape 3 | `2917` → `2919` | Le point `2918` à `761 m` relie une hausse de `107,1 m` puis une baisse de `67,4 m`; les quatre autres altitudes du contexte vont de `601,1 m` à `693,6 m`. |
-| Étape 3 | `2949` → `2950` | La hausse de `70,1 m` sur `174,70 m` est suivie de baisses successives de `38,2 m` puis `48,8 m`. |
-| Étape 6 | `8842` → `8846`, `8854` → `8855` | Quatre cas consécutifs appartiennent à une descente monotone de `784,9 m` à `754,7 m` sur environ `26,5 m`; un autre appartient à la remontée monotone qui suit. |
-| Étape 15 | `3993` → `3994`, `3995` → `3996` | Une hausse courte de `13 m` précède un point à `818,4 m`, puis une baisse de `55,5 m` sur `180,97 m`. |
-| Étape 17 | `5133` → `5136` | Une hausse de `64,2 m` sur un intervalle de `265,18 m` est suivie d’une baisse de `73,5 m` sur `21,00 m`, puis de `12,9 m` sur `6,38 m`. |
-| Étape 20 | `7447` → `7448` | Le cas de pente appartient à une descente locale continue, après une baisse de `35,1 m` sur le segment antérieur. |
-| Étape 20 | `8101` → `8102` | La hausse de `71,1 m` sur `299,75 m` se prolonge par une hausse de `28 m` sur le segment suivant. |
-| Étape 20 | `8111` → `8113` | La baisse de `28 m` sur `25,35 m` précède une baisse de `93,4 m` sur `189,79 m`; la descente se poursuit dans les points suivants. |
-
-Ces descriptions distinguent notamment les excursions locales, les séquences monotones très denses et les grandes variations sur intervalles plus longs. Elles restent des constats numériques sur les échantillons fournis. Une continuité apparente ne valide pas la pente réelle, et une inversion apparente ne démontre pas une erreur source.
+Les voisinages conservent les formes déjà observées : intervalles très courts à pente brute élevée, séquences monotones denses, variations importantes sur des intervalles longs et excursions locales suivies d’une variation opposée. Par exemple, le point `2918` de l’étape 3 relie une hausse de `107,1 m` à une baisse de `67,4 m`, tandis que le segment `5134` → `5135` de l’étape 17 porte une baisse de `73,5 m` sur environ `21,00 m`. Ces constats décrivent uniquement les échantillons fournis : ils ne valident pas une pente réelle et ne qualifient aucune observation d’erreur.
 
 ## Usage futur et limites
 
-Une stratégie candidate pourra être comparée sur les mêmes identifiants, extrémités et voisinages, puis rapporter explicitement les altitudes avant/après et leur provenance. La comparaison devra aussi couvrir des profils synthétiques et l’ensemble des invariants définis par la décision d’architecture 0007 : ce petit corpus extrême ne représente ni toutes les étapes, ni les pentes ordinaires, ni les extrémités de trace, ni les intervalles horizontaux longs à lui seul.
+Les seuils `20 m` et `1` sont des critères diagnostiques reproductibles de constitution du corpus, et non des paramètres de préparation altimétrique. De même, les percentiles localisent des observations source sans prescrire leur traitement.
 
-Aucun algorithme et aucun paramètre de préparation ne sont choisis dans ce document. Les seuils `50 m` et `1` restent exclusivement des critères reproductibles de constitution de ce corpus.
+Le corpus permet une comparaison ultérieure sur des identifiants, extrémités et voisinages stables. Cette comparaison doit aussi couvrir les profils synthétiques et les invariants de la décision 0007. Aucun algorithme, fenêtre, résolution, correction, filtrage, lissage, rejet, rééchantillonnage ou paramètre de préparation n’est choisi ni évalué ici.

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "provenance": {
     "pipeline": [
       "parseGpxTrack",
@@ -7,16 +7,102 @@
       "computeGpxCumulativeDistances"
     ],
     "selection": {
-      "absoluteAltitudeDeltaMetersStrictlyAbove": 50,
-      "absoluteRawGradeStrictlyAbove": 1
+      "absoluteAltitudeDeltaMetersStrictlyAbove": 20,
+      "absoluteRawGradeStrictlyAbove": 1,
+      "percentileMethod": "empirical nearest-rank",
+      "percentiles": [
+        99,
+        99.9,
+        100
+      ]
     },
+    "selectionReasonOrder": [
+      "absolute-altitude-delta-above-20-m",
+      "absolute-raw-grade-above-1",
+      "absolute-altitude-delta-p99",
+      "absolute-altitude-delta-p99.9",
+      "absolute-altitude-delta-p100",
+      "absolute-raw-grade-p99",
+      "absolute-raw-grade-p99.9",
+      "absolute-raw-grade-p100"
+    ],
     "context": "two retained points before and after each selected segment when available"
   },
   "cases": [
     {
+      "id": "tour-de-france-2026-etape-02-tarragone-barcelone-6572-6573",
+      "sourceFile": "raw/tour-de-france-2026-etape-02-tarragone-barcelone.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-p99.9"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 6572,
+        "normalizedEndPointIndex": 6573,
+        "rawStartPointIndex": 6577,
+        "rawEndPointIndex": 6578,
+        "horizontalSpacingMeters": 96.0379260534537,
+        "altitudeDeltaMeters": 9.25,
+        "rawGrade": 0.09631611572756732,
+        "absoluteAltitudeDeltaMeters": 9.25,
+        "absoluteRawGrade": 0.09631611572756732,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 6570,
+          "rawPointIndex": 6575,
+          "distanceMeters": 159238.69408142,
+          "latitudeDegrees": 41.36926,
+          "longitudeDegrees": 2.17023,
+          "altitudeMeters": 92
+        },
+        {
+          "normalizedPointIndex": 6571,
+          "rawPointIndex": 6576,
+          "distanceMeters": 159245.5713688141,
+          "latitudeDegrees": 41.3692,
+          "longitudeDegrees": 2.17021,
+          "altitudeMeters": 92.5
+        },
+        {
+          "normalizedPointIndex": 6572,
+          "rawPointIndex": 6577,
+          "distanceMeters": 159256.98282593436,
+          "latitudeDegrees": 41.36913,
+          "longitudeDegrees": 2.17011,
+          "altitudeMeters": 94
+        },
+        {
+          "normalizedPointIndex": 6573,
+          "rawPointIndex": 6578,
+          "distanceMeters": 159353.02075198782,
+          "latitudeDegrees": 41.36873,
+          "longitudeDegrees": 2.16909,
+          "altitudeMeters": 103.25
+        },
+        {
+          "normalizedPointIndex": 6574,
+          "rawPointIndex": 6579,
+          "distanceMeters": 159362.36510161558,
+          "latitudeDegrees": 41.36868,
+          "longitudeDegrees": 2.169,
+          "altitudeMeters": 104.5
+        },
+        {
+          "normalizedPointIndex": 6575,
+          "rawPointIndex": 6580,
+          "distanceMeters": 159369.82523505358,
+          "latitudeDegrees": 41.36862,
+          "longitudeDegrees": 2.16896,
+          "altitudeMeters": 105.25
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-03-granollers-les-angles-1890-1891",
       "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -26,7 +112,11 @@
         "rawEndPointIndex": 1895,
         "horizontalSpacingMeters": 0.8279392191907391,
         "altitudeDeltaMeters": -1,
-        "rawGrade": -1.2078181306321496
+        "rawGrade": -1.2078181306321496,
+        "absoluteAltitudeDeltaMeters": 1,
+        "absoluteRawGrade": 1.2078181306321496,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -82,8 +172,8 @@
     {
       "id": "tour-de-france-2026-etape-03-granollers-les-angles-2811-2812",
       "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 2811,
@@ -92,7 +182,11 @@
         "rawEndPointIndex": 2816,
         "horizontalSpacingMeters": 199.1229845067428,
         "altitudeDeltaMeters": 59.19999999999993,
-        "rawGrade": 0.2973036997544363
+        "rawGrade": 0.2973036997544363,
+        "absoluteAltitudeDeltaMeters": 59.19999999999993,
+        "absoluteRawGrade": 0.2973036997544363,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -146,10 +240,151 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-03-granollers-les-angles-2812-2813",
+      "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2812,
+        "normalizedEndPointIndex": 2813,
+        "rawStartPointIndex": 2816,
+        "rawEndPointIndex": 2817,
+        "horizontalSpacingMeters": 206.92816093750298,
+        "altitudeDeltaMeters": -46,
+        "rawGrade": -0.22229937091014426,
+        "absoluteAltitudeDeltaMeters": 46,
+        "absoluteRawGrade": 0.22229937091014426,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2810,
+          "rawPointIndex": 2814,
+          "distanceMeters": 88214.84164312705,
+          "latitudeDegrees": 42.09018,
+          "longitudeDegrees": 2.22346,
+          "altitudeMeters": 575.1
+        },
+        {
+          "normalizedPointIndex": 2811,
+          "rawPointIndex": 2815,
+          "distanceMeters": 88313.86029114526,
+          "latitudeDegrees": 42.09107,
+          "longitudeDegrees": 2.2235,
+          "altitudeMeters": 579.6
+        },
+        {
+          "normalizedPointIndex": 2812,
+          "rawPointIndex": 2816,
+          "distanceMeters": 88512.983275652,
+          "latitudeDegrees": 42.09286,
+          "longitudeDegrees": 2.22343,
+          "altitudeMeters": 638.8
+        },
+        {
+          "normalizedPointIndex": 2813,
+          "rawPointIndex": 2817,
+          "distanceMeters": 88719.91143658951,
+          "latitudeDegrees": 42.09472,
+          "longitudeDegrees": 2.22335,
+          "altitudeMeters": 592.8
+        },
+        {
+          "normalizedPointIndex": 2814,
+          "rawPointIndex": 2818,
+          "distanceMeters": 88855.78924188358,
+          "latitudeDegrees": 42.09593,
+          "longitudeDegrees": 2.22312,
+          "altitudeMeters": 597.3
+        },
+        {
+          "normalizedPointIndex": 2815,
+          "rawPointIndex": 2819,
+          "distanceMeters": 88901.81275334084,
+          "latitudeDegrees": 42.0963,
+          "longitudeDegrees": 2.22287,
+          "altitudeMeters": 596.25
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-03-granollers-les-angles-2916-2917",
+      "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2916,
+        "normalizedEndPointIndex": 2917,
+        "rawStartPointIndex": 2920,
+        "rawEndPointIndex": 2921,
+        "horizontalSpacingMeters": 198.09812448987213,
+        "altitudeDeltaMeters": 49.89999999999998,
+        "rawGrade": 0.25189536815908187,
+        "absoluteAltitudeDeltaMeters": 49.89999999999998,
+        "absoluteRawGrade": 0.25189536815908187,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2914,
+          "rawPointIndex": 2918,
+          "distanceMeters": 93504.48652160534,
+          "latitudeDegrees": 42.12863,
+          "longitudeDegrees": 2.20132,
+          "altitudeMeters": 598.8
+        },
+        {
+          "normalizedPointIndex": 2915,
+          "rawPointIndex": 2919,
+          "distanceMeters": 93558.26634968452,
+          "latitudeDegrees": 42.12911,
+          "longitudeDegrees": 2.20124,
+          "altitudeMeters": 601.1
+        },
+        {
+          "normalizedPointIndex": 2916,
+          "rawPointIndex": 2920,
+          "distanceMeters": 93660.64888614345,
+          "latitudeDegrees": 42.13003,
+          "longitudeDegrees": 2.20129,
+          "altitudeMeters": 604
+        },
+        {
+          "normalizedPointIndex": 2917,
+          "rawPointIndex": 2921,
+          "distanceMeters": 93858.74701063332,
+          "latitudeDegrees": 42.13178,
+          "longitudeDegrees": 2.20174,
+          "altitudeMeters": 653.9
+        },
+        {
+          "normalizedPointIndex": 2918,
+          "rawPointIndex": 2922,
+          "distanceMeters": 94037.9663942223,
+          "latitudeDegrees": 42.13329,
+          "longitudeDegrees": 2.2025,
+          "altitudeMeters": 761
+        },
+        {
+          "normalizedPointIndex": 2919,
+          "rawPointIndex": 2923,
+          "distanceMeters": 94152.42120065342,
+          "latitudeDegrees": 42.13417,
+          "longitudeDegrees": 2.20322,
+          "altitudeMeters": 693.6
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-03-granollers-les-angles-2917-2918",
       "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m",
+        "absolute-altitude-delta-p100"
       ],
       "segment": {
         "normalizedStartPointIndex": 2917,
@@ -158,7 +393,11 @@
         "rawEndPointIndex": 2922,
         "horizontalSpacingMeters": 179.2193835889775,
         "altitudeDeltaMeters": 107.10000000000002,
-        "rawGrade": 0.5975916100996286
+        "rawGrade": 0.5975916100996286,
+        "absoluteAltitudeDeltaMeters": 107.10000000000002,
+        "absoluteRawGrade": 0.5975916100996286,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -214,8 +453,8 @@
     {
       "id": "tour-de-france-2026-etape-03-granollers-les-angles-2918-2919",
       "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 2918,
@@ -224,7 +463,11 @@
         "rawEndPointIndex": 2923,
         "horizontalSpacingMeters": 114.45480643112387,
         "altitudeDeltaMeters": -67.39999999999998,
-        "rawGrade": -0.5888787207950036
+        "rawGrade": -0.5888787207950036,
+        "absoluteAltitudeDeltaMeters": 67.39999999999998,
+        "absoluteRawGrade": 0.5888787207950036,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -278,10 +521,150 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-03-granollers-les-angles-2919-2920",
+      "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2919,
+        "normalizedEndPointIndex": 2920,
+        "rawStartPointIndex": 2923,
+        "rawEndPointIndex": 2924,
+        "horizontalSpacingMeters": 89.06479171504907,
+        "altitudeDeltaMeters": -39.700000000000045,
+        "rawGrade": -0.44574291631439394,
+        "absoluteAltitudeDeltaMeters": 39.700000000000045,
+        "absoluteRawGrade": 0.44574291631439394,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2917,
+          "rawPointIndex": 2921,
+          "distanceMeters": 93858.74701063332,
+          "latitudeDegrees": 42.13178,
+          "longitudeDegrees": 2.20174,
+          "altitudeMeters": 653.9
+        },
+        {
+          "normalizedPointIndex": 2918,
+          "rawPointIndex": 2922,
+          "distanceMeters": 94037.9663942223,
+          "latitudeDegrees": 42.13329,
+          "longitudeDegrees": 2.2025,
+          "altitudeMeters": 761
+        },
+        {
+          "normalizedPointIndex": 2919,
+          "rawPointIndex": 2923,
+          "distanceMeters": 94152.42120065342,
+          "latitudeDegrees": 42.13417,
+          "longitudeDegrees": 2.20322,
+          "altitudeMeters": 693.6
+        },
+        {
+          "normalizedPointIndex": 2920,
+          "rawPointIndex": 2924,
+          "distanceMeters": 94241.48599236847,
+          "latitudeDegrees": 42.13478,
+          "longitudeDegrees": 2.20392,
+          "altitudeMeters": 653.9
+        },
+        {
+          "normalizedPointIndex": 2921,
+          "rawPointIndex": 2925,
+          "distanceMeters": 94307.07617320966,
+          "latitudeDegrees": 42.13512,
+          "longitudeDegrees": 2.20457,
+          "altitudeMeters": 635.3
+        },
+        {
+          "normalizedPointIndex": 2922,
+          "rawPointIndex": 2926,
+          "distanceMeters": 94389.62966076456,
+          "latitudeDegrees": 42.13546,
+          "longitudeDegrees": 2.20546,
+          "altitudeMeters": 624.3
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-03-granollers-les-angles-2948-2949",
+      "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2948,
+        "normalizedEndPointIndex": 2949,
+        "rawStartPointIndex": 2952,
+        "rawEndPointIndex": 2953,
+        "horizontalSpacingMeters": 105.07125399289362,
+        "altitudeDeltaMeters": 36.60000000000002,
+        "rawGrade": 0.3483350451159118,
+        "absoluteAltitudeDeltaMeters": 36.60000000000002,
+        "absoluteRawGrade": 0.3483350451159118,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2946,
+          "rawPointIndex": 2950,
+          "distanceMeters": 96722.91884638327,
+          "latitudeDegrees": 42.15251,
+          "longitudeDegrees": 2.20114,
+          "altitudeMeters": 642
+        },
+        {
+          "normalizedPointIndex": 2947,
+          "rawPointIndex": 2951,
+          "distanceMeters": 96853.45771933113,
+          "latitudeDegrees": 42.15368,
+          "longitudeDegrees": 2.20101,
+          "altitudeMeters": 652
+        },
+        {
+          "normalizedPointIndex": 2948,
+          "rawPointIndex": 2952,
+          "distanceMeters": 97106.2351159249,
+          "latitudeDegrees": 42.1559,
+          "longitudeDegrees": 2.20035,
+          "altitudeMeters": 663.8
+        },
+        {
+          "normalizedPointIndex": 2949,
+          "rawPointIndex": 2953,
+          "distanceMeters": 97211.30636991779,
+          "latitudeDegrees": 42.15684,
+          "longitudeDegrees": 2.20022,
+          "altitudeMeters": 700.4
+        },
+        {
+          "normalizedPointIndex": 2950,
+          "rawPointIndex": 2954,
+          "distanceMeters": 97386.00714620129,
+          "latitudeDegrees": 42.15841,
+          "longitudeDegrees": 2.20014,
+          "altitudeMeters": 770.5
+        },
+        {
+          "normalizedPointIndex": 2951,
+          "rawPointIndex": 2955,
+          "distanceMeters": 97469.34171203533,
+          "latitudeDegrees": 42.15915,
+          "longitudeDegrees": 2.19998,
+          "altitudeMeters": 732.3
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-03-granollers-les-angles-2949-2950",
       "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 2949,
@@ -290,7 +673,11 @@
         "rawEndPointIndex": 2954,
         "horizontalSpacingMeters": 174.70077628349827,
         "altitudeDeltaMeters": 70.10000000000002,
-        "rawGrade": 0.40125751866290627
+        "rawGrade": 0.40125751866290627,
+        "absoluteAltitudeDeltaMeters": 70.10000000000002,
+        "absoluteRawGrade": 0.40125751866290627,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -344,9 +731,149 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-03-granollers-les-angles-2950-2951",
+      "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2950,
+        "normalizedEndPointIndex": 2951,
+        "rawStartPointIndex": 2954,
+        "rawEndPointIndex": 2955,
+        "horizontalSpacingMeters": 83.3345658340404,
+        "altitudeDeltaMeters": -38.200000000000045,
+        "rawGrade": -0.458393220360382,
+        "absoluteAltitudeDeltaMeters": 38.200000000000045,
+        "absoluteRawGrade": 0.458393220360382,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2948,
+          "rawPointIndex": 2952,
+          "distanceMeters": 97106.2351159249,
+          "latitudeDegrees": 42.1559,
+          "longitudeDegrees": 2.20035,
+          "altitudeMeters": 663.8
+        },
+        {
+          "normalizedPointIndex": 2949,
+          "rawPointIndex": 2953,
+          "distanceMeters": 97211.30636991779,
+          "latitudeDegrees": 42.15684,
+          "longitudeDegrees": 2.20022,
+          "altitudeMeters": 700.4
+        },
+        {
+          "normalizedPointIndex": 2950,
+          "rawPointIndex": 2954,
+          "distanceMeters": 97386.00714620129,
+          "latitudeDegrees": 42.15841,
+          "longitudeDegrees": 2.20014,
+          "altitudeMeters": 770.5
+        },
+        {
+          "normalizedPointIndex": 2951,
+          "rawPointIndex": 2955,
+          "distanceMeters": 97469.34171203533,
+          "latitudeDegrees": 42.15915,
+          "longitudeDegrees": 2.19998,
+          "altitudeMeters": 732.3
+        },
+        {
+          "normalizedPointIndex": 2952,
+          "rawPointIndex": 2956,
+          "distanceMeters": 97586.04894098695,
+          "latitudeDegrees": 42.16015,
+          "longitudeDegrees": 2.19955,
+          "altitudeMeters": 683.5
+        },
+        {
+          "normalizedPointIndex": 2953,
+          "rawPointIndex": 2957,
+          "distanceMeters": 97660.79222346772,
+          "latitudeDegrees": 42.16069,
+          "longitudeDegrees": 2.19901,
+          "altitudeMeters": 679
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-03-granollers-les-angles-2951-2952",
+      "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2951,
+        "normalizedEndPointIndex": 2952,
+        "rawStartPointIndex": 2955,
+        "rawEndPointIndex": 2956,
+        "horizontalSpacingMeters": 116.7072289516218,
+        "altitudeDeltaMeters": -48.799999999999955,
+        "rawGrade": -0.41814033662155436,
+        "absoluteAltitudeDeltaMeters": 48.799999999999955,
+        "absoluteRawGrade": 0.41814033662155436,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2949,
+          "rawPointIndex": 2953,
+          "distanceMeters": 97211.30636991779,
+          "latitudeDegrees": 42.15684,
+          "longitudeDegrees": 2.20022,
+          "altitudeMeters": 700.4
+        },
+        {
+          "normalizedPointIndex": 2950,
+          "rawPointIndex": 2954,
+          "distanceMeters": 97386.00714620129,
+          "latitudeDegrees": 42.15841,
+          "longitudeDegrees": 2.20014,
+          "altitudeMeters": 770.5
+        },
+        {
+          "normalizedPointIndex": 2951,
+          "rawPointIndex": 2955,
+          "distanceMeters": 97469.34171203533,
+          "latitudeDegrees": 42.15915,
+          "longitudeDegrees": 2.19998,
+          "altitudeMeters": 732.3
+        },
+        {
+          "normalizedPointIndex": 2952,
+          "rawPointIndex": 2956,
+          "distanceMeters": 97586.04894098695,
+          "latitudeDegrees": 42.16015,
+          "longitudeDegrees": 2.19955,
+          "altitudeMeters": 683.5
+        },
+        {
+          "normalizedPointIndex": 2953,
+          "rawPointIndex": 2957,
+          "distanceMeters": 97660.79222346772,
+          "latitudeDegrees": 42.16069,
+          "longitudeDegrees": 2.19901,
+          "altitudeMeters": 679
+        },
+        {
+          "normalizedPointIndex": 2954,
+          "rawPointIndex": 2958,
+          "distanceMeters": 97750.75874848774,
+          "latitudeDegrees": 42.16138,
+          "longitudeDegrees": 2.19844,
+          "altitudeMeters": 673.5
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-03-granollers-les-angles-6523-6524",
       "sourceFile": "raw/tour-de-france-2026-etape-03-granollers-les-angles.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -356,7 +883,11 @@
         "rawEndPointIndex": 6529,
         "horizontalSpacingMeters": 1.9793009631393943,
         "altitudeDeltaMeters": 2.25,
-        "rawGrade": 1.1367649700080207
+        "rawGrade": 1.1367649700080207,
+        "absoluteAltitudeDeltaMeters": 2.25,
+        "absoluteRawGrade": 1.1367649700080207,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -412,7 +943,7 @@
     {
       "id": "tour-de-france-2026-etape-06-pau-gavarnie-gedre-8842-8843",
       "sourceFile": "raw/tour-de-france-2026-etape-06-pau-gavarnie-gedre.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -422,7 +953,11 @@
         "rawEndPointIndex": 8881,
         "horizontalSpacingMeters": 6.615609687083634,
         "altitudeDeltaMeters": -7.5,
-        "rawGrade": -1.1336823595628769
+        "rawGrade": -1.1336823595628769,
+        "absoluteAltitudeDeltaMeters": 7.5,
+        "absoluteRawGrade": 1.1336823595628769,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -478,7 +1013,7 @@
     {
       "id": "tour-de-france-2026-etape-06-pau-gavarnie-gedre-8843-8844",
       "sourceFile": "raw/tour-de-france-2026-etape-06-pau-gavarnie-gedre.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -488,7 +1023,11 @@
         "rawEndPointIndex": 8882,
         "horizontalSpacingMeters": 9.0357301463373,
         "altitudeDeltaMeters": -10.399999999999977,
-        "rawGrade": -1.150986121936775
+        "rawGrade": -1.150986121936775,
+        "absoluteAltitudeDeltaMeters": 10.399999999999977,
+        "absoluteRawGrade": 1.150986121936775,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -544,7 +1083,7 @@
     {
       "id": "tour-de-france-2026-etape-06-pau-gavarnie-gedre-8844-8845",
       "sourceFile": "raw/tour-de-france-2026-etape-06-pau-gavarnie-gedre.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -554,7 +1093,11 @@
         "rawEndPointIndex": 8883,
         "horizontalSpacingMeters": 6.615608646068722,
         "altitudeDeltaMeters": -7.2000000000000455,
-        "rawGrade": -1.0883352364379344
+        "rawGrade": -1.0883352364379344,
+        "absoluteAltitudeDeltaMeters": 7.2000000000000455,
+        "absoluteRawGrade": 1.0883352364379344,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -610,7 +1153,7 @@
     {
       "id": "tour-de-france-2026-etape-06-pau-gavarnie-gedre-8845-8846",
       "sourceFile": "raw/tour-de-france-2026-etape-06-pau-gavarnie-gedre.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -620,7 +1163,11 @@
         "rawEndPointIndex": 8884,
         "horizontalSpacingMeters": 4.22488578708726,
         "altitudeDeltaMeters": -5.099999999999909,
-        "rawGrade": -1.2071332237163208
+        "rawGrade": -1.2071332237163208,
+        "absoluteAltitudeDeltaMeters": 5.099999999999909,
+        "absoluteRawGrade": 1.2071332237163208,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -676,7 +1223,7 @@
     {
       "id": "tour-de-france-2026-etape-06-pau-gavarnie-gedre-8854-8855",
       "sourceFile": "raw/tour-de-france-2026-etape-06-pau-gavarnie-gedre.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -686,7 +1233,11 @@
         "rawEndPointIndex": 8893,
         "horizontalSpacingMeters": 6.893785093765473,
         "altitudeDeltaMeters": 7.7000000000000455,
-        "rawGrade": 1.1169480764585609
+        "rawGrade": 1.1169480764585609,
+        "absoluteAltitudeDeltaMeters": 7.7000000000000455,
+        "absoluteRawGrade": 1.1169480764585609,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -742,7 +1293,7 @@
     {
       "id": "tour-de-france-2026-etape-15-champagnole-plateau-de-solaison-3993-3994",
       "sourceFile": "raw/tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -752,7 +1303,11 @@
         "rawEndPointIndex": 4011,
         "horizontalSpacingMeters": 11.225355917282286,
         "altitudeDeltaMeters": 13,
-        "rawGrade": 1.1580924556686452
+        "rawGrade": 1.1580924556686452,
+        "absoluteAltitudeDeltaMeters": 13,
+        "absoluteRawGrade": 1.1580924556686452,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -806,10 +1361,80 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-15-champagnole-plateau-de-solaison-3994-3995",
+      "sourceFile": "raw/tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 3994,
+        "normalizedEndPointIndex": 3995,
+        "rawStartPointIndex": 4011,
+        "rawEndPointIndex": 4012,
+        "horizontalSpacingMeters": 48.14121388652711,
+        "altitudeDeltaMeters": 47.799999999999955,
+        "rawGrade": 0.9929122292734157,
+        "absoluteAltitudeDeltaMeters": 47.799999999999955,
+        "absoluteRawGrade": 0.9929122292734157,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 3992,
+          "rawPointIndex": 4009,
+          "distanceMeters": 74700.10545960082,
+          "latitudeDegrees": 46.24851,
+          "longitudeDegrees": 5.89292,
+          "altitudeMeters": 751.9
+        },
+        {
+          "normalizedPointIndex": 3993,
+          "rawPointIndex": 4010,
+          "distanceMeters": 74725.78415635787,
+          "latitudeDegrees": 46.24828,
+          "longitudeDegrees": 5.89289,
+          "altitudeMeters": 757.6
+        },
+        {
+          "normalizedPointIndex": 3994,
+          "rawPointIndex": 4011,
+          "distanceMeters": 74737.00951227515,
+          "latitudeDegrees": 46.24818,
+          "longitudeDegrees": 5.89291,
+          "altitudeMeters": 770.6
+        },
+        {
+          "normalizedPointIndex": 3995,
+          "rawPointIndex": 4012,
+          "distanceMeters": 74785.15072616168,
+          "latitudeDegrees": 46.2478,
+          "longitudeDegrees": 5.89321,
+          "altitudeMeters": 818.4
+        },
+        {
+          "normalizedPointIndex": 3996,
+          "rawPointIndex": 4013,
+          "distanceMeters": 74966.12473433875,
+          "latitudeDegrees": 46.24638,
+          "longitudeDegrees": 5.89436,
+          "altitudeMeters": 762.9
+        },
+        {
+          "normalizedPointIndex": 3997,
+          "rawPointIndex": 4014,
+          "distanceMeters": 74984.6181602856,
+          "latitudeDegrees": 46.24625,
+          "longitudeDegrees": 5.89451,
+          "altitudeMeters": 757.8
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-15-champagnole-plateau-de-solaison-3995-3996",
       "sourceFile": "raw/tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 3995,
@@ -818,7 +1443,11 @@
         "rawEndPointIndex": 4013,
         "horizontalSpacingMeters": 180.9740081770724,
         "altitudeDeltaMeters": -55.5,
-        "rawGrade": -0.3066738730000196
+        "rawGrade": -0.3066738730000196,
+        "absoluteAltitudeDeltaMeters": 55.5,
+        "absoluteRawGrade": 0.3066738730000196,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -872,10 +1501,150 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-15-champagnole-plateau-de-solaison-5304-5305",
+      "sourceFile": "raw/tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 5304,
+        "normalizedEndPointIndex": 5305,
+        "rawStartPointIndex": 5323,
+        "rawEndPointIndex": 5324,
+        "horizontalSpacingMeters": 75.79202647594502,
+        "altitudeDeltaMeters": -29.100000000000023,
+        "rawGrade": -0.3839454010275846,
+        "absoluteAltitudeDeltaMeters": 29.100000000000023,
+        "absoluteRawGrade": 0.3839454010275846,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 5302,
+          "rawPointIndex": 5321,
+          "distanceMeters": 94684.45268056366,
+          "latitudeDegrees": 46.11546,
+          "longitudeDegrees": 5.8258,
+          "altitudeMeters": 379.6
+        },
+        {
+          "normalizedPointIndex": 5303,
+          "rawPointIndex": 5322,
+          "distanceMeters": 94699.88222875845,
+          "latitudeDegrees": 46.11533,
+          "longitudeDegrees": 5.82573,
+          "altitudeMeters": 376.2
+        },
+        {
+          "normalizedPointIndex": 5304,
+          "rawPointIndex": 5323,
+          "distanceMeters": 94717.92140955792,
+          "latitudeDegrees": 46.1152,
+          "longitudeDegrees": 5.82559,
+          "altitudeMeters": 368.5
+        },
+        {
+          "normalizedPointIndex": 5305,
+          "rawPointIndex": 5324,
+          "distanceMeters": 94793.71343603387,
+          "latitudeDegrees": 46.11466,
+          "longitudeDegrees": 5.82499,
+          "altitudeMeters": 339.4
+        },
+        {
+          "normalizedPointIndex": 5306,
+          "rawPointIndex": 5325,
+          "distanceMeters": 94838.83722933395,
+          "latitudeDegrees": 46.11434,
+          "longitudeDegrees": 5.82463,
+          "altitudeMeters": 367.8
+        },
+        {
+          "normalizedPointIndex": 5307,
+          "rawPointIndex": 5326,
+          "distanceMeters": 94842.04555051979,
+          "latitudeDegrees": 46.11432,
+          "longitudeDegrees": 5.8246,
+          "altitudeMeters": 368.7
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-15-champagnole-plateau-de-solaison-5305-5306",
+      "sourceFile": "raw/tour-de-france-2026-etape-15-champagnole-plateau-de-solaison.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 5305,
+        "normalizedEndPointIndex": 5306,
+        "rawStartPointIndex": 5324,
+        "rawEndPointIndex": 5325,
+        "horizontalSpacingMeters": 45.12379330008116,
+        "altitudeDeltaMeters": 28.400000000000034,
+        "rawGrade": 0.6293797113007552,
+        "absoluteAltitudeDeltaMeters": 28.400000000000034,
+        "absoluteRawGrade": 0.6293797113007552,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 5303,
+          "rawPointIndex": 5322,
+          "distanceMeters": 94699.88222875845,
+          "latitudeDegrees": 46.11533,
+          "longitudeDegrees": 5.82573,
+          "altitudeMeters": 376.2
+        },
+        {
+          "normalizedPointIndex": 5304,
+          "rawPointIndex": 5323,
+          "distanceMeters": 94717.92140955792,
+          "latitudeDegrees": 46.1152,
+          "longitudeDegrees": 5.82559,
+          "altitudeMeters": 368.5
+        },
+        {
+          "normalizedPointIndex": 5305,
+          "rawPointIndex": 5324,
+          "distanceMeters": 94793.71343603387,
+          "latitudeDegrees": 46.11466,
+          "longitudeDegrees": 5.82499,
+          "altitudeMeters": 339.4
+        },
+        {
+          "normalizedPointIndex": 5306,
+          "rawPointIndex": 5325,
+          "distanceMeters": 94838.83722933395,
+          "latitudeDegrees": 46.11434,
+          "longitudeDegrees": 5.82463,
+          "altitudeMeters": 367.8
+        },
+        {
+          "normalizedPointIndex": 5307,
+          "rawPointIndex": 5326,
+          "distanceMeters": 94842.04555051979,
+          "latitudeDegrees": 46.11432,
+          "longitudeDegrees": 5.8246,
+          "altitudeMeters": 368.7
+        },
+        {
+          "normalizedPointIndex": 5308,
+          "rawPointIndex": 5327,
+          "distanceMeters": 94848.06705016334,
+          "latitudeDegrees": 46.11427,
+          "longitudeDegrees": 5.82457,
+          "altitudeMeters": 370.3
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-17-chambery-voiron-5133-5134",
       "sourceFile": "raw/tour-de-france-2026-etape-17-chambery-voiron.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 5133,
@@ -884,7 +1653,11 @@
         "rawEndPointIndex": 5153,
         "horizontalSpacingMeters": 265.182548366065,
         "altitudeDeltaMeters": 64.20000000000005,
-        "rawGrade": 0.2420973793168948
+        "rawGrade": 0.2420973793168948,
+        "absoluteAltitudeDeltaMeters": 64.20000000000005,
+        "absoluteRawGrade": 0.2420973793168948,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": true
       },
       "context": [
         {
@@ -940,9 +1713,10 @@
     {
       "id": "tour-de-france-2026-etape-17-chambery-voiron-5134-5135",
       "sourceFile": "raw/tour-de-france-2026-etape-17-chambery-voiron.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m",
-        "absolute-raw-grade-above-1"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m",
+        "absolute-raw-grade-above-1",
+        "absolute-raw-grade-p100"
       ],
       "segment": {
         "normalizedStartPointIndex": 5134,
@@ -951,7 +1725,11 @@
         "rawEndPointIndex": 5154,
         "horizontalSpacingMeters": 20.99645791387593,
         "altitudeDeltaMeters": -73.5,
-        "rawGrade": -3.500590447278541
+        "rawGrade": -3.500590447278541,
+        "absoluteAltitudeDeltaMeters": 73.5,
+        "absoluteRawGrade": 3.500590447278541,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -1007,7 +1785,7 @@
     {
       "id": "tour-de-france-2026-etape-17-chambery-voiron-5135-5136",
       "sourceFile": "raw/tour-de-france-2026-etape-17-chambery-voiron.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -1017,7 +1795,11 @@
         "rawEndPointIndex": 5155,
         "horizontalSpacingMeters": 6.375394282513298,
         "altitudeDeltaMeters": -12.899999999999977,
-        "rawGrade": -2.023404267777233
+        "rawGrade": -2.023404267777233,
+        "absoluteAltitudeDeltaMeters": 12.899999999999977,
+        "absoluteRawGrade": 2.023404267777233,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -1071,9 +1853,709 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-17-chambery-voiron-6235-6236",
+      "sourceFile": "raw/tour-de-france-2026-etape-17-chambery-voiron.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 6235,
+        "normalizedEndPointIndex": 6236,
+        "rawStartPointIndex": 6257,
+        "rawEndPointIndex": 6258,
+        "horizontalSpacingMeters": 38.197534992781584,
+        "altitudeDeltaMeters": 25.599999999999966,
+        "rawGrade": 0.6702003154087758,
+        "absoluteAltitudeDeltaMeters": 25.599999999999966,
+        "absoluteRawGrade": 0.6702003154087758,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 6233,
+          "rawPointIndex": 6255,
+          "distanceMeters": 114765.03137301163,
+          "latitudeDegrees": 45.5302,
+          "longitudeDegrees": 5.68094,
+          "altitudeMeters": 254.4
+        },
+        {
+          "normalizedPointIndex": 6234,
+          "rawPointIndex": 6256,
+          "distanceMeters": 114833.85941415407,
+          "latitudeDegrees": 45.52959,
+          "longitudeDegrees": 5.68079,
+          "altitudeMeters": 251
+        },
+        {
+          "normalizedPointIndex": 6235,
+          "rawPointIndex": 6257,
+          "distanceMeters": 114880.247651902,
+          "latitudeDegrees": 45.52918,
+          "longitudeDegrees": 5.68068,
+          "altitudeMeters": 242.3
+        },
+        {
+          "normalizedPointIndex": 6236,
+          "rawPointIndex": 6258,
+          "distanceMeters": 114918.44518689478,
+          "latitudeDegrees": 45.52884,
+          "longitudeDegrees": 5.68061,
+          "altitudeMeters": 267.9
+        },
+        {
+          "normalizedPointIndex": 6237,
+          "rawPointIndex": 6259,
+          "distanceMeters": 114935.41300049443,
+          "latitudeDegrees": 45.52869,
+          "longitudeDegrees": 5.68057,
+          "altitudeMeters": 272.5
+        },
+        {
+          "normalizedPointIndex": 6238,
+          "rawPointIndex": 6260,
+          "distanceMeters": 114950.05604450061,
+          "latitudeDegrees": 45.52856,
+          "longitudeDegrees": 5.68054,
+          "altitudeMeters": 275.2
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-18-voiron-orcieres-merlette-8783-8784",
+      "sourceFile": "raw/tour-de-france-2026-etape-18-voiron-orcieres-merlette.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-p99"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 8783,
+        "normalizedEndPointIndex": 8784,
+        "rawStartPointIndex": 8818,
+        "rawEndPointIndex": 8819,
+        "horizontalSpacingMeters": 55.59720034818747,
+        "altitudeDeltaMeters": 4.7000000000000455,
+        "rawGrade": 0.08453663081172164,
+        "absoluteAltitudeDeltaMeters": 4.7000000000000455,
+        "absoluteRawGrade": 0.08453663081172164,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 8781,
+          "rawPointIndex": 8816,
+          "distanceMeters": 175245.22092324318,
+          "latitudeDegrees": 44.64071,
+          "longitudeDegrees": 6.17641,
+          "altitudeMeters": 1121.9
+        },
+        {
+          "normalizedPointIndex": 8782,
+          "rawPointIndex": 8817,
+          "distanceMeters": 175272.44488356958,
+          "latitudeDegrees": 44.6408,
+          "longitudeDegrees": 6.17673,
+          "altitudeMeters": 1123.4
+        },
+        {
+          "normalizedPointIndex": 8783,
+          "rawPointIndex": 8818,
+          "distanceMeters": 175312.02881320604,
+          "latitudeDegrees": 44.64094,
+          "longitudeDegrees": 6.17719,
+          "altitudeMeters": 1126.7
+        },
+        {
+          "normalizedPointIndex": 8784,
+          "rawPointIndex": 8819,
+          "distanceMeters": 175367.62601355423,
+          "latitudeDegrees": 44.64113,
+          "longitudeDegrees": 6.17784,
+          "altitudeMeters": 1131.4
+        },
+        {
+          "normalizedPointIndex": 8785,
+          "rawPointIndex": 8820,
+          "distanceMeters": 175424.82693901384,
+          "latitudeDegrees": 44.64134,
+          "longitudeDegrees": 6.1785,
+          "altitudeMeters": 1135.5
+        },
+        {
+          "normalizedPointIndex": 8786,
+          "rawPointIndex": 8821,
+          "distanceMeters": 175467.0302145502,
+          "latitudeDegrees": 44.64149,
+          "longitudeDegrees": 6.17899,
+          "altitudeMeters": 1137.8
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-19-gap-alpe-d-huez-3477-3478",
+      "sourceFile": "raw/tour-de-france-2026-etape-19-gap-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 3477,
+        "normalizedEndPointIndex": 3478,
+        "rawStartPointIndex": 3491,
+        "rawEndPointIndex": 3492,
+        "horizontalSpacingMeters": 27.89695859947824,
+        "altitudeDeltaMeters": -22.09999999999991,
+        "rawGrade": -0.7922010537884674,
+        "absoluteAltitudeDeltaMeters": 22.09999999999991,
+        "absoluteRawGrade": 0.7922010537884674,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 3475,
+          "rawPointIndex": 3489,
+          "distanceMeters": 57800.789395436535,
+          "latitudeDegrees": 44.81682,
+          "longitudeDegrees": 5.90805,
+          "altitudeMeters": 789.8
+        },
+        {
+          "normalizedPointIndex": 3476,
+          "rawPointIndex": 3490,
+          "distanceMeters": 57806.404823683275,
+          "latitudeDegrees": 44.81687,
+          "longitudeDegrees": 5.90804,
+          "altitudeMeters": 787.3
+        },
+        {
+          "normalizedPointIndex": 3477,
+          "rawPointIndex": 3491,
+          "distanceMeters": 57811.12410629795,
+          "latitudeDegrees": 44.81691,
+          "longitudeDegrees": 5.90802,
+          "altitudeMeters": 784.8
+        },
+        {
+          "normalizedPointIndex": 3478,
+          "rawPointIndex": 3492,
+          "distanceMeters": 57839.02106489743,
+          "latitudeDegrees": 44.81713,
+          "longitudeDegrees": 5.90785,
+          "altitudeMeters": 762.7
+        },
+        {
+          "normalizedPointIndex": 3479,
+          "rawPointIndex": 3493,
+          "distanceMeters": 57854.52147806875,
+          "latitudeDegrees": 44.81725,
+          "longitudeDegrees": 5.90775,
+          "altitudeMeters": 755.6
+        },
+        {
+          "normalizedPointIndex": 3480,
+          "rawPointIndex": 3494,
+          "distanceMeters": 57905.27763925314,
+          "latitudeDegrees": 44.81765,
+          "longitudeDegrees": 5.90744,
+          "altitudeMeters": 768.5
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-19-gap-alpe-d-huez-6876-6877",
+      "sourceFile": "raw/tour-de-france-2026-etape-19-gap-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-raw-grade-p99.9"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 6876,
+        "normalizedEndPointIndex": 6877,
+        "rawStartPointIndex": 6897,
+        "rawEndPointIndex": 6898,
+        "horizontalSpacingMeters": 4.581803217966808,
+        "altitudeDeltaMeters": 2.5,
+        "rawGrade": 0.5456367026407093,
+        "absoluteAltitudeDeltaMeters": 2.5,
+        "absoluteRawGrade": 0.5456367026407093,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 6874,
+          "rawPointIndex": 6895,
+          "distanceMeters": 125853.19241471648,
+          "latitudeDegrees": 45.07658,
+          "longitudeDegrees": 6.04728,
+          "altitudeMeters": 1242.4
+        },
+        {
+          "normalizedPointIndex": 6875,
+          "rawPointIndex": 6896,
+          "distanceMeters": 125857.70899723707,
+          "latitudeDegrees": 45.07662,
+          "longitudeDegrees": 6.04729,
+          "altitudeMeters": 1245
+        },
+        {
+          "normalizedPointIndex": 6876,
+          "rawPointIndex": 6897,
+          "distanceMeters": 125860.43149477874,
+          "latitudeDegrees": 45.07664,
+          "longitudeDegrees": 6.04731,
+          "altitudeMeters": 1246.6
+        },
+        {
+          "normalizedPointIndex": 6877,
+          "rawPointIndex": 6898,
+          "distanceMeters": 125865.0132979967,
+          "latitudeDegrees": 45.07667,
+          "longitudeDegrees": 6.04735,
+          "altitudeMeters": 1249.1
+        },
+        {
+          "normalizedPointIndex": 6878,
+          "rawPointIndex": 6899,
+          "distanceMeters": 125868.1541584305,
+          "latitudeDegrees": 45.07667,
+          "longitudeDegrees": 6.04739,
+          "altitudeMeters": 1249.7
+        },
+        {
+          "normalizedPointIndex": 6879,
+          "rawPointIndex": 6900,
+          "distanceMeters": 125871.29501886429,
+          "latitudeDegrees": 45.07667,
+          "longitudeDegrees": 6.04743,
+          "altitudeMeters": 1250.2
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-2646-2647",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2646,
+        "normalizedEndPointIndex": 2647,
+        "rawStartPointIndex": 2656,
+        "rawEndPointIndex": 2657,
+        "horizontalSpacingMeters": 32.581147920995136,
+        "altitudeDeltaMeters": -21.699999999999818,
+        "rawGrade": -0.6660293263030319,
+        "absoluteAltitudeDeltaMeters": 21.699999999999818,
+        "absoluteRawGrade": 0.6660293263030319,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2644,
+          "rawPointIndex": 2654,
+          "distanceMeters": 55163.91439109311,
+          "latitudeDegrees": 45.20116,
+          "longitudeDegrees": 6.30265,
+          "altitudeMeters": 1257.6
+        },
+        {
+          "normalizedPointIndex": 2645,
+          "rawPointIndex": 2655,
+          "distanceMeters": 55194.29816407075,
+          "latitudeDegrees": 45.20138,
+          "longitudeDegrees": 6.30288,
+          "altitudeMeters": 1258.6
+        },
+        {
+          "normalizedPointIndex": 2646,
+          "rawPointIndex": 2656,
+          "distanceMeters": 55199.44352048305,
+          "latitudeDegrees": 45.20141,
+          "longitudeDegrees": 6.30293,
+          "altitudeMeters": 1256.6
+        },
+        {
+          "normalizedPointIndex": 2647,
+          "rawPointIndex": 2657,
+          "distanceMeters": 55232.02466840405,
+          "latitudeDegrees": 45.20162,
+          "longitudeDegrees": 6.30322,
+          "altitudeMeters": 1234.9
+        },
+        {
+          "normalizedPointIndex": 2648,
+          "rawPointIndex": 2658,
+          "distanceMeters": 55266.12850973338,
+          "latitudeDegrees": 45.20182,
+          "longitudeDegrees": 6.30355,
+          "altitudeMeters": 1230.8
+        },
+        {
+          "normalizedPointIndex": 2649,
+          "rawPointIndex": 2659,
+          "distanceMeters": 55303.29015079904,
+          "latitudeDegrees": 45.20202,
+          "longitudeDegrees": 6.30393,
+          "altitudeMeters": 1264.4
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-2648-2649",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2648,
+        "normalizedEndPointIndex": 2649,
+        "rawStartPointIndex": 2658,
+        "rawEndPointIndex": 2659,
+        "horizontalSpacingMeters": 37.16164106565702,
+        "altitudeDeltaMeters": 33.600000000000136,
+        "rawGrade": 0.9041581328616733,
+        "absoluteAltitudeDeltaMeters": 33.600000000000136,
+        "absoluteRawGrade": 0.9041581328616733,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2646,
+          "rawPointIndex": 2656,
+          "distanceMeters": 55199.44352048305,
+          "latitudeDegrees": 45.20141,
+          "longitudeDegrees": 6.30293,
+          "altitudeMeters": 1256.6
+        },
+        {
+          "normalizedPointIndex": 2647,
+          "rawPointIndex": 2657,
+          "distanceMeters": 55232.02466840405,
+          "latitudeDegrees": 45.20162,
+          "longitudeDegrees": 6.30322,
+          "altitudeMeters": 1234.9
+        },
+        {
+          "normalizedPointIndex": 2648,
+          "rawPointIndex": 2658,
+          "distanceMeters": 55266.12850973338,
+          "latitudeDegrees": 45.20182,
+          "longitudeDegrees": 6.30355,
+          "altitudeMeters": 1230.8
+        },
+        {
+          "normalizedPointIndex": 2649,
+          "rawPointIndex": 2659,
+          "distanceMeters": 55303.29015079904,
+          "latitudeDegrees": 45.20202,
+          "longitudeDegrees": 6.30393,
+          "altitudeMeters": 1264.4
+        },
+        {
+          "normalizedPointIndex": 2650,
+          "rawPointIndex": 2660,
+          "distanceMeters": 55309.709412909426,
+          "latitudeDegrees": 45.20205,
+          "longitudeDegrees": 6.304,
+          "altitudeMeters": 1266.3
+        },
+        {
+          "normalizedPointIndex": 2651,
+          "rawPointIndex": 2661,
+          "distanceMeters": 55314.21409501969,
+          "latitudeDegrees": 45.20207,
+          "longitudeDegrees": 6.30405,
+          "altitudeMeters": 1267.2
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-2713-2714",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 2713,
+        "normalizedEndPointIndex": 2714,
+        "rawStartPointIndex": 2723,
+        "rawEndPointIndex": 2724,
+        "horizontalSpacingMeters": 40.305216576278326,
+        "altitudeDeltaMeters": 33.799999999999955,
+        "rawGrade": 0.8386011258873368,
+        "absoluteAltitudeDeltaMeters": 33.799999999999955,
+        "absoluteRawGrade": 0.8386011258873368,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 2711,
+          "rawPointIndex": 2721,
+          "distanceMeters": 56668.18400783987,
+          "latitudeDegrees": 45.21155,
+          "longitudeDegrees": 6.30682,
+          "altitudeMeters": 1281.4
+        },
+        {
+          "normalizedPointIndex": 2712,
+          "rawPointIndex": 2722,
+          "distanceMeters": 56674.22004369507,
+          "latitudeDegrees": 45.2116,
+          "longitudeDegrees": 6.30685,
+          "altitudeMeters": 1282.6
+        },
+        {
+          "normalizedPointIndex": 2713,
+          "rawPointIndex": 2723,
+          "distanceMeters": 56679.779797706804,
+          "latitudeDegrees": 45.21165,
+          "longitudeDegrees": 6.30685,
+          "altitudeMeters": 1284.2
+        },
+        {
+          "normalizedPointIndex": 2714,
+          "rawPointIndex": 2724,
+          "distanceMeters": 56720.08501428308,
+          "latitudeDegrees": 45.21201,
+          "longitudeDegrees": 6.30679,
+          "altitudeMeters": 1318
+        },
+        {
+          "normalizedPointIndex": 2715,
+          "rawPointIndex": 2725,
+          "distanceMeters": 57183.90015536538,
+          "latitudeDegrees": 45.21614,
+          "longitudeDegrees": 6.30596,
+          "altitudeMeters": 1298.3
+        },
+        {
+          "normalizedPointIndex": 2716,
+          "rawPointIndex": 2726,
+          "distanceMeters": 57203.9764849757,
+          "latitudeDegrees": 45.21632,
+          "longitudeDegrees": 6.30594,
+          "altitudeMeters": 1286.5
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-7184-7185",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-raw-grade-p99"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 7184,
+        "normalizedEndPointIndex": 7185,
+        "rawStartPointIndex": 7206,
+        "rawEndPointIndex": 7207,
+        "horizontalSpacingMeters": 10.516125141846715,
+        "altitudeDeltaMeters": -2.7000000000000455,
+        "rawGrade": -0.25674856124105655,
+        "absoluteAltitudeDeltaMeters": 2.7000000000000455,
+        "absoluteRawGrade": 0.25674856124105655,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 7182,
+          "rawPointIndex": 7204,
+          "distanceMeters": 131474.34471310087,
+          "latitudeDegrees": 45.04091,
+          "longitudeDegrees": 6.35701,
+          "altitudeMeters": 1781.5
+        },
+        {
+          "normalizedPointIndex": 7183,
+          "rawPointIndex": 7205,
+          "distanceMeters": 131496.16621367537,
+          "latitudeDegrees": 45.04102,
+          "longitudeDegrees": 6.35678,
+          "altitudeMeters": 1781.1
+        },
+        {
+          "normalizedPointIndex": 7184,
+          "rawPointIndex": 7206,
+          "distanceMeters": 131521.22958914618,
+          "latitudeDegrees": 45.04116,
+          "longitudeDegrees": 6.35653,
+          "altitudeMeters": 1776.9
+        },
+        {
+          "normalizedPointIndex": 7185,
+          "rawPointIndex": 7207,
+          "distanceMeters": 131531.74571428803,
+          "latitudeDegrees": 45.04123,
+          "longitudeDegrees": 6.35644,
+          "altitudeMeters": 1774.2
+        },
+        {
+          "normalizedPointIndex": 7186,
+          "rawPointIndex": 7208,
+          "distanceMeters": 131543.56350185577,
+          "latitudeDegrees": 45.04132,
+          "longitudeDegrees": 6.35636,
+          "altitudeMeters": 1772.8
+        },
+        {
+          "normalizedPointIndex": 7187,
+          "rawPointIndex": 7209,
+          "distanceMeters": 131557.7151892475,
+          "latitudeDegrees": 45.04144,
+          "longitudeDegrees": 6.3563,
+          "altitudeMeters": 1773.2
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-7444-7445",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 7444,
+        "normalizedEndPointIndex": 7445,
+        "rawStartPointIndex": 7466,
+        "rawEndPointIndex": 7467,
+        "horizontalSpacingMeters": 174.68965756575926,
+        "altitudeDeltaMeters": 22.799999999999955,
+        "rawGrade": 0.13051717152411982,
+        "absoluteAltitudeDeltaMeters": 22.799999999999955,
+        "absoluteRawGrade": 0.13051717152411982,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 7442,
+          "rawPointIndex": 7464,
+          "distanceMeters": 136185.38431420515,
+          "latitudeDegrees": 45.04846,
+          "longitudeDegrees": 6.31423,
+          "altitudeMeters": 1507.3
+        },
+        {
+          "normalizedPointIndex": 7443,
+          "rawPointIndex": 7465,
+          "distanceMeters": 136193.553147885,
+          "latitudeDegrees": 45.0484,
+          "longitudeDegrees": 6.31417,
+          "altitudeMeters": 1512.2
+        },
+        {
+          "normalizedPointIndex": 7444,
+          "rawPointIndex": 7466,
+          "distanceMeters": 136219.70300433377,
+          "latitudeDegrees": 45.04823,
+          "longitudeDegrees": 6.31394,
+          "altitudeMeters": 1530.3
+        },
+        {
+          "normalizedPointIndex": 7445,
+          "rawPointIndex": 7467,
+          "distanceMeters": 136394.39266189953,
+          "latitudeDegrees": 45.04709,
+          "longitudeDegrees": 6.31241,
+          "altitudeMeters": 1553.1
+        },
+        {
+          "normalizedPointIndex": 7446,
+          "rawPointIndex": 7468,
+          "distanceMeters": 136420.54280428667,
+          "latitudeDegrees": 45.04692,
+          "longitudeDegrees": 6.31218,
+          "altitudeMeters": 1555.6
+        },
+        {
+          "normalizedPointIndex": 7447,
+          "rawPointIndex": 7469,
+          "distanceMeters": 136461.78916130782,
+          "latitudeDegrees": 45.04665,
+          "longitudeDegrees": 6.31182,
+          "altitudeMeters": 1520.5
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-7446-7447",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 7446,
+        "normalizedEndPointIndex": 7447,
+        "rawStartPointIndex": 7468,
+        "rawEndPointIndex": 7469,
+        "horizontalSpacingMeters": 41.246357021154836,
+        "altitudeDeltaMeters": -35.09999999999991,
+        "rawGrade": -0.8509842452752246,
+        "absoluteAltitudeDeltaMeters": 35.09999999999991,
+        "absoluteRawGrade": 0.8509842452752246,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 7444,
+          "rawPointIndex": 7466,
+          "distanceMeters": 136219.70300433377,
+          "latitudeDegrees": 45.04823,
+          "longitudeDegrees": 6.31394,
+          "altitudeMeters": 1530.3
+        },
+        {
+          "normalizedPointIndex": 7445,
+          "rawPointIndex": 7467,
+          "distanceMeters": 136394.39266189953,
+          "latitudeDegrees": 45.04709,
+          "longitudeDegrees": 6.31241,
+          "altitudeMeters": 1553.1
+        },
+        {
+          "normalizedPointIndex": 7446,
+          "rawPointIndex": 7468,
+          "distanceMeters": 136420.54280428667,
+          "latitudeDegrees": 45.04692,
+          "longitudeDegrees": 6.31218,
+          "altitudeMeters": 1555.6
+        },
+        {
+          "normalizedPointIndex": 7447,
+          "rawPointIndex": 7469,
+          "distanceMeters": 136461.78916130782,
+          "latitudeDegrees": 45.04665,
+          "longitudeDegrees": 6.31182,
+          "altitudeMeters": 1520.5
+        },
+        {
+          "normalizedPointIndex": 7448,
+          "rawPointIndex": 7470,
+          "distanceMeters": 136473.6573102461,
+          "latitudeDegrees": 45.04657,
+          "longitudeDegrees": 6.31172,
+          "altitudeMeters": 1508.2
+        },
+        {
+          "normalizedPointIndex": 7449,
+          "rawPointIndex": 7471,
+          "distanceMeters": 136482.58078799577,
+          "latitudeDegrees": 45.04655,
+          "longitudeDegrees": 6.31161,
+          "altitudeMeters": 1502
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-7447-7448",
       "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
-      "categories": [
+      "selectionReasons": [
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -1083,7 +2565,11 @@
         "rawEndPointIndex": 7470,
         "horizontalSpacingMeters": 11.86814893828705,
         "altitudeDeltaMeters": -12.299999999999955,
-        "rawGrade": -1.0363873982335812
+        "rawGrade": -1.0363873982335812,
+        "absoluteAltitudeDeltaMeters": 12.299999999999955,
+        "absoluteRawGrade": 1.0363873982335812,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -1137,10 +2623,150 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-7733-7734",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 7733,
+        "normalizedEndPointIndex": 7734,
+        "rawStartPointIndex": 7755,
+        "rawEndPointIndex": 7756,
+        "horizontalSpacingMeters": 153.23460665464518,
+        "altitudeDeltaMeters": -22.700000000000045,
+        "rawGrade": -0.14813886037610627,
+        "absoluteAltitudeDeltaMeters": 22.700000000000045,
+        "absoluteRawGrade": 0.14813886037610627,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 7731,
+          "rawPointIndex": 7753,
+          "distanceMeters": 141777.34104549806,
+          "latitudeDegrees": 45.03875,
+          "longitudeDegrees": 6.24891,
+          "altitudeMeters": 1309.7
+        },
+        {
+          "normalizedPointIndex": 7732,
+          "rawPointIndex": 7754,
+          "distanceMeters": 141797.1099295074,
+          "latitudeDegrees": 45.03877,
+          "longitudeDegrees": 6.24866,
+          "altitudeMeters": 1314
+        },
+        {
+          "normalizedPointIndex": 7733,
+          "rawPointIndex": 7755,
+          "distanceMeters": 141818.35391323114,
+          "latitudeDegrees": 45.03878,
+          "longitudeDegrees": 6.24839,
+          "altitudeMeters": 1316.2
+        },
+        {
+          "normalizedPointIndex": 7734,
+          "rawPointIndex": 7756,
+          "distanceMeters": 141971.5885198858,
+          "latitudeDegrees": 45.03876,
+          "longitudeDegrees": 6.24644,
+          "altitudeMeters": 1293.5
+        },
+        {
+          "normalizedPointIndex": 7735,
+          "rawPointIndex": 7757,
+          "distanceMeters": 141998.30353949114,
+          "latitudeDegrees": 45.03876,
+          "longitudeDegrees": 6.2461,
+          "altitudeMeters": 1291.9
+        },
+        {
+          "normalizedPointIndex": 7736,
+          "rawPointIndex": 7758,
+          "distanceMeters": 142029.8115506381,
+          "latitudeDegrees": 45.03878,
+          "longitudeDegrees": 6.2457,
+          "altitudeMeters": 1290.7
+        }
+      ]
+    },
+    {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-8013-8014",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 8013,
+        "normalizedEndPointIndex": 8014,
+        "rawStartPointIndex": 8035,
+        "rawEndPointIndex": 8036,
+        "horizontalSpacingMeters": 54.82421409248491,
+        "altitudeDeltaMeters": -23.100000000000136,
+        "rawGrade": -0.42134666921138036,
+        "absoluteAltitudeDeltaMeters": 23.100000000000136,
+        "absoluteRawGrade": 0.42134666921138036,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 8011,
+          "rawPointIndex": 8033,
+          "distanceMeters": 147846.14168354633,
+          "latitudeDegrees": 45.04003,
+          "longitudeDegrees": 6.17554,
+          "altitudeMeters": 1116.5
+        },
+        {
+          "normalizedPointIndex": 8012,
+          "rawPointIndex": 8034,
+          "distanceMeters": 147883.19894136602,
+          "latitudeDegrees": 45.04015,
+          "longitudeDegrees": 6.1751,
+          "altitudeMeters": 1100.8
+        },
+        {
+          "normalizedPointIndex": 8013,
+          "rawPointIndex": 8035,
+          "distanceMeters": 147908.45335092326,
+          "latitudeDegrees": 45.04021,
+          "longitudeDegrees": 6.17479,
+          "altitudeMeters": 1083.2
+        },
+        {
+          "normalizedPointIndex": 8014,
+          "rawPointIndex": 8036,
+          "distanceMeters": 147963.27756501574,
+          "latitudeDegrees": 45.04037,
+          "longitudeDegrees": 6.17413,
+          "altitudeMeters": 1060.1
+        },
+        {
+          "normalizedPointIndex": 8015,
+          "rawPointIndex": 8037,
+          "distanceMeters": 147967.12766536637,
+          "latitudeDegrees": 45.04039,
+          "longitudeDegrees": 6.17409,
+          "altitudeMeters": 1060.2
+        },
+        {
+          "normalizedPointIndex": 8016,
+          "rawPointIndex": 8038,
+          "distanceMeters": 147979.4528636588,
+          "latitudeDegrees": 45.04044,
+          "longitudeDegrees": 6.17395,
+          "altitudeMeters": 1058.9
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-8101-8102",
       "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 8101,
@@ -1149,7 +2775,11 @@
         "rawEndPointIndex": 8124,
         "horizontalSpacingMeters": 299.7478234976588,
         "altitudeDeltaMeters": 71.09999999999991,
-        "rawGrade": 0.2371993870392698
+        "rawGrade": 0.2371993870392698,
+        "absoluteAltitudeDeltaMeters": 71.09999999999991,
+        "absoluteRawGrade": 0.2371993870392698,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": true
       },
       "context": [
         {
@@ -1203,9 +2833,80 @@
       ]
     },
     {
+      "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-8102-8103",
+      "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
+      ],
+      "segment": {
+        "normalizedStartPointIndex": 8102,
+        "normalizedEndPointIndex": 8103,
+        "rawStartPointIndex": 8124,
+        "rawEndPointIndex": 8125,
+        "horizontalSpacingMeters": 124.97017291092197,
+        "altitudeDeltaMeters": 28,
+        "rawGrade": 0.22405346290076944,
+        "absoluteAltitudeDeltaMeters": 28,
+        "absoluteRawGrade": 0.22405346290076944,
+        "direction": "ascending",
+        "horizontalSpacingAbove250Meters": false
+      },
+      "context": [
+        {
+          "normalizedPointIndex": 8100,
+          "rawPointIndex": 8122,
+          "distanceMeters": 149657.49217392257,
+          "latitudeDegrees": 45.04526,
+          "longitudeDegrees": 6.15548,
+          "altitudeMeters": 1079
+        },
+        {
+          "normalizedPointIndex": 8101,
+          "rawPointIndex": 8123,
+          "distanceMeters": 149670.1116033053,
+          "latitudeDegrees": 45.04527,
+          "longitudeDegrees": 6.15532,
+          "altitudeMeters": 1086.7
+        },
+        {
+          "normalizedPointIndex": 8102,
+          "rawPointIndex": 8124,
+          "distanceMeters": 149969.85942680296,
+          "latitudeDegrees": 45.04558,
+          "longitudeDegrees": 6.15153,
+          "altitudeMeters": 1157.8
+        },
+        {
+          "normalizedPointIndex": 8103,
+          "rawPointIndex": 8125,
+          "distanceMeters": 150094.82959971388,
+          "latitudeDegrees": 45.04571,
+          "longitudeDegrees": 6.14995,
+          "altitudeMeters": 1185.8
+        },
+        {
+          "normalizedPointIndex": 8104,
+          "rawPointIndex": 8126,
+          "distanceMeters": 150133.33522915703,
+          "latitudeDegrees": 45.04578,
+          "longitudeDegrees": 6.14947,
+          "altitudeMeters": 1189.3
+        },
+        {
+          "normalizedPointIndex": 8105,
+          "rawPointIndex": 8127,
+          "distanceMeters": 150215.65683880006,
+          "latitudeDegrees": 45.04606,
+          "longitudeDegrees": 6.1485,
+          "altitudeMeters": 1189.6
+        }
+      ]
+    },
+    {
       "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-8111-8112",
       "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
-      "categories": [
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m",
         "absolute-raw-grade-above-1"
       ],
       "segment": {
@@ -1215,7 +2916,11 @@
         "rawEndPointIndex": 8134,
         "horizontalSpacingMeters": 25.351835663575912,
         "altitudeDeltaMeters": -28,
-        "rawGrade": -1.1044565124027221
+        "rawGrade": -1.1044565124027221,
+        "absoluteAltitudeDeltaMeters": 28,
+        "absoluteRawGrade": 1.1044565124027221,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
@@ -1271,8 +2976,8 @@
     {
       "id": "tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez-8112-8113",
       "sourceFile": "raw/tour-de-france-2026-etape-20-le-bourg-d-oisans-alpe-d-huez.gpx",
-      "categories": [
-        "absolute-altitude-delta-above-50-m"
+      "selectionReasons": [
+        "absolute-altitude-delta-above-20-m"
       ],
       "segment": {
         "normalizedStartPointIndex": 8112,
@@ -1281,7 +2986,11 @@
         "rawEndPointIndex": 8135,
         "horizontalSpacingMeters": 189.79265359597048,
         "altitudeDeltaMeters": -93.40000000000009,
-        "rawGrade": -0.49211599200688494
+        "rawGrade": -0.49211599200688494,
+        "absoluteAltitudeDeltaMeters": 93.40000000000009,
+        "absoluteRawGrade": 0.49211599200688494,
+        "direction": "descending",
+        "horizontalSpacingAbove250Meters": false
       },
       "context": [
         {
