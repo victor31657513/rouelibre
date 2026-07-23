@@ -4,7 +4,7 @@
 
 - Victor orchestre le projet, teste les livraisons et arbitre les décisions.
 - Codex analyse le dépôt, implémente les tâches, exécute les tests, met à jour la documentation et prépare les Pull Requests.
-- ChatGPT examine les Pull Requests et rend un verdict.
+- ChatGPT audite les Pull Requests après leur fusion et rend un verdict.
 - Codex ne poursuit pas spontanément vers la tâche ou la phase suivante.
 - Une Pull Request traite un sujet principal.
 
@@ -90,4 +90,29 @@ La documentation ne présente jamais comme existante une fonctionnalité seuleme
 
 La description d'une PR explique son objectif et son périmètre, présente les tests réellement exécutés et signale les limites importantes. Sa structure exacte n'est pas bloquante. Le modèle `.github/pull_request_template.md` reste une aide pour les descriptions rédigées manuellement, et les descriptions automatiques structurées en `Motivation` / `Description` / `Testing` sont acceptées.
 
-ChatGPT compare la description au diff réel lors de l'audit. Codex ne fusionne pas une PR avant la validation explicite de ChatGPT. Les recommandations détaillées sont documentées dans `docs/PULL_REQUESTS.md`.
+ChatGPT compare la description au diff réel lors de l'audit post-fusion. Les recommandations détaillées sont documentées dans `docs/PULL_REQUESTS.md`.
+
+## Fusion et examen des Pull Requests
+
+Les Pull Requests préparées par Codex sont fusionnées automatiquement lorsque toutes les vérifications obligatoires de la CI ont réussi.
+
+Codex active l'auto-merge après avoir terminé l'implémentation, exécuté les tests prévus, mis à jour la documentation concernée, vérifié le périmètre de la tâche et renseigné la description de la Pull Request.
+
+Une Pull Request ne doit pas être fusionnée automatiquement dans les cas suivants :
+
+- la CI échoue ;
+- les tests requis n'ont pas été exécutés ;
+- la documentation nécessaire est absente ;
+- un problème connu compromet la cohérence de la simulation, la stabilité numérique ou le déterminisme ;
+- la Pull Request est incomplète ou volontairement laissée en brouillon.
+
+ChatGPT effectue un audit post-fusion de chaque Pull Request. Le verdict prend l'une des formes suivantes :
+
+- **VALIDÉE** : la modification fusionnée est conforme et le projet peut passer à la tâche suivante ;
+- **PR CORRECTIVE** : une correction doit être réalisée dans une nouvelle Pull Request ciblée ;
+- **NOUVELLE PR** : le besoin identifié relève d'un autre périmètre ;
+- **BLOQUÉE** : un problème empêche de poursuivre le développement.
+
+La fusion automatique n'autorise pas Codex à commencer spontanément la tâche suivante. La phase ou la tâche suivante ne commence qu'après le verdict **VALIDÉE** de ChatGPT.
+
+Lorsqu'une Pull Request fusionnée nécessite une correction, la branche `main` n'est pas réécrite et la Pull Request initiale n'est pas rouverte. Codex prépare une nouvelle Pull Request corrective minimale, testable et documentée.
