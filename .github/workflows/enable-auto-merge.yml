@@ -43,6 +43,7 @@ jobs:
           deploy_merged_commit() {
             local merge_sha="$1"
             local existing_run=""
+            local dispatched_run=""
 
             echo "Merge commit SHA: ${merge_sha}"
 
@@ -72,7 +73,35 @@ jobs:
             done
 
             gh workflow run deploy-pages.yml --repo "$REPOSITORY" --ref main
-            echo "Deploy Lab to GitHub Pages was dispatched for main after confirmed merge ${merge_sha}."
+
+            # The CLI returning successfully only proves that GitHub accepted the
+            # request. Confirm that the requested workflow_dispatch run exists and
+            # covers the merge commit before reporting success.
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              dispatched_run="$({
+                gh run list \
+                  --repo "$REPOSITORY" \
+                  --workflow deploy-pages.yml \
+                  --event workflow_dispatch \
+                  --commit "$merge_sha" \
+                  --limit 1 \
+                  --json databaseId,event,headSha,status,url \
+                  --jq '.[0] // empty'
+              })"
+
+              echo "Deployment dispatch verification ${attempt}/10 for ${merge_sha}: ${dispatched_run:-not visible}"
+              if [[ -n "$dispatched_run" ]]; then
+                echo "Deploy Lab to GitHub Pages workflow_dispatch run confirmed for ${merge_sha}: ${dispatched_run}"
+                return 0
+              fi
+
+              if [[ "$attempt" -lt 10 ]]; then
+                sleep 2
+              fi
+            done
+
+            echo "Error: no deploy-pages.yml workflow_dispatch run was observed for ${merge_sha}." >&2
+            exit 1
           }
 
           read -r state auto_merge_enabled merge_sha < <(
@@ -93,34 +122,35 @@ jobs:
 
           if [[ "$auto_merge_enabled" == "true" ]]; then
             echo "Auto-merge is already enabled."
-            echo "No deployment was dispatched because the Pull Request is not merged."
-            exit 0
+          else
+            gh pr merge "$PR_URL" --auto --merge
+            echo "Auto-merge was requested; waiting for the Pull Request to reach MERGED."
           fi
 
-          gh pr merge "$PR_URL" --auto --merge
+          # Keep the merge request and deployment orchestration in this execution.
+          # Sixty attempts at two-second intervals bound the wait to about 120 s.
+          for attempt in $(seq 1 60); do
+            read -r state merge_sha < <(
+              gh pr view "$PR_URL" \
+                --json state,mergeCommit \
+                --jq '[.state, (.mergeCommit.oid // "-")] | @tsv'
+            )
 
-          read -r state auto_merge_enabled merge_sha < <(
-            gh pr view "$PR_URL" \
-              --json state,autoMergeRequest,mergeCommit \
-              --jq '[.state, (.autoMergeRequest != null), (.mergeCommit.oid // "-")] | @tsv'
-          )
-
-          if [[ "$state" == "MERGED" ]]; then
-            echo "Pull Request was merged while enabling auto-merge."
-            if [[ "$merge_sha" == "-" ]]; then
-              echo "Error: the merged Pull Request has no merge commit SHA." >&2
-              exit 1
+            echo "Merge observation ${attempt}/60: state=${state}, mergeCommit=${merge_sha}"
+            if [[ "$state" == "MERGED" ]]; then
+              if [[ "$merge_sha" == "-" ]]; then
+                echo "Error: the merged Pull Request has no merge commit SHA." >&2
+                exit 1
+              fi
+              deploy_merged_commit "$merge_sha"
+              exit 0
             fi
-            deploy_merged_commit "$merge_sha"
-            exit 0
-          fi
 
-          if [[ "$auto_merge_enabled" == "true" ]]; then
-            echo "Auto-merge was enabled; the Pull Request is not merged yet."
-            echo "No deployment was dispatched because enabling auto-merge is not a confirmed merge."
-            exit 0
-          fi
+            if [[ "$attempt" -lt 60 ]]; then
+              sleep 2
+            fi
+          done
 
-          echo "Error: Pull Request remains open without auto-merge enabled." >&2
-          echo "No deployment was dispatched because the Pull Request is not merged." >&2
+          echo "Error: Pull Request did not reach MERGED within the 120-second polling window." >&2
+          echo "No deployment was dispatched or reported as scheduled." >&2
           exit 1
