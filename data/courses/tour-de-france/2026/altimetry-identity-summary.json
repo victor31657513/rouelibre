@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "protocolSchemaVersion": 1,
+  "manifestSchemaVersion": 2,
+  "candidateId": "identity",
+  "candidateVersion": 1,
+  "configurationId": "identity-preserve-v1",
+  "configuration": {
+    "endpointPolicy": "preserve",
+    "longIntervalPolicy": "preserve"
+  },
+  "syntheticProfileCount": 14,
+  "canonicalTrackCount": 21,
+  "manifestCaseCount": 43,
+  "hardGateCount": 20,
+  "passedHardGateCount": 20,
+  "metricCount": 34,
+  "allCorrectionsExactlyZero": true,
+  "allDistancesExactlyPreserved": true,
+  "allAltitudesExactlyPreserved": true,
+  "allGradesExactlyPreserved": true,
+  "allElevationGainsExactlyPreserved": true,
+  "allElevationLossesExactlyPreserved": true,
+  "reportDigestAlgorithm": "sha256",
+  "reportDigest": "f3a8c0e7b5b79d4fbc52ef8ddbb799ab6d208e1d407420db09ba64b65b1fe386"
+}

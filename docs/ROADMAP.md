@@ -22,17 +22,18 @@
 - Corpus dérivé, reproductible et documenté de 43 segments uniques couvrant les seuils diagnostiques de variation absolue et de pente brute ainsi que leurs observations aux percentiles 99, 99,9 et 100, avec correspondance entre indices normalisés et bruts et voisinages source.
 - Exigences de préparation altimétrique déterministe : géométrie horizontale conservée, voisinages exprimés en mètres, configuration explicite, sortie atomique et finie, traçabilité, rapport avant/après et comportement déclaré sur les intervalles longs, sans choix prématuré d'algorithme ou de seuil.
 - Protocole reproductible de comparaison altimétrique : 14 profils synthétiques, 21 traces complètes, 43 cas extraits après traitement complet, invariants éliminatoires, métriques et rapport ordonnés, sans score global ni candidat.
+- Banc d'essai neutre et déterministe avec la référence identité — réalisé : rapport fonctionnel exhaustif maintenu en mémoire et résumé compact versionné.
 
 ## Prochaine tâche unique
 
-Implémenter un banc d’essai neutre et déterministe appliquant le protocole de comparaison, avec uniquement la référence identité, sans implémenter encore de stratégie candidate de préparation altimétrique.
+Définir et implémenter dans le seul banc d’essai une première stratégie candidate minimale de préparation altimétrique, avec une configuration explicite et sans intégration à l’API publique, au laboratoire ou à la simulation.
 
 ## Étapes futures
 
 Les étapes suivantes seront découpées en tâches plus petites et ne seront pas engagées avant validation de l'étape précédente :
 
 1. définition du protocole reproductible de comparaison des préparations altimétriques — réalisée ;
-2. banc d'essai neutre et déterministe avec la seule référence identité ;
+2. banc d'essai neutre et déterministe avec la seule référence identité — réalisé ;
 3. ajout de stratégies candidates dans des tâches dédiées ;
 4. exécution et documentation de la comparaison ;
 5. choix documenté d'une stratégie et de ses paramètres ;
