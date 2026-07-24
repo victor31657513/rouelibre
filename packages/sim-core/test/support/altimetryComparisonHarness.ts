@@ -28,6 +28,15 @@ interface ManifestCase { readonly id: string; readonly sourceFile: string; reado
 interface Manifest { readonly schemaVersion: number; readonly cases: readonly ManifestCase[] }
 export interface HarnessInputs { readonly protocol: Protocol; readonly manifest: Manifest; readonly fileNames: readonly string[]; readonly tracks: readonly DistanceAnnotatedGpxTrack[] }
 export interface FunctionalAudit { readonly randomCallCount: number; readonly dateNowCallCount: number; readonly performanceNowCallCount: number; readonly mutableGlobalStateUsed: boolean }
+export interface SourceCoordinateSnapshotPoint { readonly latitudeDegrees: number | undefined; readonly longitudeDegrees: number | undefined }
+export interface ExactPreservationProof {
+  readonly sourcePointCount: number; readonly preparedPointCount: number; readonly pointCountsExactlyEqual: boolean;
+  readonly comparedDistanceCount: number; readonly distancesExactlyEqual: boolean;
+  readonly comparedAltitudeCount: number; readonly altitudesExactlyEqual: boolean;
+  readonly sourceIntervalCount: number; readonly preparedIntervalCount: number; readonly comparedGradeCount: number; readonly gradesExactlyEqual: boolean;
+  readonly sourcePositiveElevationGainMeters: number; readonly preparedPositiveElevationGainMeters: number; readonly positiveElevationGainsExactlyEqual: boolean;
+  readonly sourceNegativeElevationLossMeters: number; readonly preparedNegativeElevationLossMeters: number; readonly negativeElevationLossesExactlyEqual: boolean;
+}
 
 export function deepFreeze<T>(value: T): Readonly<T> {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
@@ -85,6 +94,33 @@ function stats(points: readonly SourcePoint[]) {
   for (let index = 1; index < points.length; index++) { const a = points[index - 1]!, b = points[index]!; const delta = b.altitudeMeters - a.altitudeMeters; minimumAltitude = Math.min(minimumAltitude, b.altitudeMeters); maximumAltitude = Math.max(maximumAltitude, b.altitudeMeters); gain += Math.max(delta, 0); loss += Math.max(-delta, 0); grades.push(delta / (b.distanceMeters - a.distanceMeters)); }
   const absolute = grades.map(Math.abs); return { minimumAltitude, maximumAltitude, gain, loss, grades, minimumGrade: Math.min(...grades), maximumGrade: Math.max(...grades), maximumAbsoluteGrade: Math.max(...absolute), p95: nearestRank(absolute, 95), p99: nearestRank(absolute, 99) };
 }
+function sequencesExactlyEqual(left: readonly number[], right: readonly number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+export function buildExactPreservationProof(source: readonly SourcePoint[], prepared: PreparedProfile): ExactPreservationProof {
+  validatePreparedProfile(source, prepared);
+  const sourceStats = stats(source), preparedStats = stats(prepared.points);
+  const sourceDistancesMeters = source.map(({ distanceMeters }) => distanceMeters), preparedDistancesMeters = prepared.points.map(({ distanceMeters }) => distanceMeters);
+  const sourceAltitudesMeters = source.map(({ altitudeMeters }) => altitudeMeters), preparedAltitudesMeters = prepared.points.map(({ altitudeMeters }) => altitudeMeters);
+  return deepFreeze({
+    sourcePointCount: source.length, preparedPointCount: prepared.points.length, pointCountsExactlyEqual: source.length === prepared.points.length,
+    comparedDistanceCount: Math.min(sourceDistancesMeters.length, preparedDistancesMeters.length), distancesExactlyEqual: sequencesExactlyEqual(sourceDistancesMeters, preparedDistancesMeters),
+    comparedAltitudeCount: Math.min(sourceAltitudesMeters.length, preparedAltitudesMeters.length), altitudesExactlyEqual: sequencesExactlyEqual(sourceAltitudesMeters, preparedAltitudesMeters),
+    sourceIntervalCount: sourceStats.grades.length, preparedIntervalCount: preparedStats.grades.length, comparedGradeCount: Math.min(sourceStats.grades.length, preparedStats.grades.length), gradesExactlyEqual: sequencesExactlyEqual(sourceStats.grades, preparedStats.grades),
+    sourcePositiveElevationGainMeters: sourceStats.gain, preparedPositiveElevationGainMeters: preparedStats.gain, positiveElevationGainsExactlyEqual: sourceStats.gain === preparedStats.gain,
+    sourceNegativeElevationLossMeters: sourceStats.loss, preparedNegativeElevationLossMeters: preparedStats.loss, negativeElevationLossesExactlyEqual: sourceStats.loss === preparedStats.loss,
+  });
+}
+
+export function snapshotSourceCoordinates(sources: readonly SourceProfile[]): readonly (readonly SourceCoordinateSnapshotPoint[])[] {
+  return deepFreeze(sources.map(({ points }) => points.map(({ latitudeDegrees, longitudeDegrees }) => ({ latitudeDegrees, longitudeDegrees }))));
+}
+export function sourceCoordinatesMatchSnapshot(sources: readonly SourceProfile[], snapshot: readonly (readonly SourceCoordinateSnapshotPoint[])[]): boolean {
+  return sources.length === snapshot.length && sources.every(({ points }, profileIndex) => points.length === snapshot[profileIndex]?.length && points.every((point, pointIndex) => {
+    const original = snapshot[profileIndex]?.[pointIndex];
+    return point.latitudeDegrees === original?.latitudeDegrees && point.longitudeDegrees === original?.longitudeDegrees;
+  }));
+}
 export function measureProfile(source: readonly SourcePoint[], prepared: PreparedProfile, configuration: IdentityConfiguration) {
   validateConfiguration(configuration); validatePreparedProfile(source, prepared);
   const sourceStats = stats(source), preparedStats = stats(prepared.points);
@@ -130,7 +166,7 @@ function runAtomicAudit(): { passed: boolean; evidence: unknown } {
   const checks = [() => prepareIdentity({ points: [{ distanceMeters: 0, altitudeMeters: 1 }, { distanceMeters: 0, altitudeMeters: 2 }] }), () => validatePreparedProfile(source.points, { points: [{ distanceMeters: 0, altitudeMeters: 1, sourcePointIndices: [0] }, { distanceMeters: 1, altitudeMeters: 2, sourcePointIndices: [1] }] }), () => measureProfile(source.points, prepareIdentity(source), { endpointPolicy: "bad", longIntervalPolicy: "preserve" } as unknown as IdentityConfiguration)];
   const rejected = checks.map((check) => { try { check(); return false; } catch { return true; } }); return { passed: rejected.every(Boolean) && JSON.stringify(source) === before, evidence: { rejectedInvalidInput: rejected[0], rejectedInvalidOutput: rejected[1], rejectedInvalidConfiguration: rejected[2], inputUnchanged: JSON.stringify(source) === before, noPartialResultReturned: true } };
 }
-function evaluateInvariants(protocol: Protocol, context: { sourceSnapshotsEqual: boolean; configurationSnapshotsEqual: boolean; repeatable: boolean; prepared: readonly PreparedProfile[]; sources: readonly SourceProfile[]; metrics: readonly ReturnType<typeof measureProfile>[]; configuration: IdentityConfiguration; audit: FunctionalAudit }) {
+function evaluateInvariants(protocol: Protocol, context: { sourceSnapshotsEqual: boolean; sourceCoordinatesUnchanged: boolean; configurationSnapshotsEqual: boolean; repeatable: boolean; prepared: readonly PreparedProfile[]; sources: readonly SourceProfile[]; metrics: readonly ReturnType<typeof measureProfile>[]; configuration: IdentityConfiguration; audit: FunctionalAudit }) {
   const atomic = runAtomicAudit(); const allPoints = context.prepared.flatMap((p) => p.points); const allFinite = allPoints.every((p) => [p.distanceMeters, p.altitudeMeters].every(Number.isFinite));
   const evidence: Record<string, { passed: boolean; evidence: unknown }> = {
     "input-unchanged": { passed: context.sourceSnapshotsEqual, evidence: { snapshotsEqual: context.sourceSnapshotsEqual } }, "configuration-unchanged": { passed: context.configurationSnapshotsEqual, evidence: { snapshotsEqual: context.configurationSnapshotsEqual } }, "repeatable-result": { passed: context.repeatable, evidence: { independentPreparedProfilesEqual: context.repeatable } },
@@ -139,7 +175,7 @@ function evaluateInvariants(protocol: Protocol, context: { sourceSnapshotsEqual:
     "strictly-increasing-distances": { passed: context.prepared.every((p) => p.points.every((point, i) => i === 0 || point.distanceMeters > p.points[i - 1]!.distanceMeters)), evidence: { checkedProfileCount: context.prepared.length } },
     "exact-source-final-distance": { passed: context.prepared.every((p, i) => p.points.at(-1)!.distanceMeters === context.sources[i]!.points.at(-1)!.distanceMeters), evidence: { checkedProfileCount: context.prepared.length } },
     "exact-horizontal-length-preservation": { passed: context.prepared.every((p, i) => p.points.at(-1)!.distanceMeters === context.sources[i]!.points.at(-1)!.distanceMeters), evidence: { finalDistancesComparedExactly: context.prepared.length } },
-    "source-coordinates-unchanged": { passed: context.prepared.every((p, i) => p.points.every((point, j) => point.latitudeDegrees === context.sources[i]!.points[j]?.latitudeDegrees && point.longitudeDegrees === context.sources[i]!.points[j]?.longitudeDegrees)), evidence: { profilesCompared: context.prepared.length } },
+    "source-coordinates-unchanged": { passed: context.sourceCoordinatesUnchanged, evidence: { profilesCompared: context.sources.length, sourceSnapshotsEqual: context.sourceCoordinatesUnchanged } },
     "complete-output-traceability": { passed: context.prepared.every((p) => p.points.every((point) => point.sourcePointIndices.length > 0)), evidence: { tracedPreparedPointCount: allPoints.length } },
     "explicit-altitude-change-list": { passed: context.metrics.every((m) => m.changedSourcePointIndices.length === m.sourcePointChangedCountExact), evidence: { metricSetsChecked: context.metrics.length } },
     "declared-endpoint-policy": { passed: context.configuration.endpointPolicy === "preserve", evidence: { endpointPolicy: context.configuration.endpointPolicy } }, "declared-long-interval-policy": { passed: context.configuration.longIntervalPolicy === "preserve", evidence: { longIntervalPolicy: context.configuration.longIntervalPolicy } },
@@ -155,19 +191,19 @@ function evaluateInvariants(protocol: Protocol, context: { sourceSnapshotsEqual:
 const cleanAudit: FunctionalAudit = deepFreeze({ randomCallCount: 0, dateNowCallCount: 0, performanceNowCallCount: 0, mutableGlobalStateUsed: false });
 export function buildIdentityReport(inputs: HarnessInputs = loadHarnessInputs(), audit: FunctionalAudit = cleanAudit) {
   validateHarnessInputs(inputs); validateConfiguration(identityReference.configuration); const configuration = identityReference.configuration; const sourceSnapshot = JSON.stringify(inputs); const configurationSnapshot = JSON.stringify(configuration);
-  const sources: SourceProfile[] = [...inputs.protocol.syntheticProfiles.map((p) => ({ points: p.points })), ...inputs.tracks]; const prepared = sources.map((source) => identityReference.prepare(source)); const repeated = sources.map((source) => identityReference.prepare(source)); const metrics = sources.map((source, i) => measureProfile(source.points, prepared[i]!, configuration));
+  const sources: SourceProfile[] = [...inputs.protocol.syntheticProfiles.map((p) => ({ points: p.points })), ...inputs.tracks]; const coordinateSnapshot = snapshotSourceCoordinates(sources); const prepared = sources.map((source) => identityReference.prepare(source)); const repeated = sources.map((source) => identityReference.prepare(source)); const metrics = sources.map((source, i) => measureProfile(source.points, prepared[i]!, configuration)); const exactPreservationProofs = sources.map((source, i) => buildExactPreservationProof(source.points, prepared[i]!));
   const syntheticProfileResults = inputs.protocol.syntheticProfiles.map((profile, i) => ({ profileId: profile.id, metrics: metrics[i]! })); const offset = inputs.protocol.syntheticProfiles.length;
   const corpusTrackResults = inputs.tracks.map((_, i) => ({ sourceFile: `raw/${inputs.fileNames[i]}`, metrics: metrics[offset + i]! })); const trackIndex = new Map(inputs.fileNames.map((name, i) => [`raw/${name}`, i]));
   const corpusCaseResults = inputs.manifest.cases.map((entry) => { const index = trackIndex.get(entry.sourceFile); if (index === undefined) throw new RangeError(`unknown manifest track: ${entry.sourceFile}`); const source = inputs.tracks[index]!, output = prepared[offset + index]!; const start = source.points[entry.segment.normalizedStartPointIndex]!, end = source.points[entry.segment.normalizedEndPointIndex]!; if (!start || !end) throw new RangeError(`invalid manifest case: ${entry.id}`); const preparedStart = altitudeAtSourceDistance(output, start.distanceMeters), preparedEnd = altitudeAtSourceDistance(output, end.distanceMeters); return { caseId: entry.id, sourceFile: entry.sourceFile, selectionReasons: [...entry.selectionReasons], direction: entry.segment.direction, horizontalSpacingAbove250Meters: entry.segment.horizontalSpacingAbove250Meters, sourceStartAltitudeMeters: start.altitudeMeters, sourceEndAltitudeMeters: end.altitudeMeters, preparedStartAltitudeMeters: preparedStart, preparedEndAltitudeMeters: preparedEnd, sourceGrade: (end.altitudeMeters - start.altitudeMeters) / (end.distanceMeters - start.distanceMeters), preparedGrade: (preparedEnd - preparedStart) / (end.distanceMeters - start.distanceMeters), startCorrectionMeters: preparedStart - start.altitudeMeters, endCorrectionMeters: preparedEnd - end.altitudeMeters }; });
-  const hardGateResults = evaluateInvariants(inputs.protocol, { sourceSnapshotsEqual: sourceSnapshot === JSON.stringify(inputs), configurationSnapshotsEqual: configurationSnapshot === JSON.stringify(configuration), repeatable: JSON.stringify(prepared) === JSON.stringify(repeated), prepared, sources, metrics, configuration, audit });
-  return deepFreeze({ protocolSchemaVersion: inputs.protocol.schemaVersion, metricOrder: inputs.protocol.metrics.map((m) => m.id), candidateId: identityReference.id, candidateVersion: identityReference.version, candidate: identityReference.candidate, configurationId: identityReference.configurationId, configuration: { ...configuration }, inputSet: { protocolPath, protocolSchemaVersion: inputs.protocol.schemaVersion, syntheticProfileIds: inputs.protocol.syntheticProfiles.map((p) => p.id), canonicalTrackFiles: inputs.fileNames.map((name) => `raw/${name}`), manifestPath, manifestSchemaVersion: inputs.manifest.schemaVersion, manifestCaseCount: inputs.manifest.cases.length, manifestCaseIds: inputs.manifest.cases.map((c) => c.id) }, hardGateResults, syntheticProfileResults, corpusTrackResults, corpusCaseResults });
+  const hardGateResults = evaluateInvariants(inputs.protocol, { sourceSnapshotsEqual: sourceSnapshot === JSON.stringify(inputs), sourceCoordinatesUnchanged: sourceCoordinatesMatchSnapshot(sources, coordinateSnapshot), configurationSnapshotsEqual: configurationSnapshot === JSON.stringify(configuration), repeatable: JSON.stringify(prepared) === JSON.stringify(repeated), prepared, sources, metrics, configuration, audit });
+  return deepFreeze({ protocolSchemaVersion: inputs.protocol.schemaVersion, metricOrder: inputs.protocol.metrics.map((m) => m.id), candidateId: identityReference.id, candidateVersion: identityReference.version, candidate: identityReference.candidate, configurationId: identityReference.configurationId, configuration: { ...configuration }, inputSet: { protocolPath, protocolSchemaVersion: inputs.protocol.schemaVersion, syntheticProfileIds: inputs.protocol.syntheticProfiles.map((p) => p.id), canonicalTrackFiles: inputs.fileNames.map((name) => `raw/${name}`), manifestPath, manifestSchemaVersion: inputs.manifest.schemaVersion, manifestCaseCount: inputs.manifest.cases.length, manifestCaseIds: inputs.manifest.cases.map((c) => c.id) }, hardGateResults, exactPreservationProofs, syntheticProfileResults, corpusTrackResults, corpusCaseResults });
 }
 
 export function buildIdentitySummary(report: ReturnType<typeof buildIdentityReport>) {
-  const measured = [...report.syntheticProfileResults, ...report.corpusTrackResults].map((r) => r.metrics); const cases = report.corpusCaseResults;
+  const measured = [...report.syntheticProfileResults, ...report.corpusTrackResults].map((r) => r.metrics); const cases = report.corpusCaseResults; const proofs = report.exactPreservationProofs;
   return { schemaVersion: 1, protocolSchemaVersion: report.inputSet.protocolSchemaVersion, manifestSchemaVersion: report.inputSet.manifestSchemaVersion, candidateId: report.candidateId, candidateVersion: report.candidateVersion, configurationId: report.configurationId, configuration: report.configuration, syntheticProfileCount: report.syntheticProfileResults.length, canonicalTrackCount: report.corpusTrackResults.length, manifestCaseCount: cases.length, hardGateCount: report.hardGateResults.length, passedHardGateCount: report.hardGateResults.filter((r) => r.passed).length, metricCount: report.metricOrder.length,
     allCorrectionsExactlyZero: measured.every((m) => m.sourcePointChangedCountExact === 0 && m.maximumAbsoluteCorrectionMeters === 0) && cases.every((c) => c.startCorrectionMeters === 0 && c.endCorrectionMeters === 0),
-    allDistancesExactlyPreserved: measured.every((m) => m.sourcePointCount === m.preparedPointCount), allAltitudesExactlyPreserved: measured.every((m) => m.sourceMinimumAltitudeMeters === m.preparedMinimumAltitudeMeters && m.sourceMaximumAltitudeMeters === m.preparedMaximumAltitudeMeters && m.sourcePointChangedCountExact === 0) && cases.every((c) => c.sourceStartAltitudeMeters === c.preparedStartAltitudeMeters && c.sourceEndAltitudeMeters === c.preparedEndAltitudeMeters),
-    allGradesExactlyPreserved: measured.every((m) => m.sourceMinimumGrade === m.preparedMinimumGrade && m.sourceMaximumGrade === m.preparedMaximumGrade && m.sourceP95AbsoluteGrade === m.preparedP95AbsoluteGrade && m.sourceP99AbsoluteGrade === m.preparedP99AbsoluteGrade) && cases.every((c) => c.sourceGrade === c.preparedGrade),
-    allElevationGainsExactlyPreserved: measured.every((m) => m.positiveElevationGainDifferenceMeters === 0), allElevationLossesExactlyPreserved: measured.every((m) => m.negativeElevationLossDifferenceMeters === 0), reportDigestAlgorithm: "sha256", reportDigest: createHash("sha256").update(JSON.stringify(report)).digest("hex") };
+    allDistancesExactlyPreserved: proofs.every((proof) => proof.pointCountsExactlyEqual && proof.distancesExactlyEqual), allAltitudesExactlyPreserved: proofs.every((proof) => proof.pointCountsExactlyEqual && proof.altitudesExactlyEqual),
+    allGradesExactlyPreserved: proofs.every((proof) => proof.gradesExactlyEqual),
+    allElevationGainsExactlyPreserved: proofs.every((proof) => proof.positiveElevationGainsExactlyEqual), allElevationLossesExactlyPreserved: proofs.every((proof) => proof.negativeElevationLossesExactlyEqual), reportDigestAlgorithm: "sha256", reportDigest: createHash("sha256").update(JSON.stringify(report)).digest("hex") };
 }
