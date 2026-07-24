@@ -23,17 +23,21 @@ L'absence de CI sur les Pull Requests ne réduit pas les exigences de tests, de 
 
 ## Fusion automatique
 
-Le workflow GitHub Actions `Enable Pull Request Auto-Merge` programme l'auto-merge avec la méthode `merge commit`. Il réagit aux événements `opened`, `reopened`, `ready_for_review` et `synchronize` d'une Pull Request ciblant `main`.
+Le workflow GitHub Actions `Enable Pull Request Auto-Merge` programme l'auto-merge avec la méthode `merge commit`. Il réagit aux événements `opened`, `reopened`, `ready_for_review`, `synchronize` et `closed` d'une Pull Request ciblant `main`. L'événement `closed` permet de traiter une fusion qui intervient après la seule programmation de l'auto-merge.
 
 Une Pull Request est éligible uniquement si elle n'est pas en brouillon, si sa branche source appartient au même dépôt, si son auteur correspond au propriétaire du dépôt et si sa branche cible est `main`. Les Pull Requests provenant d'un fork, créées par un contributeur externe, en brouillon ou ciblant une autre branche sont exclues.
 
-Le workflow vérifie uniquement ces critères d'éligibilité à partir des métadonnées de la Pull Request et utilise la CLI GitHub préinstallée sur le runner. Il ne récupère et n'exécute aucun code de la branche source et ne réalise aucun typecheck, test ou build. Ses permissions en écriture sont limitées à `contents` et `pull-requests` afin de demander l'auto-merge avec le jeton éphémère fourni par GitHub Actions.
+Le workflow vérifie uniquement ces critères d'éligibilité à partir des métadonnées de la Pull Request et utilise la CLI GitHub préinstallée sur le runner. Il ne récupère et n'exécute aucun code de la branche source et ne réalise aucun typecheck, test ou build. Ses permissions en écriture sont limitées à `contents` et `pull-requests` pour demander l'auto-merge, et à `actions` pour déclencher le workflow de déploiement, avec le jeton éphémère fourni par GitHub Actions.
 
 Le dépôt ne configure aucun contrôle obligatoire ni protection équivalente conditionnant la fusion à une vérification du code. Une Pull Request éligible peut donc être fusionnée dès que GitHub accepte la demande d'auto-merge. Il ne s'agit pas d'un contournement de protection : aucune protection de ce type n'est configurée. Le workflow réussit si la demande est programmée, si elle l'était déjà ou si GitHub indique que la Pull Request est déjà fusionnée ; il échoue explicitement si la Pull Request reste ouverte sans demande d'auto-merge.
 
+Une fusion effectuée par l'auto-merge avec le `GITHUB_TOKEN` ne déclenche pas un autre workflow depuis l'événement `push` produit par ce jeton. Après avoir constaté l'état `MERGED`, le workflow journalise le SHA du commit de fusion, recherche une exécution de `deploy-pages.yml` associée à ce SHA, puis lance `gh workflow run deploy-pages.yml --ref main` seulement si aucune exécution n'existe. Une courte attente laisse aussi le temps à l'exécution `push` d'une fusion réalisée autrement de devenir visible. Les exécutions d'une même Pull Request sont sérialisées pour réduire les courses lors d'une relance. Une Pull Request encore ouverte, y compris lorsque son auto-merge vient d'être activé, ne déclenche aucun déploiement.
+
+Le workflow `deploy-pages.yml` reste l'unique propriétaire de l'installation, du typecheck, des tests, du build, de l'artefact Pages et de la publication. Le workflow d'auto-merge ne duplique aucune de ces étapes.
+
 Codex ne rend pas la Pull Request prête à être fusionnée automatiquement si une vérification locale échoue, si les tests requis n'ont pas été exécutés, si la documentation nécessaire est absente, si un problème connu compromet la cohérence de la simulation, la stabilité numérique ou le déterminisme, ou si la Pull Request est incomplète.
 
-Après une mise à jour de la branche source, l'événement `synchronize` réexécute uniquement le workflow d'auto-merge. Sa vérification idempotente conserve une demande d'auto-merge existante sans erreur ; aucune vérification du code de la Pull Request n'est déclenchée.
+Après une mise à jour de la branche source, l'événement `synchronize` réexécute uniquement le workflow d'auto-merge. Sa vérification idempotente conserve une demande d'auto-merge existante sans erreur ; aucune vérification du code de la Pull Request et aucun déploiement avant fusion ne sont déclenchés.
 
 ### Diagnostic d'un échec
 
@@ -41,7 +45,8 @@ Après une mise à jour de la branche source, l'événement `synchronize` réex�
 2. Consulter les journaux du workflow `Enable Pull Request Auto-Merge` et relever l'état retourné par la CLI GitHub.
 3. Vérifier que l'option `Allow auto-merge` est active.
 4. Vérifier les permissions effectives du `GITHUB_TOKEN` et l'absence d'une restriction d'organisation empêchant la programmation de l'auto-merge.
-5. Signaler explicitement l'échec sans fusion manuelle, sans `--admin` et sans PAT. Une correction éventuelle fait l'objet d'une Pull Request distincte.
+5. Pour une PR fusionnée, vérifier dans les journaux le SHA de fusion, la recherche d'une exécution existante et le déclenchement `workflow_dispatch` éventuel de `Deploy Lab to GitHub Pages`.
+6. Signaler explicitement l'échec sans fusion manuelle, sans `--admin` et sans PAT. Une correction éventuelle fait l'objet d'une Pull Request distincte.
 
 ## Audit post-fusion
 

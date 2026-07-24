@@ -41,7 +41,7 @@ Roue libre est en phase de fondation technique, documentaire, physique minimale,
 - Affichage des observables physiques, énergétiques, environnementales et des forces du coureur isolé, dont la force gravitationnelle longitudinale.
 - Représentation visuelle minimale dont la position sur un parcours fini est dérivée de `LongitudinalCourseProgress.progress`, bornée visuellement entre 0 % et 100 %. Le parcours constant sans arrivée conserve une animation cyclique fondée sur la distance modulo 100 m.
 - Modèle de description proposé pour aider à rédiger manuellement les Pull Requests, vérifications locales obligatoires par Codex avant l'ouverture d'une Pull Request non brouillon, auto-merge fondé uniquement sur les métadonnées d'éligibilité sans vérification du code de la branche source, et audit post-fusion de la description et du diff.
-- Workflow GitHub Actions pouvant publier le build Vite du laboratoire sur GitHub Pages depuis `main`, après installation, typecheck, tests et build de production.
+- Workflow GitHub Actions unique pouvant publier le build Vite du laboratoire sur GitHub Pages depuis `main`, après installation, typecheck, tests et build de production ; le workflow d'auto-merge le déclenche explicitement par `workflow_dispatch` après une fusion confirmée réalisée avec `GITHUB_TOKEN`, sauf si une exécution existe déjà pour le commit de fusion.
 - Documentation du projet, de l'architecture, du modèle physique longitudinal, du modèle énergétique minimal, du laboratoire visuel et de la publication GitHub Pages.
 - Répertoire `docs/decisions/` pour les décisions d'architecture structurées.
 
